@@ -22,6 +22,8 @@ import { Route as ProjectsRouteImport } from './routes/projects'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as TasksRouteImport } from './routes/tasks'
+import { Route as GoalsGoalIdRouteImport } from './routes/goals.$goalId'
+import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -88,36 +90,50 @@ const TasksRoute = TasksRouteImport.update({
   path: '/tasks',
   getParentRoute: () => rootRouteImport,
 } as any)
+const GoalsGoalIdRoute = GoalsGoalIdRouteImport.update({
+  id: '/$goalId',
+  path: '/$goalId',
+  getParentRoute: () => GoalsRoute,
+} as any)
+const ProjectsProjectIdRoute = ProjectsProjectIdRouteImport.update({
+  id: '/$projectId',
+  path: '/$projectId',
+  getParentRoute: () => ProjectsRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/achievements': typeof AchievementsRoute
   '/auth': typeof AuthRoute
   '/finance': typeof FinanceRoute
-  '/goals': typeof GoalsRoute
+  '/goals': typeof GoalsRouteWithChildren
   '/learning': typeof LearningRoute
   '/notes': typeof NotesRoute
   '/planning': typeof PlanningRoute
   '/profile': typeof ProfileRoute
-  '/projects': typeof ProjectsRoute
+  '/projects': typeof ProjectsRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
   '/tasks': typeof TasksRoute
+  '/goals/$goalId': typeof GoalsGoalIdRoute
+  '/projects/$projectId': typeof ProjectsProjectIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/achievements': typeof AchievementsRoute
   '/auth': typeof AuthRoute
   '/finance': typeof FinanceRoute
-  '/goals': typeof GoalsRoute
+  '/goals': typeof GoalsRouteWithChildren
   '/learning': typeof LearningRoute
   '/notes': typeof NotesRoute
   '/planning': typeof PlanningRoute
   '/profile': typeof ProfileRoute
-  '/projects': typeof ProjectsRoute
+  '/projects': typeof ProjectsRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
   '/tasks': typeof TasksRoute
+  '/goals/$goalId': typeof GoalsGoalIdRoute
+  '/projects/$projectId': typeof ProjectsProjectIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -125,15 +141,17 @@ export interface FileRoutesById {
   '/achievements': typeof AchievementsRoute
   '/auth': typeof AuthRoute
   '/finance': typeof FinanceRoute
-  '/goals': typeof GoalsRoute
+  '/goals': typeof GoalsRouteWithChildren
   '/learning': typeof LearningRoute
   '/notes': typeof NotesRoute
   '/planning': typeof PlanningRoute
   '/profile': typeof ProfileRoute
-  '/projects': typeof ProjectsRoute
+  '/projects': typeof ProjectsRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
   '/tasks': typeof TasksRoute
+  '/goals/$goalId': typeof GoalsGoalIdRoute
+  '/projects/$projectId': typeof ProjectsProjectIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -151,6 +169,8 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/settings'
     | '/tasks'
+    | '/goals/$goalId'
+    | '/projects/$projectId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -166,6 +186,8 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/settings'
     | '/tasks'
+    | '/goals/$goalId'
+    | '/projects/$projectId'
   id:
     | '__root__'
     | '/'
@@ -181,6 +203,8 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/settings'
     | '/tasks'
+    | '/goals/$goalId'
+    | '/projects/$projectId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -188,12 +212,12 @@ export interface RootRouteChildren {
   AchievementsRoute: typeof AchievementsRoute
   AuthRoute: typeof AuthRoute
   FinanceRoute: typeof FinanceRoute
-  GoalsRoute: typeof GoalsRoute
+  GoalsRoute: typeof GoalsRouteWithChildren
   LearningRoute: typeof LearningRoute
   NotesRoute: typeof NotesRoute
   PlanningRoute: typeof PlanningRoute
   ProfileRoute: typeof ProfileRoute
-  ProjectsRoute: typeof ProjectsRoute
+  ProjectsRoute: typeof ProjectsRouteWithChildren
   ResetPasswordRoute: typeof ResetPasswordRoute
   SettingsRoute: typeof SettingsRoute
   TasksRoute: typeof TasksRoute
@@ -292,20 +316,56 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TasksRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/goals/$goalId': {
+      id: '/goals/$goalId'
+      path: '/$goalId'
+      fullPath: '/goals/$goalId'
+      preLoaderRoute: typeof GoalsGoalIdRouteImport
+      parentRoute: typeof GoalsRoute
+    }
+    '/projects/$projectId': {
+      id: '/projects/$projectId'
+      path: '/$projectId'
+      fullPath: '/projects/$projectId'
+      preLoaderRoute: typeof ProjectsProjectIdRouteImport
+      parentRoute: typeof ProjectsRoute
+    }
   }
 }
+
+interface GoalsRouteChildren {
+  GoalsGoalIdRoute: typeof GoalsGoalIdRoute
+}
+
+const GoalsRouteChildren: GoalsRouteChildren = {
+  GoalsGoalIdRoute: GoalsGoalIdRoute,
+}
+
+const GoalsRouteWithChildren = GoalsRoute._addFileChildren(GoalsRouteChildren)
+
+interface ProjectsRouteChildren {
+  ProjectsProjectIdRoute: typeof ProjectsProjectIdRoute
+}
+
+const ProjectsRouteChildren: ProjectsRouteChildren = {
+  ProjectsProjectIdRoute: ProjectsProjectIdRoute,
+}
+
+const ProjectsRouteWithChildren = ProjectsRoute._addFileChildren(
+  ProjectsRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AchievementsRoute: AchievementsRoute,
   AuthRoute: AuthRoute,
   FinanceRoute: FinanceRoute,
-  GoalsRoute: GoalsRoute,
+  GoalsRoute: GoalsRouteWithChildren,
   LearningRoute: LearningRoute,
   NotesRoute: NotesRoute,
   PlanningRoute: PlanningRoute,
   ProfileRoute: ProfileRoute,
-  ProjectsRoute: ProjectsRoute,
+  ProjectsRoute: ProjectsRouteWithChildren,
   ResetPasswordRoute: ResetPasswordRoute,
   SettingsRoute: SettingsRoute,
   TasksRoute: TasksRoute,

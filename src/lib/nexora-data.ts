@@ -193,7 +193,11 @@ export function useCreateGoal() {
           .single(),
       );
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["goals"] }),
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: ["goals"] }),
+        qc.invalidateQueries({ queryKey: ["projects"] }),
+      ]),
   });
 }
 
@@ -204,7 +208,11 @@ export function useUpdateGoal() {
       await currentUserId();
       return unwrap(await supabase.from("goals").update(values).eq("id", id).select().single());
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["goals"] }),
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: ["goals"] }),
+        qc.invalidateQueries({ queryKey: ["projects"] }),
+      ]),
   });
 }
 
@@ -216,7 +224,11 @@ export function useDeleteGoal() {
       const { error } = await supabase.from("goals").delete().eq("id", id);
       if (error) throw new Error(error.message);
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["goals"] }),
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: ["goals"] }),
+        qc.invalidateQueries({ queryKey: ["projects"] }),
+      ]),
   });
 }
 
@@ -243,6 +255,7 @@ export type ProjectInput = {
   progress?: number;
   start_date?: string | null;
   deadline?: string | null;
+  goal_id?: string | null;
 };
 
 export function useCreateProject() {
@@ -258,7 +271,11 @@ export function useCreateProject() {
           .single(),
       );
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["projects"] }),
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: ["projects"] }),
+        qc.invalidateQueries({ queryKey: ["goals"] }),
+      ]),
   });
 }
 
@@ -269,7 +286,12 @@ export function useUpdateProject() {
       await currentUserId();
       return unwrap(await supabase.from("projects").update(values).eq("id", id).select().single());
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["projects"] }),
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: ["projects"] }),
+        qc.invalidateQueries({ queryKey: ["tasks"] }),
+        qc.invalidateQueries({ queryKey: ["goals"] }),
+      ]),
   });
 }
 
@@ -281,7 +303,12 @@ export function useDeleteProject() {
       const { error } = await supabase.from("projects").delete().eq("id", id);
       if (error) throw new Error(error.message);
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["projects"] }),
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: ["projects"] }),
+        qc.invalidateQueries({ queryKey: ["tasks"] }),
+        qc.invalidateQueries({ queryKey: ["goals"] }),
+      ]),
   });
 }
 

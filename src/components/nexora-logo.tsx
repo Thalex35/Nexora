@@ -1,8 +1,5 @@
 import { cn } from "@/lib/utils";
 
-/**
- * Nexora brand logo: an abstract forward-movement node symbol + wordmark.
- */
 export function NexoraLogo({
   className,
   showWordmark = true,
@@ -34,23 +31,15 @@ export function NexoraMark({ size = 28 }: { size?: number }) {
       aria-hidden="true"
       className="shrink-0"
     >
-      <rect
-        x="1"
-        y="1"
-        width="30"
-        height="30"
-        rx="9"
-        className="fill-surface stroke-border"
-        strokeWidth="1"
-      />
+      <rect x="1" y="1" width="30" height="30" rx="8" className="fill-surface" />
       <path
-        d="M10 22V10l12 12V10"
-        className="stroke-primary"
-        strokeWidth="2.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+        d="M9 23V9l14 14V9"
+        fill="none"
+        stroke="#2DD4BF"
+        strokeWidth="3"
+        strokeLinecap="square"
+        strokeLinejoin="miter"
       />
-      <circle cx="22" cy="10" r="2.6" className="fill-primary" />
     </svg>
   );
 }

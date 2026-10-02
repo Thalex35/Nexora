@@ -28,6 +28,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
   useCreateTask,
+  useProjects,
   useTasks,
   useUpdateTask,
   type Task,
@@ -167,12 +168,14 @@ function TaskDialog({
 }) {
   const createTask = useCreateTask();
   const updateTask = useUpdateTask();
+  const projects = useProjects();
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<TaskPriority>("medium");
   const [status, setStatus] = useState<TaskStatus>("todo");
   const [dueDate, setDueDate] = useState("");
+  const [projectId, setProjectId] = useState("__no_project__");
   const [hydratedFor, setHydratedFor] = useState<string | null>(null);
 
   const key = task?.id ?? "new";
@@ -182,6 +185,7 @@ function TaskDialog({
     setPriority(task?.priority ?? "medium");
     setStatus(task?.status ?? "todo");
     setDueDate(task?.due_date ?? "");
+    setProjectId(task?.project_id ?? "__no_project__");
     setHydratedFor(key);
   }
   if (!open && hydratedFor !== null) setHydratedFor(null);
@@ -194,6 +198,7 @@ function TaskDialog({
       priority,
       status,
       due_date: dueDate || null,
+      project_id: projectId === "__no_project__" ? null : projectId,
     };
     try {
       if (task) {
@@ -252,15 +257,37 @@ function TaskDialog({
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Status</Label>
+              <Label htmlFor="task-status">Status</Label>
               <Select value={status} onValueChange={(value) => setStatus(value as TaskStatus)}>
-                <SelectTrigger>
+                <SelectTrigger id="task-status">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todo">To do</SelectItem>
                   <SelectItem value="in_progress">In progress</SelectItem>
                   <SelectItem value="done">Done</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="task-project">Project (optional)</Label>
+              <Select value={projectId} onValueChange={setProjectId}>
+                <SelectTrigger id="task-project">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__no_project__">No project</SelectItem>
+                  {(projects.data ?? [])
+                    .filter(
+                      (project) =>
+                        project.id === task?.project_id ||
+                        !["completed", "archived"].includes(project.status),
+                    )
+                    .map((project) => (
+                      <SelectItem key={project.id} value={project.id}>
+                        {project.name}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>

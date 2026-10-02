@@ -1,16 +1,6 @@
-# Pixel Perfect Match
+# Nexora
 
-Implement exactly the screenshot and nothing else
-
-This project was built with [Lovable](https://lovable.dev).
-
-## Build with Lovable
-
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/aec7c8b7-6308-49b2-aea4-4bb4f8647759).
-
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
+Nexora is a private personal workspace for daily planning, tasks, goals and projects.
 
 ## Development
 
