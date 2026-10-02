@@ -193,7 +193,7 @@ function QuickAddForm({ type, onDone }: { type: QuickAddType; onDone: () => void
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="qa-category">Category</Label>
+            <Label htmlFor="qa-category">{type === "income" ? "Source" : "Category"}</Label>
             <Input
               id="qa-category"
               value={category}

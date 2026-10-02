@@ -98,7 +98,9 @@ function ProjectDetailPage() {
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">This project could not be found.</p>
           <Button variant="outline" asChild>
-            <Link to="/projects">Back to projects</Link>
+            <Link to="/projects" search={{ goalId: undefined }}>
+              Back to projects
+            </Link>
           </Button>
         </div>
       </AppShell>
@@ -113,7 +115,7 @@ function ProjectDetailPage() {
           description={project.description || "A focused body of work, supported by tasks."}
           actions={
             <Button variant="ghost" size="sm" asChild>
-              <Link to="/projects">
+              <Link to="/projects" search={{ goalId: undefined }}>
                 <ArrowLeft className="mr-1 h-4 w-4" />
                 Projects
               </Link>

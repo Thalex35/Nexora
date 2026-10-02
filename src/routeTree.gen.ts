@@ -24,6 +24,7 @@ import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as TasksRouteImport } from './routes/tasks'
 import { Route as GoalsGoalIdRouteImport } from './routes/goals.$goalId'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
+import { Route as FinanceIncomeIncomeIdRouteImport } from './routes/finance.income.$incomeId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -100,12 +101,17 @@ const ProjectsProjectIdRoute = ProjectsProjectIdRouteImport.update({
   path: '/$projectId',
   getParentRoute: () => ProjectsRoute,
 } as any)
+const FinanceIncomeIncomeIdRoute = FinanceIncomeIncomeIdRouteImport.update({
+  id: '/income/$incomeId',
+  path: '/income/$incomeId',
+  getParentRoute: () => FinanceRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/achievements': typeof AchievementsRoute
   '/auth': typeof AuthRoute
-  '/finance': typeof FinanceRoute
+  '/finance': typeof FinanceRouteWithChildren
   '/goals': typeof GoalsRouteWithChildren
   '/learning': typeof LearningRoute
   '/notes': typeof NotesRoute
@@ -117,12 +123,13 @@ export interface FileRoutesByFullPath {
   '/tasks': typeof TasksRoute
   '/goals/$goalId': typeof GoalsGoalIdRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
+  '/finance/income/$incomeId': typeof FinanceIncomeIncomeIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/achievements': typeof AchievementsRoute
   '/auth': typeof AuthRoute
-  '/finance': typeof FinanceRoute
+  '/finance': typeof FinanceRouteWithChildren
   '/goals': typeof GoalsRouteWithChildren
   '/learning': typeof LearningRoute
   '/notes': typeof NotesRoute
@@ -134,13 +141,14 @@ export interface FileRoutesByTo {
   '/tasks': typeof TasksRoute
   '/goals/$goalId': typeof GoalsGoalIdRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
+  '/finance/income/$incomeId': typeof FinanceIncomeIncomeIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/achievements': typeof AchievementsRoute
   '/auth': typeof AuthRoute
-  '/finance': typeof FinanceRoute
+  '/finance': typeof FinanceRouteWithChildren
   '/goals': typeof GoalsRouteWithChildren
   '/learning': typeof LearningRoute
   '/notes': typeof NotesRoute
@@ -152,6 +160,7 @@ export interface FileRoutesById {
   '/tasks': typeof TasksRoute
   '/goals/$goalId': typeof GoalsGoalIdRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
+  '/finance/income/$incomeId': typeof FinanceIncomeIncomeIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -171,6 +180,7 @@ export interface FileRouteTypes {
     | '/tasks'
     | '/goals/$goalId'
     | '/projects/$projectId'
+    | '/finance/income/$incomeId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -188,6 +198,7 @@ export interface FileRouteTypes {
     | '/tasks'
     | '/goals/$goalId'
     | '/projects/$projectId'
+    | '/finance/income/$incomeId'
   id:
     | '__root__'
     | '/'
@@ -205,13 +216,14 @@ export interface FileRouteTypes {
     | '/tasks'
     | '/goals/$goalId'
     | '/projects/$projectId'
+    | '/finance/income/$incomeId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AchievementsRoute: typeof AchievementsRoute
   AuthRoute: typeof AuthRoute
-  FinanceRoute: typeof FinanceRoute
+  FinanceRoute: typeof FinanceRouteWithChildren
   GoalsRoute: typeof GoalsRouteWithChildren
   LearningRoute: typeof LearningRoute
   NotesRoute: typeof NotesRoute
@@ -330,8 +342,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdRouteImport
       parentRoute: typeof ProjectsRoute
     }
+    '/finance/income/$incomeId': {
+      id: '/finance/income/$incomeId'
+      path: '/income/$incomeId'
+      fullPath: '/finance/income/$incomeId'
+      preLoaderRoute: typeof FinanceIncomeIncomeIdRouteImport
+      parentRoute: typeof FinanceRoute
+    }
   }
 }
+
+interface FinanceRouteChildren {
+  FinanceIncomeIncomeIdRoute: typeof FinanceIncomeIncomeIdRoute
+}
+
+const FinanceRouteChildren: FinanceRouteChildren = {
+  FinanceIncomeIncomeIdRoute: FinanceIncomeIncomeIdRoute,
+}
+
+const FinanceRouteWithChildren =
+  FinanceRoute._addFileChildren(FinanceRouteChildren)
 
 interface GoalsRouteChildren {
   GoalsGoalIdRoute: typeof GoalsGoalIdRoute
@@ -359,7 +389,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AchievementsRoute: AchievementsRoute,
   AuthRoute: AuthRoute,
-  FinanceRoute: FinanceRoute,
+  FinanceRoute: FinanceRouteWithChildren,
   GoalsRoute: GoalsRouteWithChildren,
   LearningRoute: LearningRoute,
   NotesRoute: NotesRoute,

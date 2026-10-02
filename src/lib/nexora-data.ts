@@ -9,6 +9,7 @@ export type Task = Database["public"]["Tables"]["tasks"]["Row"];
 export type Goal = Database["public"]["Tables"]["goals"]["Row"];
 export type Project = Database["public"]["Tables"]["projects"]["Row"];
 export type Transaction = Database["public"]["Tables"]["transactions"]["Row"];
+export type IncomeAllocation = Database["public"]["Tables"]["income_allocations"]["Row"];
 export type DailyPlan = Database["public"]["Tables"]["daily_plans"]["Row"];
 export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 
@@ -17,6 +18,7 @@ export type TaskPriority = Database["public"]["Enums"]["task_priority"];
 export type GoalStatus = Database["public"]["Enums"]["goal_status"];
 export type ProjectStatus = Database["public"]["Enums"]["project_status"];
 export type TransactionType = Database["public"]["Enums"]["transaction_type"];
+export type AllocationType = IncomeAllocation["allocation_type"];
 
 function unwrap<T>({ data, error }: { data: T | null; error: { message: string } | null }): T {
   if (error) throw new Error(error.message);
@@ -356,6 +358,19 @@ export function useCreateTransaction() {
   });
 }
 
+export function useUpdateTransaction() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...values }: Partial<TransactionInput> & { id: string }) => {
+      await currentUserId();
+      return unwrap(
+        await supabase.from("transactions").update(values).eq("id", id).select().single(),
+      );
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["transactions"] }),
+  });
+}
+
 export function useDeleteTransaction() {
   const qc = useQueryClient();
   return useMutation({
@@ -364,7 +379,84 @@ export function useDeleteTransaction() {
       const { error } = await supabase.from("transactions").delete().eq("id", id);
       if (error) throw new Error(error.message);
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["transactions"] }),
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: ["transactions"] }),
+        qc.invalidateQueries({ queryKey: ["income_allocations"] }),
+      ]),
+  });
+}
+
+export type IncomeAllocationInput = {
+  income_id: string;
+  title: string;
+  allocation_type: AllocationType;
+  value: number;
+  planned_date?: string | null;
+  completed?: boolean;
+};
+
+export function useIncomeAllocations(incomeId?: string) {
+  const { authorized } = useAuth();
+  return useQuery({
+    queryKey: ["income_allocations", incomeId ?? "all"],
+    enabled: authorized,
+    queryFn: async () => {
+      const userId = await currentUserId();
+      let query = supabase
+        .from("income_allocations")
+        .select("*")
+        .eq("user_id", userId)
+        .order("planned_date", { ascending: true, nullsFirst: false })
+        .order("created_at", { ascending: true });
+      if (incomeId) query = query.eq("income_id", incomeId);
+      return unwrap(await query) as IncomeAllocation[];
+    },
+  });
+}
+
+export function useCreateIncomeAllocation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: IncomeAllocationInput) => {
+      const userId = await currentUserId();
+      return unwrap(
+        await supabase
+          .from("income_allocations")
+          .insert({ ...input, user_id: userId })
+          .select()
+          .single(),
+      );
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["income_allocations"] }),
+  });
+}
+
+export function useUpdateIncomeAllocation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      ...values
+    }: Partial<Omit<IncomeAllocationInput, "income_id">> & { id: string }) => {
+      await currentUserId();
+      return unwrap(
+        await supabase.from("income_allocations").update(values).eq("id", id).select().single(),
+      );
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["income_allocations"] }),
+  });
+}
+
+export function useDeleteIncomeAllocation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await currentUserId();
+      const { error } = await supabase.from("income_allocations").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["income_allocations"] }),
   });
 }
 

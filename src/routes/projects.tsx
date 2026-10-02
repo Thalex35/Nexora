@@ -22,7 +22,7 @@ import {
 
 export const Route = createFileRoute("/projects")({
   validateSearch: (search: Record<string, unknown>) => ({
-    goalId: typeof search.goalId === "string" ? search.goalId : undefined,
+    goalId: typeof search["goalId"] === "string" ? search["goalId"] : undefined,
   }),
   head: () => ({
     meta: [
@@ -114,6 +114,7 @@ function ProjectsPage() {
                     <Link
                       to="/projects/$projectId"
                       params={{ projectId: project.id }}
+                      search={search}
                       className="break-words font-semibold text-foreground hover:text-primary"
                     >
                       {project.name}
