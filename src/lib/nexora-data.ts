@@ -12,6 +12,8 @@ export type Transaction = Database["public"]["Tables"]["transactions"]["Row"];
 export type IncomeAllocation = Database["public"]["Tables"]["income_allocations"]["Row"];
 export type DailyPlan = Database["public"]["Tables"]["daily_plans"]["Row"];
 export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
+export type Routine = Database["public"]["Tables"]["routines"]["Row"];
+export type RoutineCompletion = Database["public"]["Tables"]["routine_completions"]["Row"];
 
 export type TaskStatus = Database["public"]["Enums"]["task_status"];
 export type TaskPriority = Database["public"]["Enums"]["task_priority"];
@@ -502,6 +504,137 @@ export function useDeleteIncomeAllocation() {
 }
 
 /* -------------------------------- daily plan -------------------------------- */
+
+export type RoutineInput = {
+  name: string;
+  description?: string | null;
+  is_active?: boolean;
+  sort_order?: number;
+};
+
+export function useRoutines() {
+  const { authorized } = useAuth();
+  return useQuery({
+    queryKey: ["routines"],
+    enabled: authorized,
+    queryFn: async () => {
+      const userId = await currentUserId();
+      return unwrap(
+        await supabase
+          .from("routines")
+          .select("*")
+          .eq("user_id", userId)
+          .order("sort_order", { ascending: true })
+          .order("created_at", { ascending: true }),
+      ) as Routine[];
+    },
+  });
+}
+
+export function useRoutineCompletions(fromDate?: string, throughDate?: string) {
+  const { authorized } = useAuth();
+  return useQuery({
+    queryKey: ["routine_completions", fromDate ?? "all", throughDate ?? "all"],
+    enabled: authorized,
+    queryFn: async () => {
+      const userId = await currentUserId();
+      let query = supabase
+        .from("routine_completions")
+        .select("*")
+        .eq("user_id", userId)
+        .order("completion_date", { ascending: false });
+      if (fromDate) query = query.gte("completion_date", fromDate);
+      if (throughDate) query = query.lte("completion_date", throughDate);
+      return unwrap(await query) as RoutineCompletion[];
+    },
+  });
+}
+
+export function useCreateRoutine() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: RoutineInput) => {
+      const userId = await currentUserId();
+      return unwrap(
+        await supabase
+          .from("routines")
+          .insert({ ...input, user_id: userId })
+          .select()
+          .single(),
+      );
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["routines"] }),
+  });
+}
+
+export function useUpdateRoutine() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...values }: Partial<RoutineInput> & { id: string }) => {
+      await currentUserId();
+      return unwrap(await supabase.from("routines").update(values).eq("id", id).select().single());
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["routines"] }),
+  });
+}
+
+export function useDeleteRoutine() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await currentUserId();
+      const { error } = await supabase.from("routines").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: ["routines"] }),
+        qc.invalidateQueries({ queryKey: ["routine_completions"] }),
+      ]),
+  });
+}
+
+export function useSetRoutineCompletion() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      routineId,
+      completionDate,
+      completed,
+    }: {
+      routineId: string;
+      completionDate: string;
+      completed: boolean;
+    }) => {
+      const userId = await currentUserId();
+      if (completed) {
+        return unwrap(
+          await supabase
+            .from("routine_completions")
+            .upsert(
+              {
+                routine_id: routineId,
+                user_id: userId,
+                completion_date: completionDate,
+              },
+              { onConflict: "routine_id,completion_date" },
+            )
+            .select()
+            .single(),
+        );
+      }
+      const { error } = await supabase
+        .from("routine_completions")
+        .delete()
+        .eq("routine_id", routineId)
+        .eq("user_id", userId)
+        .eq("completion_date", completionDate);
+      if (error) throw new Error(error.message);
+      return undefined;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["routine_completions"] }),
+  });
+}
 
 export function useDailyPlan(planDate: string) {
   const { authorized } = useAuth();

@@ -26,16 +26,18 @@ import {
   todayISO,
   useCreateGoal,
   useCreateProject,
+  useCreateRoutine,
   useCreateTask,
   useCreateTransaction,
   useTransactions,
   type TaskPriority,
 } from "@/lib/nexora-data";
 
-type QuickAddType = "task" | "expense" | "income" | "goal" | "project" | "note";
+type QuickAddType = "task" | "routine" | "expense" | "income" | "goal" | "project" | "note";
 
 const typeLabels: Record<QuickAddType, string> = {
   task: "Add Task",
+  routine: "Add Routine",
   expense: "Add Expense",
   income: "Add Income",
   goal: "Add Goal",
@@ -93,6 +95,7 @@ function QuickAddForm({ type, onDone }: { type: QuickAddType; onDone: () => void
   const createTask = useCreateTask();
   const createGoal = useCreateGoal();
   const createProject = useCreateProject();
+  const createRoutine = useCreateRoutine();
   const createTransaction = useCreateTransaction();
   const transactions = useTransactions();
 
@@ -109,6 +112,7 @@ function QuickAddForm({ type, onDone }: { type: QuickAddType; onDone: () => void
     createTask.isPending ||
     createGoal.isPending ||
     createProject.isPending ||
+    createRoutine.isPending ||
     createTransaction.isPending;
 
   const reset = () => {
@@ -142,6 +146,11 @@ function QuickAddForm({ type, onDone }: { type: QuickAddType; onDone: () => void
           name: title,
           description: notes || null,
           deadline: date || null,
+        });
+      } else if (type === "routine") {
+        await createRoutine.mutateAsync({
+          name: title.trim(),
+          description: notes || null,
         });
       } else if (type === "income" || type === "expense") {
         const value = Number(amount);
@@ -181,6 +190,7 @@ function QuickAddForm({ type, onDone }: { type: QuickAddType; onDone: () => void
   }
 
   const isMoney = type === "income" || type === "expense";
+  const hasDate = type === "task" || type === "goal" || type === "project" || isMoney;
 
   return (
     <form onSubmit={submit} className="space-y-4">
@@ -237,13 +247,21 @@ function QuickAddForm({ type, onDone }: { type: QuickAddType; onDone: () => void
         </>
       ) : (
         <div className="space-y-2">
-          <Label htmlFor="qa-title">{type === "project" ? "Project name" : "Title"}</Label>
+          <Label htmlFor="qa-title">
+            {type === "project" ? "Project name" : type === "routine" ? "Routine name" : "Title"}
+          </Label>
           <Input
             id="qa-title"
             required
             value={title}
             onChange={(event) => setTitle(event.target.value)}
-            placeholder={type === "goal" ? "Run a half marathon" : "What needs doing?"}
+            placeholder={
+              type === "goal"
+                ? "Run a half marathon"
+                : type === "routine"
+                  ? "Morning walk"
+                  : "What needs doing?"
+            }
           />
         </div>
       )}
@@ -264,23 +282,25 @@ function QuickAddForm({ type, onDone }: { type: QuickAddType; onDone: () => void
         </div>
       )}
 
-      <div className="space-y-2">
-        <Label htmlFor="qa-date">
-          {type === "task"
-            ? "Due date"
-            : type === "goal"
-              ? "Target date"
-              : type === "project"
-                ? "Deadline"
-                : "Date"}
-        </Label>
-        <Input
-          id="qa-date"
-          type="date"
-          value={date}
-          onChange={(event) => setDate(event.target.value)}
-        />
-      </div>
+      {hasDate && (
+        <div className="space-y-2">
+          <Label htmlFor="qa-date">
+            {type === "task"
+              ? "Due date"
+              : type === "goal"
+                ? "Target date"
+                : type === "project"
+                  ? "Deadline"
+                  : "Date"}
+          </Label>
+          <Input
+            id="qa-date"
+            type="date"
+            value={date}
+            onChange={(event) => setDate(event.target.value)}
+          />
+        </div>
+      )}
 
       {type !== "task" && (
         <div className="space-y-2">

@@ -6,6 +6,7 @@ import {
   FolderKanban,
   Home,
   NotebookPen,
+  ListChecks,
   Settings,
   Target,
   User,
@@ -19,6 +20,7 @@ export type NavItem = {
     | "/"
     | "/planning"
     | "/tasks"
+    | "/routines"
     | "/goals"
     | "/projects"
     | "/finance"
@@ -34,6 +36,7 @@ export const mainNav: NavItem[] = [
   { title: "Home", url: "/", icon: Home },
   { title: "Plan & review", url: "/planning", icon: CalendarDays },
   { title: "Tasks", url: "/tasks", icon: CheckSquare },
+  { title: "Routines", url: "/routines", icon: ListChecks },
   { title: "Goals", url: "/goals", icon: Target },
   { title: "Projects", url: "/projects", icon: FolderKanban },
   { title: "Finance", url: "/finance", icon: Wallet },
