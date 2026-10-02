@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { CalendarDays, CheckCircle2, CircleAlert, Plus } from "lucide-react";
+import { CalendarDays, CheckCircle2, CircleAlert, FolderKanban, Plus, Target } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
@@ -12,7 +12,9 @@ import {
   timestampDateISO,
   todayISO,
   useDailyPlan,
+  useGoals,
   useProfile,
+  useProjects,
   useTasks,
 } from "@/lib/nexora-data";
 import type { Task } from "@/lib/nexora-data";
@@ -46,6 +48,8 @@ function completedToday(task: Task, today: string) {
 function HomePage() {
   const { data: profile } = useProfile();
   const tasks = useTasks();
+  const goals = useGoals();
+  const projects = useProjects();
   const today = todayISO();
   const todayPlan = useDailyPlan(today);
   const tomorrowPlan = useDailyPlan(dateOffsetISO(1));
@@ -72,6 +76,10 @@ function HomePage() {
     tomorrowPlan.data?.priority_2,
     tomorrowPlan.data?.priority_3,
   ].filter((value): value is string => Boolean(value?.trim()));
+  const activeGoals = (goals.data ?? []).filter((goal) => goal.status === "active").slice(0, 3);
+  const activeProjects = (projects.data ?? [])
+    .filter((project) => project.status === "active" || project.status === "planning")
+    .slice(0, 3);
 
   return (
     <AppShell>
@@ -191,6 +199,41 @@ function HomePage() {
           </section>
         )}
 
+        <section className="grid gap-4 md:grid-cols-2">
+          <CompactProgressList
+            title="Active goals"
+            icon={<Target className="h-4 w-4" />}
+            to="/goals"
+            empty="No active goals yet."
+            loading={goals.isLoading}
+            error={goals.isError}
+            onRetry={() => void goals.refetch()}
+            items={activeGoals.map((goal) => ({
+              id: goal.id,
+              title: goal.title,
+              progress: goal.progress,
+              to: "/goals/$goalId" as const,
+              params: { goalId: goal.id },
+            }))}
+          />
+          <CompactProgressList
+            title="Active projects"
+            icon={<FolderKanban className="h-4 w-4" />}
+            to="/projects"
+            empty="No active projects yet."
+            loading={projects.isLoading}
+            error={projects.isError}
+            onRetry={() => void projects.refetch()}
+            items={activeProjects.map((project) => ({
+              id: project.id,
+              title: project.name,
+              progress: project.progress,
+              to: "/projects/$projectId" as const,
+              params: { projectId: project.id },
+            }))}
+          />
+        </section>
+
         <section className="nexora-panel flex flex-col justify-between gap-4 p-5 sm:flex-row sm:items-center">
           <div className="flex items-start gap-3">
             <CalendarDays className="mt-0.5 h-5 w-5 text-primary" />
@@ -211,5 +254,75 @@ function HomePage() {
         </section>
       </div>
     </AppShell>
+  );
+}
+
+function CompactProgressList({
+  title,
+  icon,
+  to,
+  empty,
+  items,
+  loading,
+  error,
+  onRetry,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  to: "/goals" | "/projects";
+  empty: string;
+  loading: boolean;
+  error: boolean;
+  onRetry: () => void;
+  items: Array<{
+    id: string;
+    title: string;
+    progress: number;
+    to: "/goals/$goalId" | "/projects/$projectId";
+    params: { goalId: string } | { projectId: string };
+  }>;
+}) {
+  return (
+    <section className="nexora-panel min-w-0 space-y-3 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+          <span className="text-primary">{icon}</span>
+          {title}
+        </h2>
+        <Link to={to} className="text-xs text-primary hover:underline">
+          View all
+        </Link>
+      </div>
+      {loading ? (
+        <p className="text-sm text-muted-foreground">Loading…</p>
+      ) : error ? (
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">Couldn't load this list.</p>
+          <Button variant="ghost" size="sm" onClick={onRetry}>
+            Retry
+          </Button>
+        </div>
+      ) : items.length === 0 ? (
+        <p className="text-sm text-muted-foreground">{empty}</p>
+      ) : (
+        <ul className="space-y-3">
+          {items.map((item) => (
+            <li key={item.id} className="min-w-0">
+              <div className="flex items-center justify-between gap-3">
+                <Link
+                  to={item.to}
+                  params={item.params}
+                  className="min-w-0 truncate text-sm text-foreground hover:text-primary"
+                >
+                  {item.title}
+                </Link>
+                <span className="shrink-0 text-xs text-muted-foreground">{item.progress}%</span>
+              </div>
+              <Progress value={item.progress} className="mt-1.5 h-1.5" />
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }

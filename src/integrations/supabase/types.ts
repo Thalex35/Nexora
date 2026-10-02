@@ -112,6 +112,7 @@ export type Database = {
           created_at: string
           deadline: string | null
           description: string | null
+          goal_id: string | null
           id: string
           name: string
           progress: number
@@ -124,6 +125,7 @@ export type Database = {
           created_at?: string
           deadline?: string | null
           description?: string | null
+          goal_id?: string | null
           id?: string
           name: string
           progress?: number
@@ -136,6 +138,7 @@ export type Database = {
           created_at?: string
           deadline?: string | null
           description?: string | null
+          goal_id?: string | null
           id?: string
           name?: string
           progress?: number
@@ -144,7 +147,15 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "projects_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "goals"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       tasks: {
         Row: {
