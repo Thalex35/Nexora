@@ -56,12 +56,24 @@ export const Route = createFileRoute("/tasks")({
 
 function TasksPage() {
   const tasks = useTasks();
-  const [filter, setFilter] = useState<"open" | "done" | "all">("open");
+  const [filter, setFilter] = useState<"today" | "upcoming" | "overdue" | "done" | "all">("today");
   const [editing, setEditing] = useState<Task | null>(null);
   const [open, setOpen] = useState(false);
+  const today = new Date();
+  const todayDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(
+    today.getDate(),
+  ).padStart(2, "0")}`;
 
   const visible = (tasks.data ?? []).filter((task) =>
-    filter === "all" ? true : filter === "done" ? task.status === "done" : task.status !== "done",
+    filter === "all"
+      ? true
+      : filter === "done"
+        ? task.status === "done"
+        : filter === "overdue"
+          ? task.status !== "done" && task.due_date !== null && task.due_date < todayDate
+          : filter === "upcoming"
+            ? task.status !== "done" && task.due_date !== null && task.due_date > todayDate
+            : task.status !== "done" && (task.due_date === null || task.due_date === todayDate),
   );
 
   return (
@@ -69,7 +81,7 @@ function TasksPage() {
       <div className="space-y-6">
         <PageHeader
           title="Tasks"
-          description="Everything you need to do, in one place."
+          description="A simple view of what needs doing and when."
           actions={
             <Button
               size="sm"
@@ -84,8 +96,10 @@ function TasksPage() {
         />
 
         <Tabs value={filter} onValueChange={(value) => setFilter(value as typeof filter)}>
-          <TabsList>
-            <TabsTrigger value="open">Open</TabsTrigger>
+          <TabsList className="h-auto w-full flex-wrap justify-start gap-1 sm:w-auto">
+            <TabsTrigger value="today">Today</TabsTrigger>
+            <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
+            <TabsTrigger value="overdue">Overdue</TabsTrigger>
             <TabsTrigger value="done">Completed</TabsTrigger>
             <TabsTrigger value="all">All</TabsTrigger>
           </TabsList>
@@ -98,8 +112,22 @@ function TasksPage() {
         ) : visible.length === 0 ? (
           <EmptyState
             icon={<CheckSquare className="h-5 w-5" />}
-            title="No tasks yet"
-            description="Add your first task to start shaping your day."
+            title={
+              filter === "today"
+                ? "Nothing on today's list"
+                : filter === "upcoming"
+                  ? "No upcoming tasks"
+                  : filter === "overdue"
+                    ? "Nothing overdue"
+                    : filter === "done"
+                      ? "No completed tasks"
+                      : "No tasks yet"
+            }
+            description={
+              filter === "today"
+                ? "Add a task with today's date, or leave the date blank to keep it on today's list."
+                : "Tasks in this view will appear here."
+            }
             actionLabel="Create a task"
             onAction={() => {
               setEditing(null);
@@ -209,7 +237,10 @@ function TaskDialog({
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label>Priority</Label>
-              <Select value={priority} onValueChange={(value) => setPriority(value as TaskPriority)}>
+              <Select
+                value={priority}
+                onValueChange={(value) => setPriority(value as TaskPriority)}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>

@@ -39,6 +39,21 @@ export function todayISO() {
   ).padStart(2, "0")}`;
 }
 
+export function dateOffsetISO(offset: number) {
+  const date = new Date();
+  date.setDate(date.getDate() + offset);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+    date.getDate(),
+  ).padStart(2, "0")}`;
+}
+
+export function timestampDateISO(timestamp: string) {
+  const date = new Date(timestamp);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+    date.getDate(),
+  ).padStart(2, "0")}`;
+}
+
 /* ---------------------------------- profile --------------------------------- */
 
 export function useProfile() {
@@ -328,10 +343,10 @@ export function useDeleteTransaction() {
 
 /* -------------------------------- daily plan -------------------------------- */
 
-export function useTodayPlan() {
+export function useDailyPlan(planDate: string) {
   const { authorized } = useAuth();
   return useQuery({
-    queryKey: ["daily_plan", todayISO()],
+    queryKey: ["daily_plan", planDate],
     enabled: authorized,
     queryFn: async () => {
       const userId = await currentUserId();
@@ -340,17 +355,18 @@ export function useTodayPlan() {
           .from("daily_plans")
           .select("*")
           .eq("user_id", userId)
-          .eq("plan_date", todayISO())
+          .eq("plan_date", planDate)
           .maybeSingle(),
       ) as DailyPlan | null;
     },
   });
 }
 
-export function useSaveTodayPlan() {
+export function useSaveDailyPlan() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (values: {
+    mutationFn: async (input: {
+      plan_date: string;
       priority_1?: string | null;
       priority_2?: string | null;
       priority_3?: string | null;
@@ -359,10 +375,7 @@ export function useSaveTodayPlan() {
       return unwrap(
         await supabase
           .from("daily_plans")
-          .upsert(
-            { user_id: userId, plan_date: todayISO(), ...values },
-            { onConflict: "user_id,plan_date" },
-          )
+          .upsert({ user_id: userId, ...input }, { onConflict: "user_id,plan_date" })
           .select()
           .single(),
       );

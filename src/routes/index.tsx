@@ -1,24 +1,21 @@
-import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { CheckSquare, FolderKanban, Target, Wallet } from "lucide-react";
-import { toast } from "sonner";
+import { CalendarDays, CheckCircle2, CircleAlert, Plus } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { TaskRow } from "@/components/task-row";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
 import {
+  dateOffsetISO,
+  timestampDateISO,
   todayISO,
-  useGoals,
+  useDailyPlan,
   useProfile,
-  useProjects,
-  useSaveTodayPlan,
   useTasks,
-  useTodayPlan,
-  useTransactions,
 } from "@/lib/nexora-data";
+import type { Task } from "@/lib/nexora-data";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -26,14 +23,10 @@ export const Route = createFileRoute("/")({
       { title: "Today — Nexora" },
       {
         name: "description",
-        content:
-          "Your Nexora Today view: the three priorities that matter, today's tasks, and a calm overview of goals, projects and finances.",
+        content: "Your three priorities, today's tasks, and a clear next step.",
       },
       { property: "og:title", content: "Today — Nexora" },
-      {
-        property: "og:description",
-        content: "The three priorities that matter, today's tasks, and your life at a glance.",
-      },
+      { property: "og:description", content: "Your daily workspace for what matters today." },
     ],
   }),
   component: HomePage,
@@ -46,240 +39,177 @@ function greeting() {
   return "Good evening";
 }
 
-function HomePage() {
-  return (
-    <AppShell>
-      <Today />
-    </AppShell>
-  );
+function completedToday(task: Task, today: string) {
+  return task.status === "done" && timestampDateISO(task.updated_at) === today;
 }
 
-function Today() {
+function HomePage() {
   const { data: profile } = useProfile();
   const tasks = useTasks();
-  const goals = useGoals();
-  const projects = useProjects();
-  const transactions = useTransactions();
-
   const today = todayISO();
-  const todaysTasks = (tasks.data ?? []).filter(
-    (task) => task.status !== "done" && (!task.due_date || task.due_date <= today),
+  const todayPlan = useDailyPlan(today);
+  const tomorrowPlan = useDailyPlan(dateOffsetISO(1));
+  const name = profile?.full_name?.split(" ")[0];
+  const allTasks = tasks.data ?? [];
+  const todaysTasks = allTasks.filter(
+    (task) =>
+      task.due_date === today ||
+      completedToday(task, today) ||
+      (task.status !== "done" && task.due_date === null),
   );
-  const openTasks = (tasks.data ?? []).filter((task) => task.status !== "done");
-  const activeGoals = (goals.data ?? []).filter((goal) => goal.status === "active");
-  const activeProjects = (projects.data ?? []).filter((project) =>
-    ["planning", "active"].includes(project.status),
+  const overdueTasks = allTasks.filter(
+    (task) => task.status !== "done" && task.due_date !== null && task.due_date < today,
   );
-
-  const income = (transactions.data ?? [])
-    .filter((item) => item.type === "income")
-    .reduce((sum, item) => sum + Number(item.amount), 0);
-  const expenses = (transactions.data ?? [])
-    .filter((item) => item.type === "expense")
-    .reduce((sum, item) => sum + Number(item.amount), 0);
-
-  const firstName = profile?.full_name?.split(" ")[0];
+  const completedCount = todaysTasks.filter((task) => task.status === "done").length;
+  const progress = todaysTasks.length ? Math.round((completedCount / todaysTasks.length) * 100) : 0;
+  const priorities = [
+    todayPlan.data?.priority_1,
+    todayPlan.data?.priority_2,
+    todayPlan.data?.priority_3,
+  ].filter((value): value is string => Boolean(value?.trim()));
+  const tomorrowPriorities = [
+    tomorrowPlan.data?.priority_1,
+    tomorrowPlan.data?.priority_2,
+    tomorrowPlan.data?.priority_3,
+  ].filter((value): value is string => Boolean(value?.trim()));
 
   return (
-    <div className="space-y-8">
-      <PageHeader
-        title={`${greeting()}${firstName ? `, ${firstName}` : ""}`}
-        description={new Date().toLocaleDateString(undefined, {
-          weekday: "long",
-          day: "numeric",
-          month: "long",
-          year: "numeric",
-        })}
-      />
+    <AppShell>
+      <div className="space-y-7">
+        <PageHeader
+          title={`${greeting()}${name ? `, ${name}` : ""}`}
+          description={new Date().toLocaleDateString(undefined, {
+            weekday: "long",
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+          })}
+          actions={
+            <Button size="sm" asChild>
+              <Link to="/tasks">
+                <Plus className="mr-1 h-4 w-4" />
+                Add task
+              </Link>
+            </Button>
+          }
+        />
 
-      <TodaysPriorities />
-
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="nexora-label">Today's tasks</h2>
-          <Link to="/tasks" className="text-sm text-primary hover:underline">
-            All tasks
-          </Link>
-        </div>
-        {tasks.isLoading ? (
-          <LoadingState rows={2} />
-        ) : tasks.isError ? (
-          <ErrorState onRetry={() => void tasks.refetch()} />
-        ) : todaysTasks.length === 0 ? (
-          <EmptyState
-            title="Nothing due today"
-            description="Add a task with today's date and it will show up here."
-          />
-        ) : (
-          <div className="space-y-2">
-            {todaysTasks.slice(0, 6).map((task) => (
-              <TaskRow key={task.id} task={task} />
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="nexora-label">Overview</h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <OverviewCard
-            to="/tasks"
-            icon={<CheckSquare className="h-4 w-4" />}
-            label="Tasks"
-            loading={tasks.isLoading}
-            value={openTasks.length > 0 ? `${openTasks.length} open` : null}
-            empty="No tasks yet"
-          />
-          <OverviewCard
-            to="/goals"
-            icon={<Target className="h-4 w-4" />}
-            label="Goals"
-            loading={goals.isLoading}
-            value={activeGoals.length > 0 ? `${activeGoals.length} active` : null}
-            empty="No goals yet"
-          />
-          <OverviewCard
-            to="/projects"
-            icon={<FolderKanban className="h-4 w-4" />}
-            label="Projects"
-            loading={projects.isLoading}
-            value={activeProjects.length > 0 ? `${activeProjects.length} in motion` : null}
-            empty="No projects yet"
-          />
-          <OverviewCard
-            to="/finance"
-            icon={<Wallet className="h-4 w-4" />}
-            label="Finance"
-            loading={transactions.isLoading}
-            value={
-              (transactions.data ?? []).length > 0
-                ? `${(income - expenses).toFixed(2)} balance`
-                : null
-            }
-            empty="No transactions yet"
-          />
-        </div>
-      </section>
-    </div>
-  );
-}
-
-function TodaysPriorities() {
-  const plan = useTodayPlan();
-  const savePlan = useSaveTodayPlan();
-  const [values, setValues] = useState<string[]>(["", "", ""]);
-  const [editing, setEditing] = useState(false);
-
-  useEffect(() => {
-    if (plan.data) {
-      setValues([
-        plan.data.priority_1 ?? "",
-        plan.data.priority_2 ?? "",
-        plan.data.priority_3 ?? "",
-      ]);
-    }
-  }, [plan.data]);
-
-  const filled = values.filter((value) => value.trim().length > 0);
-
-  async function save() {
-    try {
-      await savePlan.mutateAsync({
-        priority_1: values[0]?.trim() || null,
-        priority_2: values[1]?.trim() || null,
-        priority_3: values[2]?.trim() || null,
-      });
-      setEditing(false);
-      toast.success("Priorities saved");
-    } catch {
-      toast.error("Couldn't save your priorities. Please try again.");
-    }
-  }
-
-  return (
-    <section className="nexora-panel p-5">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="nexora-label">Today's priorities</h2>
-        {!plan.isLoading && (
-          <Button variant="ghost" size="sm" onClick={() => setEditing((prev) => !prev)}>
-            {editing ? "Cancel" : filled.length > 0 ? "Edit" : "Set"}
-          </Button>
-        )}
-      </div>
-
-      {plan.isLoading ? (
-        <div className="mt-4">
-          <LoadingState rows={1} />
-        </div>
-      ) : editing ? (
-        <div className="mt-4 space-y-3">
-          {[0, 1, 2].map((index) => (
-            <div key={index} className="flex items-center gap-3">
-              <span className="w-4 shrink-0 text-sm text-muted-foreground">{index + 1}</span>
-              <Input
-                value={values[index] ?? ""}
-                placeholder={`Priority ${index + 1}`}
-                onChange={(event) => {
-                  const next = [...values];
-                  next[index] = event.target.value;
-                  setValues(next);
-                }}
-              />
+        <section className="nexora-panel border-primary/25 p-5 sm:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="nexora-label">Today's 3 priorities</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                The few things that matter most today.
+              </p>
             </div>
-          ))}
-          <Button size="sm" onClick={() => void save()} disabled={savePlan.isPending}>
-            {savePlan.isPending ? "Saving…" : "Save priorities"}
-          </Button>
-        </div>
-      ) : filled.length === 0 ? (
-        <p className="mt-4 text-sm text-muted-foreground">
-          No priorities set for today. Choose the three things that matter most.
-        </p>
-      ) : (
-        <ol className="mt-4 space-y-2.5">
-          {values.map((value, index) =>
-            value.trim() ? (
-              <li key={index} className="flex items-start gap-3 text-sm text-foreground">
-                <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md bg-surface text-xs font-semibold text-primary">
-                  {index + 1}
-                </span>
-                <span className="min-w-0">{value}</span>
-              </li>
-            ) : null,
+            <Button variant="ghost" size="sm" asChild>
+              <Link to="/planning">Edit today's plan</Link>
+            </Button>
+          </div>
+          {todayPlan.isLoading ? (
+            <div className="mt-4">
+              <LoadingState rows={1} />
+            </div>
+          ) : todayPlan.isError ? (
+            <div className="mt-4">
+              <ErrorState onRetry={() => void todayPlan.refetch()} />
+            </div>
+          ) : priorities.length === 0 ? (
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm text-muted-foreground">
+                Choose the three things that matter today.
+              </p>
+              <Button size="sm" asChild>
+                <Link to="/planning">Set today's priorities</Link>
+              </Button>
+            </div>
+          ) : (
+            <ol className="mt-5 grid gap-3 sm:grid-cols-3">
+              {priorities.map((priority, index) => (
+                <li
+                  key={`${priority}-${index}`}
+                  className="flex min-h-16 items-start gap-3 rounded-lg bg-surface p-3 text-sm"
+                >
+                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-primary/10 text-xs font-semibold text-primary">
+                    {index + 1}
+                  </span>
+                  <span className="pt-0.5 text-foreground">{priority}</span>
+                </li>
+              ))}
+            </ol>
           )}
-        </ol>
-      )}
-    </section>
-  );
-}
+        </section>
 
-function OverviewCard({
-  to,
-  icon,
-  label,
-  value,
-  empty,
-  loading,
-}: {
-  to: "/tasks" | "/goals" | "/projects" | "/finance";
-  icon: React.ReactNode;
-  label: string;
-  value: string | null;
-  empty: string;
-  loading: boolean;
-}) {
-  return (
-    <Link
-      to={to}
-      className="nexora-panel flex flex-col gap-3 p-4 transition-colors hover:border-primary/50"
-    >
-      <span className="flex items-center gap-2 text-muted-foreground">
-        {icon}
-        <span className="text-xs font-medium uppercase tracking-wider">{label}</span>
-      </span>
-      <span className="text-base font-semibold text-foreground">
-        {loading ? "…" : (value ?? <span className="text-muted-foreground">{empty}</span>)}
-      </span>
-    </Link>
+        <section className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-foreground">Today's tasks</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {tasks.isLoading
+                  ? "Loading your list…"
+                  : `${completedCount} of ${todaysTasks.length} completed`}
+              </p>
+            </div>
+            <Button variant="ghost" size="sm" asChild>
+              <Link to="/tasks">All tasks</Link>
+            </Button>
+          </div>
+          {!tasks.isLoading && !tasks.isError && (
+            <Progress value={progress} aria-label={`${progress}% of today's tasks completed`} />
+          )}
+          {tasks.isLoading ? (
+            <LoadingState rows={3} />
+          ) : tasks.isError ? (
+            <ErrorState onRetry={() => void tasks.refetch()} />
+          ) : todaysTasks.length === 0 ? (
+            <EmptyState
+              icon={<CheckCircle2 className="h-5 w-5" />}
+              title="A clear day"
+              description="Add a task for today or leave space for what matters."
+            />
+          ) : (
+            <div className="space-y-2">
+              {todaysTasks.map((task) => (
+                <TaskRow key={task.id} task={task} />
+              ))}
+            </div>
+          )}
+        </section>
+
+        {overdueTasks.length > 0 && (
+          <section className="space-y-3">
+            <div className="flex items-center gap-2">
+              <CircleAlert className="h-4 w-4 text-warning" />
+              <h2 className="text-base font-semibold text-foreground">Overdue</h2>
+              <span className="text-sm text-muted-foreground">{overdueTasks.length}</span>
+            </div>
+            <div className="space-y-2">
+              {overdueTasks.map((task) => (
+                <TaskRow key={task.id} task={task} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        <section className="nexora-panel flex flex-col justify-between gap-4 p-5 sm:flex-row sm:items-center">
+          <div className="flex items-start gap-3">
+            <CalendarDays className="mt-0.5 h-5 w-5 text-primary" />
+            <div>
+              <h2 className="font-medium text-foreground">Plan for tomorrow</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {tomorrowPlan.isLoading
+                  ? "Loading tomorrow's plan…"
+                  : tomorrowPriorities.length === 3
+                    ? "Tomorrow's three priorities are ready."
+                    : "Before you finish today, decide what matters tomorrow."}
+              </p>
+            </div>
+          </div>
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/planning">Plan tomorrow</Link>
+          </Button>
+        </section>
+      </div>
+    </AppShell>
   );
 }

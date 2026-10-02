@@ -31,8 +31,12 @@ export function TaskRow({
       <Checkbox
         checked={done}
         aria-label={done ? "Mark as not done" : "Mark as done"}
+        disabled={updateTask.isPending}
         onCheckedChange={(checked) =>
-          updateTask.mutate({ id: task.id, status: checked ? "done" : "todo" })
+          updateTask.mutate(
+            { id: task.id, status: checked ? "done" : "todo" },
+            { onError: () => toast.error("Couldn't update that task") },
+          )
         }
       />
       <button
@@ -49,11 +53,17 @@ export function TaskRow({
         >
           {task.title}
         </p>
-        {task.due_date && (
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Due {new Date(`${task.due_date}T00:00:00`).toLocaleDateString()}
-          </p>
-        )}
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          {task.due_date
+            ? `Due ${new Date(`${task.due_date}T00:00:00`).toLocaleDateString()}`
+            : "No due date"}
+          {" · "}
+          {task.status === "done"
+            ? "Completed"
+            : task.status === "in_progress"
+              ? "In progress"
+              : "To do"}
+        </p>
       </button>
       <Badge variant="outline" className={cn("shrink-0 capitalize", priorityStyles[task.priority])}>
         {task.priority}
