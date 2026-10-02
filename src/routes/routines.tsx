@@ -357,7 +357,7 @@ function RoutinesPage() {
       </div>
 
       <RoutineDialog
-        key={editing?.id ?? "new-routine"}
+        key={`${editing?.id ?? "new-routine"}-${dialogOpen}`}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         routine={editing}
