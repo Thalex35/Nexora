@@ -16,6 +16,7 @@ import { Route as FinanceRouteImport } from './routes/finance'
 import { Route as GoalsRouteImport } from './routes/goals'
 import { Route as LearningRouteImport } from './routes/learning'
 import { Route as NotesRouteImport } from './routes/notes'
+import { Route as PlanningRouteImport } from './routes/planning'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as ProjectsRouteImport } from './routes/projects'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
@@ -57,6 +58,11 @@ const NotesRoute = NotesRouteImport.update({
   path: '/notes',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PlanningRoute = PlanningRouteImport.update({
+  id: '/planning',
+  path: '/planning',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ProfileRoute = ProfileRouteImport.update({
   id: '/profile',
   path: '/profile',
@@ -91,6 +97,7 @@ export interface FileRoutesByFullPath {
   '/goals': typeof GoalsRoute
   '/learning': typeof LearningRoute
   '/notes': typeof NotesRoute
+  '/planning': typeof PlanningRoute
   '/profile': typeof ProfileRoute
   '/projects': typeof ProjectsRoute
   '/reset-password': typeof ResetPasswordRoute
@@ -105,6 +112,7 @@ export interface FileRoutesByTo {
   '/goals': typeof GoalsRoute
   '/learning': typeof LearningRoute
   '/notes': typeof NotesRoute
+  '/planning': typeof PlanningRoute
   '/profile': typeof ProfileRoute
   '/projects': typeof ProjectsRoute
   '/reset-password': typeof ResetPasswordRoute
@@ -120,6 +128,7 @@ export interface FileRoutesById {
   '/goals': typeof GoalsRoute
   '/learning': typeof LearningRoute
   '/notes': typeof NotesRoute
+  '/planning': typeof PlanningRoute
   '/profile': typeof ProfileRoute
   '/projects': typeof ProjectsRoute
   '/reset-password': typeof ResetPasswordRoute
@@ -136,6 +145,7 @@ export interface FileRouteTypes {
     | '/goals'
     | '/learning'
     | '/notes'
+    | '/planning'
     | '/profile'
     | '/projects'
     | '/reset-password'
@@ -150,6 +160,7 @@ export interface FileRouteTypes {
     | '/goals'
     | '/learning'
     | '/notes'
+    | '/planning'
     | '/profile'
     | '/projects'
     | '/reset-password'
@@ -164,6 +175,7 @@ export interface FileRouteTypes {
     | '/goals'
     | '/learning'
     | '/notes'
+    | '/planning'
     | '/profile'
     | '/projects'
     | '/reset-password'
@@ -179,6 +191,7 @@ export interface RootRouteChildren {
   GoalsRoute: typeof GoalsRoute
   LearningRoute: typeof LearningRoute
   NotesRoute: typeof NotesRoute
+  PlanningRoute: typeof PlanningRoute
   ProfileRoute: typeof ProfileRoute
   ProjectsRoute: typeof ProjectsRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
@@ -237,6 +250,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof NotesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/planning': {
+      id: '/planning'
+      path: '/planning'
+      fullPath: '/planning'
+      preLoaderRoute: typeof PlanningRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/profile': {
       id: '/profile'
       path: '/profile'
@@ -283,6 +303,7 @@ const rootRouteChildren: RootRouteChildren = {
   GoalsRoute: GoalsRoute,
   LearningRoute: LearningRoute,
   NotesRoute: NotesRoute,
+  PlanningRoute: PlanningRoute,
   ProfileRoute: ProfileRoute,
   ProjectsRoute: ProjectsRoute,
   ResetPasswordRoute: ResetPasswordRoute,

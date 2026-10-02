@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
+import { useAuth } from "@/lib/auth";
+import { isAuthorizedUserId } from "@/lib/single-user";
 
 export type Task = Database["public"]["Tables"]["tasks"]["Row"];
 export type Goal = Database["public"]["Tables"]["goals"]["Row"];
@@ -26,6 +28,7 @@ async function currentUserId(): Promise<string> {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) throw new Error("Not signed in");
+  if (!isAuthorizedUserId(user.id)) throw new Error("This Nexora instance is private.");
   return user.id;
 }
 
@@ -36,11 +39,28 @@ export function todayISO() {
   ).padStart(2, "0")}`;
 }
 
+export function dateOffsetISO(offset: number) {
+  const date = new Date();
+  date.setDate(date.getDate() + offset);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+    date.getDate(),
+  ).padStart(2, "0")}`;
+}
+
+export function timestampDateISO(timestamp: string) {
+  const date = new Date(timestamp);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+    date.getDate(),
+  ).padStart(2, "0")}`;
+}
+
 /* ---------------------------------- profile --------------------------------- */
 
 export function useProfile() {
+  const { authorized } = useAuth();
   return useQuery({
     queryKey: ["profile"],
+    enabled: authorized,
     queryFn: async () => {
       const userId = await currentUserId();
       return unwrap(
@@ -70,16 +90,20 @@ export function useUpdateProfile() {
 /* ----------------------------------- tasks ---------------------------------- */
 
 export function useTasks() {
+  const { authorized } = useAuth();
   return useQuery({
     queryKey: ["tasks"],
-    queryFn: async () =>
-      unwrap(
+    enabled: authorized,
+    queryFn: async () => {
+      await currentUserId();
+      return unwrap(
         await supabase
           .from("tasks")
           .select("*")
           .order("due_date", { ascending: true, nullsFirst: false })
           .order("created_at", { ascending: false }),
-      ) as Task[],
+      ) as Task[];
+    },
   });
 }
 
@@ -112,8 +136,10 @@ export function useCreateTask() {
 export function useUpdateTask() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...values }: Partial<TaskInput> & { id: string }) =>
-      unwrap(await supabase.from("tasks").update(values).eq("id", id).select().single()),
+    mutationFn: async ({ id, ...values }: Partial<TaskInput> & { id: string }) => {
+      await currentUserId();
+      return unwrap(await supabase.from("tasks").update(values).eq("id", id).select().single());
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["tasks"] }),
   });
 }
@@ -122,6 +148,7 @@ export function useDeleteTask() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
+      await currentUserId();
       const { error } = await supabase.from("tasks").delete().eq("id", id);
       if (error) throw new Error(error.message);
     },
@@ -132,12 +159,16 @@ export function useDeleteTask() {
 /* ----------------------------------- goals ---------------------------------- */
 
 export function useGoals() {
+  const { authorized } = useAuth();
   return useQuery({
     queryKey: ["goals"],
-    queryFn: async () =>
-      unwrap(
+    enabled: authorized,
+    queryFn: async () => {
+      await currentUserId();
+      return unwrap(
         await supabase.from("goals").select("*").order("created_at", { ascending: false }),
-      ) as Goal[],
+      ) as Goal[];
+    },
   });
 }
 
@@ -169,8 +200,10 @@ export function useCreateGoal() {
 export function useUpdateGoal() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...values }: Partial<GoalInput> & { id: string }) =>
-      unwrap(await supabase.from("goals").update(values).eq("id", id).select().single()),
+    mutationFn: async ({ id, ...values }: Partial<GoalInput> & { id: string }) => {
+      await currentUserId();
+      return unwrap(await supabase.from("goals").update(values).eq("id", id).select().single());
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["goals"] }),
   });
 }
@@ -179,6 +212,7 @@ export function useDeleteGoal() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
+      await currentUserId();
       const { error } = await supabase.from("goals").delete().eq("id", id);
       if (error) throw new Error(error.message);
     },
@@ -189,12 +223,16 @@ export function useDeleteGoal() {
 /* --------------------------------- projects --------------------------------- */
 
 export function useProjects() {
+  const { authorized } = useAuth();
   return useQuery({
     queryKey: ["projects"],
-    queryFn: async () =>
-      unwrap(
+    enabled: authorized,
+    queryFn: async () => {
+      await currentUserId();
+      return unwrap(
         await supabase.from("projects").select("*").order("created_at", { ascending: false }),
-      ) as Project[],
+      ) as Project[];
+    },
   });
 }
 
@@ -227,8 +265,10 @@ export function useCreateProject() {
 export function useUpdateProject() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...values }: Partial<ProjectInput> & { id: string }) =>
-      unwrap(await supabase.from("projects").update(values).eq("id", id).select().single()),
+    mutationFn: async ({ id, ...values }: Partial<ProjectInput> & { id: string }) => {
+      await currentUserId();
+      return unwrap(await supabase.from("projects").update(values).eq("id", id).select().single());
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["projects"] }),
   });
 }
@@ -237,6 +277,7 @@ export function useDeleteProject() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
+      await currentUserId();
       const { error } = await supabase.from("projects").delete().eq("id", id);
       if (error) throw new Error(error.message);
     },
@@ -247,15 +288,19 @@ export function useDeleteProject() {
 /* ------------------------------- transactions ------------------------------- */
 
 export function useTransactions() {
+  const { authorized } = useAuth();
   return useQuery({
     queryKey: ["transactions"],
-    queryFn: async () =>
-      unwrap(
+    enabled: authorized,
+    queryFn: async () => {
+      await currentUserId();
+      return unwrap(
         await supabase
           .from("transactions")
           .select("*")
           .order("transaction_date", { ascending: false }),
-      ) as Transaction[],
+      ) as Transaction[];
+    },
   });
 }
 
@@ -288,6 +333,7 @@ export function useDeleteTransaction() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
+      await currentUserId();
       const { error } = await supabase.from("transactions").delete().eq("id", id);
       if (error) throw new Error(error.message);
     },
@@ -297,9 +343,11 @@ export function useDeleteTransaction() {
 
 /* -------------------------------- daily plan -------------------------------- */
 
-export function useTodayPlan() {
+export function useDailyPlan(planDate: string) {
+  const { authorized } = useAuth();
   return useQuery({
-    queryKey: ["daily_plan", todayISO()],
+    queryKey: ["daily_plan", planDate],
+    enabled: authorized,
     queryFn: async () => {
       const userId = await currentUserId();
       return unwrap(
@@ -307,17 +355,18 @@ export function useTodayPlan() {
           .from("daily_plans")
           .select("*")
           .eq("user_id", userId)
-          .eq("plan_date", todayISO())
+          .eq("plan_date", planDate)
           .maybeSingle(),
       ) as DailyPlan | null;
     },
   });
 }
 
-export function useSaveTodayPlan() {
+export function useSaveDailyPlan() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (values: {
+    mutationFn: async (input: {
+      plan_date: string;
       priority_1?: string | null;
       priority_2?: string | null;
       priority_3?: string | null;
@@ -326,10 +375,7 @@ export function useSaveTodayPlan() {
       return unwrap(
         await supabase
           .from("daily_plans")
-          .upsert(
-            { user_id: userId, plan_date: todayISO(), ...values },
-            { onConflict: "user_id,plan_date" },
-          )
+          .upsert({ user_id: userId, ...input }, { onConflict: "user_id,plan_date" })
           .select()
           .single(),
       );

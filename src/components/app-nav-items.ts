@@ -1,6 +1,7 @@
 import {
   Award,
   BookOpen,
+  CalendarDays,
   CheckSquare,
   FolderKanban,
   Home,
@@ -14,12 +15,24 @@ import {
 
 export type NavItem = {
   title: string;
-  url: "/" | "/tasks" | "/goals" | "/projects" | "/finance" | "/learning" | "/achievements" | "/notes" | "/settings" | "/profile";
+  url:
+    | "/"
+    | "/planning"
+    | "/tasks"
+    | "/goals"
+    | "/projects"
+    | "/finance"
+    | "/learning"
+    | "/achievements"
+    | "/notes"
+    | "/settings"
+    | "/profile";
   icon: LucideIcon;
 };
 
 export const mainNav: NavItem[] = [
   { title: "Home", url: "/", icon: Home },
+  { title: "Plan & review", url: "/planning", icon: CalendarDays },
   { title: "Tasks", url: "/tasks", icon: CheckSquare },
   { title: "Goals", url: "/goals", icon: Target },
   { title: "Projects", url: "/projects", icon: FolderKanban },

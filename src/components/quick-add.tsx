@@ -167,8 +167,8 @@ function QuickAddForm({ type, onDone }: { type: QuickAddType; onDone: () => void
   if (type === "note") {
     return (
       <div className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
-        Notes are a foundation in this release. Once the Notes module ships, quick-added notes
-        will save here.
+        Notes are a foundation in this release. Once the Notes module ships, quick-added notes will
+        save here.
       </div>
     );
   }
@@ -233,7 +233,13 @@ function QuickAddForm({ type, onDone }: { type: QuickAddType; onDone: () => void
 
       <div className="space-y-2">
         <Label htmlFor="qa-date">
-          {type === "task" ? "Due date" : type === "goal" ? "Target date" : type === "project" ? "Deadline" : "Date"}
+          {type === "task"
+            ? "Due date"
+            : type === "goal"
+              ? "Target date"
+              : type === "project"
+                ? "Deadline"
+                : "Date"}
         </Label>
         <Input
           id="qa-date"
@@ -243,15 +249,17 @@ function QuickAddForm({ type, onDone }: { type: QuickAddType; onDone: () => void
         />
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="qa-notes">{isMoney ? "Description" : "Details"}</Label>
-        <Textarea
-          id="qa-notes"
-          rows={2}
-          value={notes}
-          onChange={(event) => setNotes(event.target.value)}
-        />
-      </div>
+      {type !== "task" && (
+        <div className="space-y-2">
+          <Label htmlFor="qa-notes">{isMoney ? "Description" : "Details"}</Label>
+          <Textarea
+            id="qa-notes"
+            rows={2}
+            value={notes}
+            onChange={(event) => setNotes(event.target.value)}
+          />
+        </div>
+      )}
 
       <Button type="submit" className="w-full" disabled={pending}>
         {pending ? "Saving…" : typeLabels[type]}
