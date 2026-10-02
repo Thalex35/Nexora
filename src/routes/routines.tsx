@@ -60,8 +60,8 @@ function RoutinesPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Routine | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Routine | null>(null);
-  const [historyDate, setHistoryDate] = useState(() => dateOffsetISO(-1));
-  const selectedDay = useRoutineCompletions(historyDate, historyDate);
+  const [selectedDate, setSelectedDate] = useState(today);
+  const selectedDay = useRoutineCompletions(selectedDate, selectedDate);
   const allRoutines = routines.data ?? [];
   const activeRoutines = allRoutines.filter((routine) => routine.is_active);
   const visibleRoutines = allRoutines.filter((routine) =>
@@ -105,17 +105,31 @@ function RoutinesPage() {
         />
 
         <section className="nexora-panel space-y-4 p-4 sm:p-5">
-          <div>
-            <h2 className="text-base font-semibold text-foreground">Today</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Checking a routine records completion for {formatRoutineDate(today)} only.
-            </p>
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className="text-base font-semibold text-foreground">
+                {selectedDate === today ? "Today" : formatRoutineDate(selectedDate)}
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Check-ins are saved for the selected date and remain in your history.
+              </p>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="routine-checklist-date">Checklist date</Label>
+              <Input
+                id="routine-checklist-date"
+                type="date"
+                max={today}
+                value={selectedDate}
+                onChange={(event) => setSelectedDate(event.target.value || today)}
+              />
+            </div>
           </div>
-          {routines.isLoading || completions.isLoading ? (
+          {routines.isLoading || selectedDay.isLoading ? (
             <LoadingState rows={3} />
-          ) : routines.isError || completions.isError ? (
+          ) : routines.isError || selectedDay.isError ? (
             <ErrorState
-              onRetry={() => void Promise.all([routines.refetch(), completions.refetch()])}
+              onRetry={() => void Promise.all([routines.refetch(), selectedDay.refetch()])}
             />
           ) : activeRoutines.length === 0 ? (
             <EmptyState
@@ -128,8 +142,8 @@ function RoutinesPage() {
           ) : (
             <RoutineChecklist
               routines={activeRoutines}
-              completions={completions.data ?? []}
-              completionDate={today}
+              completions={selectedDay.data ?? []}
+              completionDate={selectedDate}
             />
           )}
         </section>
@@ -241,14 +255,9 @@ function RoutinesPage() {
               </p>
             </div>
             <div className="space-y-1">
-              <Label htmlFor="routine-history-date">View a date</Label>
-              <Input
-                id="routine-history-date"
-                type="date"
-                max={today}
-                value={historyDate}
-                onChange={(event) => setHistoryDate(event.target.value || today)}
-              />
+              <span className="text-sm text-muted-foreground">
+                Selected date: {formatRoutineDate(selectedDate)}
+              </span>
             </div>
           </div>
           {routines.isLoading || completions.isLoading || selectedDay.isLoading ? (
@@ -266,7 +275,7 @@ function RoutinesPage() {
           ) : (
             <>
               <p className="text-sm font-medium text-foreground">
-                {formatRoutineDate(historyDate)}
+                {formatRoutineDate(selectedDate)}
               </p>
               <ul className="space-y-2">
                 {allRoutines.map((routine) => {
