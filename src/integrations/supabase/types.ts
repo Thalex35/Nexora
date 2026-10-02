@@ -258,6 +258,7 @@ export type Database = {
           created_at: string
           description: string | null
           id: string
+          income_id: string | null
           transaction_date: string
           type: Database["public"]["Enums"]["transaction_type"]
           updated_at: string
@@ -269,6 +270,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          income_id?: string | null
           transaction_date?: string
           type: Database["public"]["Enums"]["transaction_type"]
           updated_at?: string
@@ -280,12 +282,21 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          income_id?: string | null
           transaction_date?: string
           type?: Database["public"]["Enums"]["transaction_type"]
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "transactions_income_id_fkey"
+            columns: ["income_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {

@@ -21,12 +21,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { formatMoney } from "@/lib/finance";
 import {
   todayISO,
   useCreateGoal,
   useCreateProject,
   useCreateTask,
   useCreateTransaction,
+  useTransactions,
   type TaskPriority,
 } from "@/lib/nexora-data";
 
@@ -92,6 +94,7 @@ function QuickAddForm({ type, onDone }: { type: QuickAddType; onDone: () => void
   const createGoal = useCreateGoal();
   const createProject = useCreateProject();
   const createTransaction = useCreateTransaction();
+  const transactions = useTransactions();
 
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
@@ -99,6 +102,8 @@ function QuickAddForm({ type, onDone }: { type: QuickAddType; onDone: () => void
   const [priority, setPriority] = useState<TaskPriority>("medium");
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState("");
+  const [linkedIncomeId, setLinkedIncomeId] = useState("unlinked");
+  const incomes = (transactions.data ?? []).filter((transaction) => transaction.type === "income");
 
   const pending =
     createTask.isPending ||
@@ -112,6 +117,7 @@ function QuickAddForm({ type, onDone }: { type: QuickAddType; onDone: () => void
     setDate("");
     setAmount("");
     setCategory("");
+    setLinkedIncomeId("unlinked");
     setPriority("medium");
   };
 
@@ -149,6 +155,7 @@ function QuickAddForm({ type, onDone }: { type: QuickAddType; onDone: () => void
           category: category || null,
           description: notes || title || null,
           transaction_date: date || todayISO(),
+          income_id: type === "expense" && linkedIncomeId !== "unlinked" ? linkedIncomeId : null,
         });
       } else {
         toast.info("Notes arrive in a later sprint", {
@@ -201,6 +208,32 @@ function QuickAddForm({ type, onDone }: { type: QuickAddType; onDone: () => void
               placeholder={type === "income" ? "Salary" : "Groceries"}
             />
           </div>
+          {type === "expense" && (
+            <div className="space-y-2">
+              <Label htmlFor="qa-linked-income">Linked income (optional)</Label>
+              <Select value={linkedIncomeId} onValueChange={setLinkedIncomeId}>
+                <SelectTrigger
+                  id="qa-linked-income"
+                  disabled={transactions.isLoading || transactions.isError}
+                >
+                  <SelectValue placeholder="No linked income" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unlinked">No linked income</SelectItem>
+                  {incomes.map((income) => (
+                    <SelectItem key={income.id} value={income.id}>
+                      {income.category || "Income"} — {formatMoney(Number(income.amount))}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {transactions.isError && (
+                <p className="text-xs text-destructive" role="alert">
+                  Couldn't load incomes. Try again before linking this expense.
+                </p>
+              )}
+            </div>
+          )}
         </>
       ) : (
         <div className="space-y-2">

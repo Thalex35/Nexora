@@ -14,12 +14,16 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { PageHeader } from "@/components/page-header";
 import { allocationAmount, formatFinanceDate, formatMoney } from "@/lib/finance";
 import {
+  useIncome,
   useDeleteIncomeAllocation,
   useDeleteTransaction,
   useIncomeAllocations,
+  useIncomeExpenses,
   useTransactions,
   useUpdateIncomeAllocation,
   type IncomeAllocation,
+  type Transaction,
+  type TransactionType,
 } from "@/lib/nexora-data";
 
 export const Route = createFileRoute("/finance/income/$incomeId")({
@@ -35,28 +39,34 @@ export const Route = createFileRoute("/finance/income/$incomeId")({
 function IncomeDetailPage() {
   const { incomeId } = Route.useParams();
   const transactions = useTransactions();
+  const incomeQuery = useIncome(incomeId);
   const allocations = useIncomeAllocations(incomeId);
+  const expenses = useIncomeExpenses(incomeId);
   const updateAllocation = useUpdateIncomeAllocation();
   const deleteAllocation = useDeleteIncomeAllocation();
   const deleteTransaction = useDeleteTransaction();
   const [allocationDialogOpen, setAllocationDialogOpen] = useState(false);
   const [editingAllocation, setEditingAllocation] = useState<IncomeAllocation | null>(null);
-  const [editingIncome, setEditingIncome] = useState(false);
+  const [transactionType, setTransactionType] = useState<TransactionType | null>(null);
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [pendingExpenseDelete, setPendingExpenseDelete] = useState<Transaction | null>(null);
   const [pendingAllocationDelete, setPendingAllocationDelete] = useState<IncomeAllocation | null>(
     null,
   );
   const [confirmIncomeDelete, setConfirmIncomeDelete] = useState(false);
 
-  const income = (transactions.data ?? []).find((item) => item.id === incomeId);
+  const income = incomeQuery.data;
   const incomeAllocations = allocations.data ?? [];
+  const incomeExpenses = expenses.data ?? [];
+  const incomes = (transactions.data ?? []).filter((transaction) => transaction.type === "income");
 
   function openNewAllocation() {
     setEditingAllocation(null);
     setAllocationDialogOpen(true);
   }
 
-  const loading = transactions.isLoading || allocations.isLoading;
-  const failed = transactions.isError || allocations.isError;
+  const loading = incomeQuery.isLoading || allocations.isLoading || expenses.isLoading;
+  const failed = incomeQuery.isError || allocations.isError || expenses.isError;
 
   if (loading) {
     return (
@@ -70,7 +80,14 @@ function IncomeDetailPage() {
     return (
       <AppShell>
         <ErrorState
-          onRetry={() => void Promise.all([transactions.refetch(), allocations.refetch()])}
+          onRetry={() =>
+            void Promise.all([
+              transactions.refetch(),
+              incomeQuery.refetch(),
+              allocations.refetch(),
+              expenses.refetch(),
+            ])
+          }
         />
       </AppShell>
     );
@@ -93,10 +110,21 @@ function IncomeDetailPage() {
     (sum, allocation) => sum + allocationAmount(allocation, Number(income.amount)),
     0,
   );
+  const spent = incomeExpenses.reduce((sum, expense) => sum + Number(expense.amount), 0);
+  const remaining = Number(income.amount) - allocated - spent;
   const completed = incomeAllocations.filter((allocation) => allocation.completed);
+  const incomeOptions = incomes.some((item) => item.id === income.id)
+    ? incomes
+    : [income, ...incomes];
 
-  function closeIncomeDialog() {
-    setEditingIncome(false);
+  function openTransaction(type: TransactionType, transaction: Transaction | null = null) {
+    setTransactionType(type);
+    setEditingTransaction(transaction);
+  }
+
+  function closeTransactionDialog() {
+    setTransactionType(null);
+    setEditingTransaction(null);
   }
 
   return (
@@ -104,7 +132,7 @@ function IncomeDetailPage() {
       <div className="space-y-6">
         <PageHeader
           title={income.category || "Income"}
-          description={income.description || "Income received and its planned allocations."}
+          description="Income details, planned allocations, and linked expenses."
           actions={
             <Button variant="ghost" size="sm" asChild>
               <Link to="/finance">
@@ -117,17 +145,23 @@ function IncomeDetailPage() {
 
         <section className="nexora-panel space-y-4 p-4 sm:p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="text-xs text-muted-foreground">Income received</p>
-              <p className="mt-1 text-2xl font-semibold text-success">
-                {formatMoney(Number(income.amount))}
-              </p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {formatFinanceDate(income.transaction_date)}
-              </p>
+            <div className="space-y-3">
+              <div>
+                <p className="text-xs text-muted-foreground">Source</p>
+                <p className="mt-1 font-medium text-foreground">{income.category || "Income"}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Income received</p>
+                <p className="mt-1 text-2xl font-semibold text-success">
+                  {formatMoney(Number(income.amount))}
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {formatFinanceDate(income.transaction_date)}
+                </p>
+              </div>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => setEditingIncome(true)}>
+              <Button variant="outline" size="sm" onClick={() => openTransaction("income", income)}>
                 Edit income
               </Button>
               <Button
@@ -141,22 +175,30 @@ function IncomeDetailPage() {
               </Button>
             </div>
           </div>
-          <div className="grid gap-3 border-t border-border pt-4 text-sm sm:grid-cols-3">
+          <div className="border-t border-border pt-3">
+            <p className="text-xs text-muted-foreground">Description</p>
+            <p className="mt-1 break-words text-sm text-foreground">
+              {income.description || "No description"}
+            </p>
+          </div>
+          <div className="grid gap-3 border-t border-border pt-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
             <div>
-              <p className="text-muted-foreground">Planned allocations</p>
+              <p className="text-muted-foreground">Income</p>
+              <p className="mt-1 font-medium text-foreground">
+                {formatMoney(Number(income.amount))}
+              </p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">Allocated</p>
               <p className="mt-1 font-medium text-foreground">{formatMoney(allocated)}</p>
             </div>
             <div>
-              <p className="text-muted-foreground">Unallocated</p>
-              <p className="mt-1 font-medium text-foreground">
-                {formatMoney(Number(income.amount) - allocated)}
-              </p>
+              <p className="text-muted-foreground">Linked expenses</p>
+              <p className="mt-1 font-medium text-foreground">{formatMoney(spent)}</p>
             </div>
             <div>
-              <p className="text-muted-foreground">Completed allocations</p>
-              <p className="mt-1 font-medium text-foreground">
-                {completed.length} of {incomeAllocations.length}
-              </p>
+              <p className="text-muted-foreground">Remaining</p>
+              <p className="mt-1 font-medium text-foreground">{formatMoney(remaining)}</p>
             </div>
           </div>
         </section>
@@ -175,6 +217,9 @@ function IncomeDetailPage() {
             </Button>
           </div>
 
+          <p className="text-xs text-muted-foreground">
+            {completed.length} of {incomeAllocations.length} allocations completed.
+          </p>
           {incomeAllocations.length === 0 ? (
             <div className="nexora-panel p-5">
               <p className="text-sm text-muted-foreground">
@@ -255,12 +300,80 @@ function IncomeDetailPage() {
             </ul>
           )}
         </section>
+
+        <section className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-foreground">Linked expenses</h2>
+              <p className="text-sm text-muted-foreground">
+                Only expenses explicitly linked to this income are included.
+              </p>
+            </div>
+            <Button size="sm" onClick={() => openTransaction("expense")}>
+              <Plus className="mr-1 h-4 w-4" />
+              Add expense
+            </Button>
+          </div>
+          {incomeExpenses.length === 0 ? (
+            <div className="nexora-panel p-5">
+              <p className="text-sm text-muted-foreground">
+                No expenses are linked to this income.
+              </p>
+            </div>
+          ) : (
+            <ul className="nexora-panel divide-y divide-border px-4">
+              {incomeExpenses.map((expense) => (
+                <li
+                  key={expense.id}
+                  className="flex min-w-0 flex-wrap items-center gap-3 py-3 sm:flex-nowrap"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-foreground">
+                      {expense.category || "Expense"}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {formatFinanceDate(expense.transaction_date)}
+                      {expense.description ? ` · ${expense.description}` : ""}
+                    </p>
+                  </div>
+                  <span className="shrink-0 text-sm font-semibold text-foreground">
+                    −{formatMoney(Number(expense.amount))}
+                  </span>
+                  <div className="flex shrink-0 items-center">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => openTransaction("expense", expense)}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Delete ${expense.category || "expense"}`}
+                      className="text-muted-foreground hover:text-destructive"
+                      onClick={() => setPendingExpenseDelete(expense)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </li>
+              ))}
+              <li className="flex justify-between gap-3 py-3 text-sm font-semibold">
+                <span>Total linked expenses</span>
+                <span>{formatMoney(spent)}</span>
+              </li>
+            </ul>
+          )}
+        </section>
       </div>
 
       <TransactionDialog
-        type={editingIncome ? "income" : null}
-        transaction={editingIncome ? income : null}
-        onClose={closeIncomeDialog}
+        type={transactionType}
+        transaction={editingTransaction}
+        incomes={incomeOptions}
+        incomeOptionsError={transactions.isError}
+        onClose={closeTransactionDialog}
       />
       <IncomeAllocationDialog
         open={allocationDialogOpen}
@@ -288,7 +401,7 @@ function IncomeDetailPage() {
         open={confirmIncomeDelete}
         onOpenChange={setConfirmIncomeDelete}
         title="Delete this income?"
-        description="This permanently deletes the income and its allocations. Expenses are not affected."
+        description="This permanently deletes the income and its allocations. Linked expenses are kept and become unlinked."
         confirmLabel="Delete income"
         onConfirm={() => {
           deleteTransaction.mutate(income.id, {
@@ -299,6 +412,21 @@ function IncomeDetailPage() {
             onError: () => toast.error("Couldn't delete that income"),
           });
           setConfirmIncomeDelete(false);
+        }}
+      />
+      <ConfirmDialog
+        open={pendingExpenseDelete !== null}
+        onOpenChange={(next) => !next && setPendingExpenseDelete(null)}
+        title="Delete this expense?"
+        description="This permanently deletes the selected expense."
+        confirmLabel="Delete expense"
+        onConfirm={() => {
+          if (!pendingExpenseDelete) return;
+          deleteTransaction.mutate(pendingExpenseDelete.id, {
+            onSuccess: () => toast.success("Expense deleted"),
+            onError: () => toast.error("Couldn't delete that expense"),
+          });
+          setPendingExpenseDelete(null);
         }}
       />
     </AppShell>

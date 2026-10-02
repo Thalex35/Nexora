@@ -11,7 +11,15 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { formatMoney } from "@/lib/finance";
 import {
   todayISO,
   useCreateTransaction,
@@ -23,10 +31,14 @@ import {
 export function TransactionDialog({
   type,
   transaction,
+  incomes = [],
+  incomeOptionsError = false,
   onClose,
 }: {
   type: TransactionType | null;
   transaction: Transaction | null;
+  incomes?: Transaction[];
+  incomeOptionsError?: boolean;
   onClose: () => void;
 }) {
   const createTransaction = useCreateTransaction();
@@ -35,6 +47,7 @@ export function TransactionDialog({
   const [sourceOrCategory, setSourceOrCategory] = useState("");
   const [description, setDescription] = useState("");
   const [date, setDate] = useState(todayISO());
+  const [linkedIncomeId, setLinkedIncomeId] = useState("unlinked");
   const open = type !== null;
 
   useEffect(() => {
@@ -43,7 +56,8 @@ export function TransactionDialog({
     setSourceOrCategory(transaction?.category ?? "");
     setDescription(transaction?.description ?? "");
     setDate(transaction?.transaction_date ?? todayISO());
-  }, [open, transaction]);
+    setLinkedIncomeId(transaction?.income_id ?? "unlinked");
+  }, [open, transaction, type]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -59,6 +73,7 @@ export function TransactionDialog({
         category: sourceOrCategory.trim() || null,
         description: description.trim() || null,
         transaction_date: date || todayISO(),
+        income_id: income ? null : linkedIncomeId === "unlinked" ? null : linkedIncomeId,
       };
       if (transaction) {
         await updateTransaction.mutateAsync({ id: transaction.id, ...values });
@@ -117,6 +132,29 @@ export function TransactionDialog({
               onChange={(event) => setDate(event.target.value)}
             />
           </div>
+          {!income && (
+            <div className="space-y-2">
+              <Label htmlFor="finance-linked-income">Linked income (optional)</Label>
+              <Select value={linkedIncomeId} onValueChange={setLinkedIncomeId}>
+                <SelectTrigger id="finance-linked-income" disabled={incomeOptionsError}>
+                  <SelectValue placeholder="No linked income" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unlinked">No linked income</SelectItem>
+                  {incomes.map((item) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {item.category || "Income"} — {formatMoney(Number(item.amount))}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {incomeOptionsError && (
+                <p className="text-xs text-destructive" role="alert">
+                  Couldn't load income choices. This expense's existing link will be preserved.
+                </p>
+              )}
+            </div>
+          )}
           <div className="space-y-2">
             <Label htmlFor="finance-description">Description (optional)</Label>
             <Textarea

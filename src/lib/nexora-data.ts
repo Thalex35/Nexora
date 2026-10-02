@@ -333,12 +333,53 @@ export function useTransactions() {
   });
 }
 
+export function useIncome(incomeId: string) {
+  const { authorized } = useAuth();
+  return useQuery({
+    queryKey: ["transactions", "income", incomeId],
+    enabled: authorized && Boolean(incomeId),
+    queryFn: async () => {
+      await currentUserId();
+      const transaction = unwrap(
+        await supabase
+          .from("transactions")
+          .select("*")
+          .eq("id", incomeId)
+          .eq("type", "income")
+          .maybeSingle(),
+      ) as Transaction | null;
+      return transaction;
+    },
+  });
+}
+
+export function useIncomeExpenses(incomeId: string) {
+  const { authorized } = useAuth();
+  return useQuery({
+    queryKey: ["transactions", "income-expenses", incomeId],
+    enabled: authorized && Boolean(incomeId),
+    queryFn: async () => {
+      const userId = await currentUserId();
+      return unwrap(
+        await supabase
+          .from("transactions")
+          .select("*")
+          .eq("user_id", userId)
+          .eq("income_id", incomeId)
+          .eq("type", "expense")
+          .order("transaction_date", { ascending: false }),
+      ) as Transaction[];
+    },
+  });
+}
+
 export type TransactionInput = {
   type: TransactionType;
   amount: number;
   category?: string | null;
   description?: string | null;
   transaction_date?: string;
+  income_id?: string | null;
 };
 
 export function useCreateTransaction() {

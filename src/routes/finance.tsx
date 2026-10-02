@@ -310,6 +310,7 @@ function FinancePage() {
       <TransactionDialog
         type={dialogType}
         transaction={editingTransaction}
+        incomes={incomes}
         onClose={closeTransactionDialog}
       />
       <ConfirmDialog
@@ -318,7 +319,7 @@ function FinancePage() {
         title={pendingDelete?.type === "income" ? "Delete this income?" : "Delete this expense?"}
         description={
           pendingDelete?.type === "income"
-            ? "This permanently deletes the income and its allocations. Expenses are not affected."
+            ? "This permanently deletes the income and its allocations. Linked expenses are kept and become unlinked."
             : "This permanently deletes this recorded expense."
         }
         confirmLabel={pendingDelete?.type === "income" ? "Delete income" : "Delete expense"}
