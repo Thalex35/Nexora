@@ -33,12 +33,14 @@ export function TransactionDialog({
   transaction,
   incomes = [],
   incomeOptionsError = false,
+  defaultDate,
   onClose,
 }: {
   type: TransactionType | null;
   transaction: Transaction | null;
   incomes?: Transaction[];
   incomeOptionsError?: boolean;
+  defaultDate?: string;
   onClose: () => void;
 }) {
   const createTransaction = useCreateTransaction();
@@ -55,9 +57,9 @@ export function TransactionDialog({
     setAmount(transaction ? String(transaction.amount) : "");
     setSourceOrCategory(transaction?.category ?? "");
     setDescription(transaction?.description ?? "");
-    setDate(transaction?.transaction_date ?? todayISO());
+    setDate(transaction?.transaction_date ?? defaultDate ?? todayISO());
     setLinkedIncomeId(transaction?.income_id ?? "unlinked");
-  }, [open, transaction, type]);
+  }, [defaultDate, open, transaction, type]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();

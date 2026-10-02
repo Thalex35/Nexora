@@ -14,6 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
+      debts: {
+        Row: {
+          amount: number
+          created_at: string
+          creditor: string
+          debt_date: string
+          description: string | null
+          due_date: string | null
+          id: string
+          paid_date: string | null
+          status: "unpaid" | "paid"
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          creditor: string
+          debt_date?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          paid_date?: string | null
+          status?: "unpaid" | "paid"
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          creditor?: string
+          debt_date?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          paid_date?: string | null
+          status?: "unpaid" | "paid"
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       daily_plans: {
         Row: {
           created_at: string
@@ -125,6 +167,56 @@ export type Database = {
             foreignKeyName: "income_allocations_income_id_fkey"
             columns: ["income_id"]
             isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      future_expenses: {
+        Row: {
+          amount: number
+          created_at: string
+          description: string | null
+          id: string
+          paid_date: string | null
+          planned_date: string
+          resulting_expense_id: string | null
+          status: "planned" | "paid" | "cancelled"
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          paid_date?: string | null
+          planned_date: string
+          resulting_expense_id?: string | null
+          status?: "planned" | "paid" | "cancelled"
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          paid_date?: string | null
+          planned_date?: string
+          resulting_expense_id?: string | null
+          status?: "planned" | "paid" | "cancelled"
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "future_expenses_resulting_expense_id_fkey"
+            columns: ["resulting_expense_id"]
+            isOneToOne: true
             referencedRelation: "transactions"
             referencedColumns: ["id"]
           },
@@ -368,7 +460,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      pay_future_expense: {
+        Args: {
+          p_future_expense_id: string
+          p_paid_date?: string
+        }
+        Returns: string
+      }
     }
     Enums: {
       goal_status: "active" | "paused" | "completed" | "archived"
