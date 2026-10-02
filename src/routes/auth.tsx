@@ -15,8 +15,7 @@ export const Route = createFileRoute("/auth")({
       { title: "Sign in — Nexora" },
       {
         name: "description",
-        content:
-          "Sign in or create your Nexora account to organise your tasks, goals, projects and finances in one personal command center.",
+        content: "Sign in to your private Nexora workspace.",
       },
       { property: "og:title", content: "Sign in — Nexora" },
       {
@@ -28,42 +27,27 @@ export const Route = createFileRoute("/auth")({
   component: AuthPage,
 });
 
-type Mode = "signin" | "signup" | "reset";
+type Mode = "signin" | "reset";
 
 function AuthPage() {
-  const { session, loading } = useAuth();
+  const { session, loading, authorized, accessDenied } = useAuth();
   const navigate = useNavigate();
   const [mode, setMode] = useState<Mode>("signin");
-  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!loading && session) {
+    if (!loading && session && authorized) {
       void navigate({ to: "/", replace: true });
     }
-  }, [loading, session, navigate]);
+  }, [loading, session, authorized, navigate]);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setBusy(true);
     try {
-      if (mode === "signup") {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            emailRedirectTo: window.location.origin,
-            data: { full_name: fullName },
-          },
-        });
-        if (error) throw error;
-        toast.success("Account created", {
-          description: "Check your inbox to confirm your email, then sign in.",
-        });
-        setMode("signin");
-      } else if (mode === "signin") {
+      if (mode === "signin") {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
       } else {
@@ -101,15 +85,14 @@ function AuthPage() {
           <p className="mt-3 text-sm text-muted-foreground">
             Understand your life, organise what matters, take action.
           </p>
+          <p className="mt-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            Private workspace
+          </p>
         </div>
 
         <div className="nexora-panel p-6">
           <h1 className="text-lg font-semibold text-foreground">
-            {mode === "signup"
-              ? "Create your account"
-              : mode === "reset"
-                ? "Reset your password"
-                : "Welcome back"}
+            {mode === "reset" ? "Reset your password" : "Welcome back"}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {mode === "reset"
@@ -117,20 +100,16 @@ function AuthPage() {
               : "Use your email to continue."}
           </p>
 
-          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-            {mode === "signup" && (
-              <div className="space-y-2">
-                <Label htmlFor="name">Full name</Label>
-                <Input
-                  id="name"
-                  required
-                  value={fullName}
-                  onChange={(event) => setFullName(event.target.value)}
-                  placeholder="Théo Louisjuste"
-                />
-              </div>
-            )}
+          {accessDenied && (
+            <p
+              role="alert"
+              className="mt-4 rounded-md border border-border bg-muted/40 p-3 text-sm text-foreground"
+            >
+              This Nexora instance is private.
+            </p>
+          )}
 
+          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -150,7 +129,7 @@ function AuthPage() {
                 <Input
                   id="password"
                   type="password"
-                  autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                  autoComplete="current-password"
                   required
                   minLength={6}
                   value={password}
@@ -163,11 +142,9 @@ function AuthPage() {
             <Button type="submit" className="w-full" disabled={busy}>
               {busy
                 ? "Please wait…"
-                : mode === "signup"
-                  ? "Create account"
-                  : mode === "reset"
-                    ? "Send reset link"
-                    : "Sign in"}
+                : mode === "reset"
+                  ? "Send reset link"
+                  : "Sign in"}
             </Button>
           </form>
 
@@ -191,26 +168,15 @@ function AuthPage() {
 
           <div className="mt-6 space-y-2 text-center text-sm">
             {mode === "signin" && (
-              <>
-                <button
-                  type="button"
-                  className="text-primary hover:underline"
-                  onClick={() => setMode("signup")}
-                >
-                  Create an account
-                </button>
-                <div>
-                  <button
-                    type="button"
-                    className="text-muted-foreground hover:text-foreground"
-                    onClick={() => setMode("reset")}
-                  >
-                    Forgot your password?
-                  </button>
-                </div>
-              </>
+              <button
+                type="button"
+                className="text-muted-foreground hover:text-foreground"
+                onClick={() => setMode("reset")}
+              >
+                Forgot your password?
+              </button>
             )}
-            {mode !== "signin" && (
+            {mode === "reset" && (
               <button
                 type="button"
                 className="text-primary hover:underline"

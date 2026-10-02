@@ -1,5 +1,5 @@
 import { useEffect, type ReactNode } from "react";
-import { useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 
 import { AppSidebar } from "@/components/app-sidebar";
 import { NexoraLogo } from "@/components/nexora-logo";
@@ -8,16 +8,34 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { useAuth } from "@/lib/auth";
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const { session, loading } = useAuth();
+  const { loading, authorized, accessDenied } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!loading && !session) {
+    if (!loading && !authorized && !accessDenied) {
       void navigate({ to: "/auth", replace: true });
     }
-  }, [loading, session, navigate]);
+  }, [loading, authorized, accessDenied, navigate]);
 
-  if (loading || !session) {
+  if (accessDenied) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 text-center">
+        <NexoraLogo className="mb-6" />
+        <h1 className="text-lg font-semibold text-foreground">This Nexora instance is private.</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Sign in with the authorized Nexora account to continue.
+        </p>
+        <Link
+          to="/auth"
+          className="mt-5 text-sm font-medium text-primary hover:underline"
+        >
+          Back to sign in
+        </Link>
+      </div>
+    );
+  }
+
+  if (loading || !authorized) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <NexoraLogo className="animate-pulse" />
