@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { ArrowDownLeft, ArrowUpRight, Wallet } from "lucide-react";
 import { toast } from "sonner";
 
@@ -41,6 +41,10 @@ export const Route = createFileRoute("/finance")({
 type HistoryFilter = "all" | "income" | "expense" | "allocations";
 
 function FinancePage() {
+  const isIncomeDetail = useRouterState({
+    select: (router) =>
+      router.matches.some((match) => match.routeId === "/finance/income/$incomeId"),
+  });
   const transactions = useTransactions();
   const allocations = useIncomeAllocations();
   const deleteTransaction = useDeleteTransaction();
@@ -90,6 +94,8 @@ function FinancePage() {
 
   const loading = transactions.isLoading || allocations.isLoading;
   const failed = transactions.isError || allocations.isError;
+
+  if (isIncomeDetail) return <Outlet />;
 
   return (
     <AppShell>
