@@ -14,6 +14,8 @@ export type DailyPlan = Database["public"]["Tables"]["daily_plans"]["Row"];
 export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 export type Routine = Database["public"]["Tables"]["routines"]["Row"];
 export type RoutineCompletion = Database["public"]["Tables"]["routine_completions"]["Row"];
+export type FutureExpense = Database["public"]["Tables"]["future_expenses"]["Row"];
+export type Debt = Database["public"]["Tables"]["debts"]["Row"];
 
 export type TaskStatus = Database["public"]["Enums"]["task_status"];
 export type TaskPriority = Database["public"]["Enums"]["task_priority"];
@@ -21,6 +23,8 @@ export type GoalStatus = Database["public"]["Enums"]["goal_status"];
 export type ProjectStatus = Database["public"]["Enums"]["project_status"];
 export type TransactionType = Database["public"]["Enums"]["transaction_type"];
 export type AllocationType = IncomeAllocation["allocation_type"];
+export type FutureExpenseStatus = FutureExpense["status"];
+export type DebtStatus = Debt["status"];
 
 function unwrap<T>({ data, error }: { data: T | null; error: { message: string } | null }): T {
   if (error) throw new Error(error.message);
@@ -411,6 +415,139 @@ export function useUpdateTransaction() {
       );
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["transactions"] }),
+  });
+}
+
+export type FutureExpenseInput = {
+  title: string;
+  amount: number;
+  planned_date: string;
+  description?: string | null;
+  status?: Exclude<FutureExpenseStatus, "paid">;
+};
+
+export function useFutureExpenses() {
+  const { authorized } = useAuth();
+  return useQuery({
+    queryKey: ["future_expenses"],
+    enabled: authorized,
+    queryFn: async () => {
+      const userId = await currentUserId();
+      return unwrap(
+        await supabase
+          .from("future_expenses")
+          .select("*")
+          .eq("user_id", userId)
+          .order("planned_date", { ascending: true })
+          .order("created_at", { ascending: true }),
+      ) as FutureExpense[];
+    },
+  });
+}
+
+export function useCreateFutureExpense() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: FutureExpenseInput) => {
+      const userId = await currentUserId();
+      return unwrap(
+        await supabase
+          .from("future_expenses")
+          .insert({ ...input, user_id: userId })
+          .select()
+          .single(),
+      );
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["future_expenses"] }),
+  });
+}
+
+export function useUpdateFutureExpense() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      ...values
+    }: Partial<FutureExpenseInput> & { id: string }) => {
+      await currentUserId();
+      return unwrap(
+        await supabase.from("future_expenses").update(values).eq("id", id).select().single(),
+      );
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["future_expenses"] }),
+  });
+}
+
+export function usePayFutureExpense() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, paidDate }: { id: string; paidDate: string }) => {
+      await currentUserId();
+      return unwrap(
+        await supabase.rpc("pay_future_expense", {
+          p_future_expense_id: id,
+          p_paid_date: paidDate,
+        }),
+      );
+    },
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: ["future_expenses"] }),
+        qc.invalidateQueries({ queryKey: ["transactions"] }),
+      ]),
+  });
+}
+
+export type DebtInput = {
+  creditor: string;
+  amount: number;
+  debt_date: string;
+  description?: string | null;
+  due_date?: string | null;
+  status?: DebtStatus;
+  paid_date?: string | null;
+};
+
+export function useDebts() {
+  const { authorized } = useAuth();
+  return useQuery({
+    queryKey: ["debts"],
+    enabled: authorized,
+    queryFn: async () => {
+      const userId = await currentUserId();
+      return unwrap(
+        await supabase
+          .from("debts")
+          .select("*")
+          .eq("user_id", userId)
+          .order("debt_date", { ascending: false })
+          .order("created_at", { ascending: false }),
+      ) as Debt[];
+    },
+  });
+}
+
+export function useCreateDebt() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: DebtInput) => {
+      const userId = await currentUserId();
+      return unwrap(
+        await supabase.from("debts").insert({ ...input, user_id: userId }).select().single(),
+      );
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["debts"] }),
+  });
+}
+
+export function useUpdateDebt() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...values }: Partial<DebtInput> & { id: string }) => {
+      await currentUserId();
+      return unwrap(await supabase.from("debts").update(values).eq("id", id).select().single());
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["debts"] }),
   });
 }
 
