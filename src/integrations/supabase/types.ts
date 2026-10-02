@@ -83,6 +83,53 @@ export type Database = {
         }
         Relationships: []
       }
+      income_allocations: {
+        Row: {
+          allocation_type: "percentage" | "fixed"
+          completed: boolean
+          created_at: string
+          id: string
+          income_id: string
+          planned_date: string | null
+          title: string
+          updated_at: string
+          user_id: string
+          value: number
+        }
+        Insert: {
+          allocation_type: "percentage" | "fixed"
+          completed?: boolean
+          created_at?: string
+          id?: string
+          income_id: string
+          planned_date?: string | null
+          title: string
+          updated_at?: string
+          user_id: string
+          value: number
+        }
+        Update: {
+          allocation_type?: "percentage" | "fixed"
+          completed?: boolean
+          created_at?: string
+          id?: string
+          income_id?: string
+          planned_date?: string | null
+          title?: string
+          updated_at?: string
+          user_id?: string
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "income_allocations_income_id_fkey"
+            columns: ["income_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null

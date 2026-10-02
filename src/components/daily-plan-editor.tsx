@@ -17,7 +17,7 @@ export function DailyPlanEditor({
 }) {
   const plan = useDailyPlan(planDate);
   const savePlan = useSaveDailyPlan();
-  const [values, setValues] = useState(["", "", ""]);
+  const [values, setValues] = useState<[string, string, string]>(["", "", ""]);
   const [initializedDate, setInitializedDate] = useState<string | null>(null);
 
   useEffect(() => {
@@ -26,7 +26,7 @@ export function DailyPlanEditor({
         plan.data?.priority_1 ?? "",
         plan.data?.priority_2 ?? "",
         plan.data?.priority_3 ?? "",
-      ]);
+      ] as [string, string, string]);
       setInitializedDate(planDate);
     }
   }, [initializedDate, plan.data, plan.isSuccess, planDate]);
@@ -47,6 +47,14 @@ export function DailyPlanEditor({
     } catch {
       toast.error("Couldn't save the plan. Please try again.");
     }
+  }
+
+  function updateValue(index: number, value: string) {
+    setValues((current) => {
+      const next: [string, string, string] = [...current];
+      next[index] = value;
+      return next;
+    });
   }
 
   return (
@@ -75,11 +83,7 @@ export function DailyPlanEditor({
                 aria-label={`Priority ${index + 1}`}
                 value={value}
                 placeholder={`Priority ${index + 1}`}
-                onChange={(event) => {
-                  const next = [...values];
-                  next[index] = event.target.value;
-                  setValues(next);
-                }}
+                onChange={(event) => updateValue(index, event.target.value)}
               />
             </label>
           ))}

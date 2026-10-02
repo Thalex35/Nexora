@@ -153,6 +153,7 @@ function GoalDetailPage() {
                   key={project.id}
                   to="/projects/$projectId"
                   params={{ projectId: project.id }}
+                  search={{ goalId: undefined }}
                   className="nexora-panel min-w-0 space-y-3 p-4 transition-colors hover:border-primary/50"
                 >
                   <div className="flex items-start justify-between gap-3">
