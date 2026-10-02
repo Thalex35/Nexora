@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Target, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, Target, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/app-shell";
@@ -32,7 +32,7 @@ export const Route = createFileRoute("/goals")({
   component: GoalsPage,
 });
 
-type GoalFilter = "active" | "completed" | "paused" | "all";
+type GoalFilter = "active" | "completed" | "paused" | "archived" | "all";
 
 function GoalsPage() {
   const goals = useGoals();
@@ -71,6 +71,7 @@ function GoalsPage() {
             <TabsTrigger value="active">Active</TabsTrigger>
             <TabsTrigger value="completed">Completed</TabsTrigger>
             <TabsTrigger value="paused">Paused</TabsTrigger>
+            <TabsTrigger value="archived">Archived</TabsTrigger>
             <TabsTrigger value="all">All</TabsTrigger>
           </TabsList>
         </Tabs>
@@ -127,6 +128,43 @@ function GoalsPage() {
                         : "No target date"}
                     </span>
                     <div className="flex shrink-0 items-center">
+                      {filter === "archived" ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={updateGoal.isPending}
+                          onClick={() =>
+                            updateGoal.mutate(
+                              { id: goal.id, status: "active" },
+                              {
+                                onSuccess: () => toast.success("Goal restored"),
+                                onError: () => toast.error("Couldn't restore that goal"),
+                              },
+                            )
+                          }
+                        >
+                          <ArchiveRestore className="mr-1 h-4 w-4" />
+                          Restore
+                        </Button>
+                      ) : goal.status !== "archived" ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={updateGoal.isPending}
+                          onClick={() =>
+                            updateGoal.mutate(
+                              { id: goal.id, status: "archived" },
+                              {
+                                onSuccess: () => toast.success("Goal archived"),
+                                onError: () => toast.error("Couldn't archive that goal"),
+                              },
+                            )
+                          }
+                        >
+                          <Archive className="mr-1 h-4 w-4" />
+                          Archive
+                        </Button>
+                      ) : null}
                       <Button
                         variant="ghost"
                         size="sm"

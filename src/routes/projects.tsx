@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { FolderKanban, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, FolderKanban, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/app-shell";
@@ -12,7 +12,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useDeleteProject, useGoals, useProjects, type Project } from "@/lib/nexora-data";
+import {
+  useDeleteProject,
+  useGoals,
+  useProjects,
+  useUpdateProject,
+  type Project,
+} from "@/lib/nexora-data";
 
 export const Route = createFileRoute("/projects")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -35,12 +41,13 @@ export const Route = createFileRoute("/projects")({
   component: ProjectsPage,
 });
 
-type ProjectFilter = "active" | "completed" | "paused" | "all";
+type ProjectFilter = "active" | "completed" | "paused" | "archived" | "all";
 
 function ProjectsPage() {
   const search = Route.useSearch();
   const projects = useProjects();
   const goals = useGoals();
+  const updateProject = useUpdateProject();
   const deleteProject = useDeleteProject();
   const [filter, setFilter] = useState<ProjectFilter>("active");
   const [open, setOpen] = useState(false);
@@ -77,6 +84,7 @@ function ProjectsPage() {
             <TabsTrigger value="active">Active</TabsTrigger>
             <TabsTrigger value="completed">Completed</TabsTrigger>
             <TabsTrigger value="paused">Paused</TabsTrigger>
+            <TabsTrigger value="archived">Archived</TabsTrigger>
             <TabsTrigger value="all">All</TabsTrigger>
           </TabsList>
         </Tabs>
@@ -142,6 +150,43 @@ function ProjectsPage() {
                         : "No deadline"}
                     </span>
                     <div className="flex shrink-0 items-center">
+                      {filter === "archived" ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={updateProject.isPending}
+                          onClick={() =>
+                            updateProject.mutate(
+                              { id: project.id, status: "active" },
+                              {
+                                onSuccess: () => toast.success("Project restored"),
+                                onError: () => toast.error("Couldn't restore that project"),
+                              },
+                            )
+                          }
+                        >
+                          <ArchiveRestore className="mr-1 h-4 w-4" />
+                          Restore
+                        </Button>
+                      ) : project.status !== "archived" ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={updateProject.isPending}
+                          onClick={() =>
+                            updateProject.mutate(
+                              { id: project.id, status: "archived" },
+                              {
+                                onSuccess: () => toast.success("Project archived"),
+                                onError: () => toast.error("Couldn't archive that project"),
+                              },
+                            )
+                          }
+                        >
+                          <Archive className="mr-1 h-4 w-4" />
+                          Archive
+                        </Button>
+                      ) : null}
                       <Button
                         variant="ghost"
                         size="sm"
