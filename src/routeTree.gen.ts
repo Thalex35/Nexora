@@ -20,6 +20,7 @@ import { Route as PlanningRouteImport } from './routes/planning'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as ProjectsRouteImport } from './routes/projects'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as RoutinesRouteImport } from './routes/routines'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as TasksRouteImport } from './routes/tasks'
 import { Route as GoalsGoalIdRouteImport } from './routes/goals.$goalId'
@@ -81,6 +82,11 @@ const ResetPasswordRoute = ResetPasswordRouteImport.update({
   path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RoutinesRoute = RoutinesRouteImport.update({
+  id: '/routines',
+  path: '/routines',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -119,6 +125,7 @@ export interface FileRoutesByFullPath {
   '/profile': typeof ProfileRoute
   '/projects': typeof ProjectsRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
+  '/routines': typeof RoutinesRoute
   '/settings': typeof SettingsRoute
   '/tasks': typeof TasksRoute
   '/goals/$goalId': typeof GoalsGoalIdRoute
@@ -137,6 +144,7 @@ export interface FileRoutesByTo {
   '/profile': typeof ProfileRoute
   '/projects': typeof ProjectsRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
+  '/routines': typeof RoutinesRoute
   '/settings': typeof SettingsRoute
   '/tasks': typeof TasksRoute
   '/goals/$goalId': typeof GoalsGoalIdRoute
@@ -156,6 +164,7 @@ export interface FileRoutesById {
   '/profile': typeof ProfileRoute
   '/projects': typeof ProjectsRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
+  '/routines': typeof RoutinesRoute
   '/settings': typeof SettingsRoute
   '/tasks': typeof TasksRoute
   '/goals/$goalId': typeof GoalsGoalIdRoute
@@ -176,6 +185,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/projects'
     | '/reset-password'
+    | '/routines'
     | '/settings'
     | '/tasks'
     | '/goals/$goalId'
@@ -194,6 +204,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/projects'
     | '/reset-password'
+    | '/routines'
     | '/settings'
     | '/tasks'
     | '/goals/$goalId'
@@ -212,6 +223,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/projects'
     | '/reset-password'
+    | '/routines'
     | '/settings'
     | '/tasks'
     | '/goals/$goalId'
@@ -231,6 +243,7 @@ export interface RootRouteChildren {
   ProfileRoute: typeof ProfileRoute
   ProjectsRoute: typeof ProjectsRouteWithChildren
   ResetPasswordRoute: typeof ResetPasswordRoute
+  RoutinesRoute: typeof RoutinesRoute
   SettingsRoute: typeof SettingsRoute
   TasksRoute: typeof TasksRoute
 }
@@ -312,6 +325,13 @@ declare module '@tanstack/react-router' {
       path: '/reset-password'
       fullPath: '/reset-password'
       preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/routines': {
+      id: '/routines'
+      path: '/routines'
+      fullPath: '/routines'
+      preLoaderRoute: typeof RoutinesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -397,6 +417,7 @@ const rootRouteChildren: RootRouteChildren = {
   ProfileRoute: ProfileRoute,
   ProjectsRoute: ProjectsRouteWithChildren,
   ResetPasswordRoute: ResetPasswordRoute,
+  RoutinesRoute: RoutinesRoute,
   SettingsRoute: SettingsRoute,
   TasksRoute: TasksRoute,
 }

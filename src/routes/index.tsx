@@ -5,6 +5,7 @@ import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { TaskRow } from "@/components/task-row";
+import { TodayRoutines } from "@/components/today-routines";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -198,6 +199,8 @@ function HomePage() {
             </div>
           </section>
         )}
+
+        <TodayRoutines />
 
         <section className="grid gap-4 md:grid-cols-2">
           <CompactProgressList
