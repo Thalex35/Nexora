@@ -1,6 +1,7 @@
 import {
   Award,
   BookOpen,
+  ChartNoAxesCombined,
   CalendarDays,
   CheckSquare,
   FolderKanban,
@@ -19,6 +20,7 @@ export type NavItem = {
   url:
     | "/"
     | "/planning"
+    | "/analytics"
     | "/tasks"
     | "/routines"
     | "/goals"
@@ -35,6 +37,7 @@ export type NavItem = {
 export const mainNav: NavItem[] = [
   { title: "Home", url: "/", icon: Home },
   { title: "Plan & review", url: "/planning", icon: CalendarDays },
+  { title: "Analytics", url: "/analytics", icon: ChartNoAxesCombined },
   { title: "Tasks", url: "/tasks", icon: CheckSquare },
   { title: "Routines", url: "/routines", icon: ListChecks },
   { title: "Goals", url: "/goals", icon: Target },

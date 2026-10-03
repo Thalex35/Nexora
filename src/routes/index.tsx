@@ -20,6 +20,7 @@ import {
   dateOffsetISO,
   timestampDateISO,
   todayISO,
+  useDailyPlans,
   useDailyPlan,
   useGoals,
   useLearningItems,
@@ -28,6 +29,7 @@ import {
   useTasks,
 } from "@/lib/nexora-data";
 import type { Task } from "@/lib/nexora-data";
+import { dateRangeForPeriod, getDayPlanPriorities } from "@/lib/planning";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -62,6 +64,8 @@ function HomePage() {
   const projects = useProjects();
   const learning = useLearningItems();
   const today = todayISO();
+  const weekRange = dateRangeForPeriod("week", today);
+  const weeklyPlans = useDailyPlans(weekRange.start, weekRange.end);
   const todayPlan = useDailyPlan(today);
   const tomorrowPlan = useDailyPlan(dateOffsetISO(1));
   const name = profile?.full_name?.split(" ")[0];
@@ -94,6 +98,11 @@ function HomePage() {
   const currentLearning = (learning.data ?? [])
     .filter((item) => item.status === "in_progress")
     .slice(0, 3);
+  const weekTasks = allTasks.filter(
+    (task) => task.due_date !== null && task.due_date >= weekRange.start && task.due_date <= today,
+  );
+  const weekCompletedTasks = weekTasks.filter((task) => task.status === "done").length;
+  const weekProgress = weekTasks.length ? Math.round((weekCompletedTasks / weekTasks.length) * 100) : 0;
 
   return (
     <AppShell>
@@ -214,6 +223,33 @@ function HomePage() {
         )}
 
         <TodayRoutines />
+
+        <section className="nexora-panel flex flex-wrap items-center justify-between gap-4 p-4">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold text-foreground">This week</h2>
+              <span className="text-xs text-muted-foreground">
+                {weekCompletedTasks}/{weekTasks.length} scheduled tasks complete
+              </span>
+            </div>
+            <Progress value={weekProgress} className="mt-2 h-1.5" />
+            <p className="mt-1 text-xs text-muted-foreground">
+              {weeklyPlans.isLoading
+                ? "Checking your plans…"
+                : weeklyPlans.isError
+                  ? "Couldn't load weekly planning consistency."
+                  : `${weeklyPlans.data?.filter((plan) => getDayPlanPriorities(plan).length > 0).length ?? 0} of 7 days have priorities set`}
+            </p>
+          </div>
+          <div className="flex shrink-0 gap-3">
+            <Link to="/planning" className="text-xs font-medium text-primary hover:underline">
+              Plan week
+            </Link>
+            <Link to="/analytics" className="text-xs font-medium text-primary hover:underline">
+              Insights
+            </Link>
+          </div>
+        </section>
 
         <section className="grid gap-4 md:grid-cols-2">
           <CompactProgressList
