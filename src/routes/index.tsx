@@ -81,16 +81,8 @@ function HomePage() {
   );
   const completedCount = todaysTasks.filter((task) => task.status === "done").length;
   const progress = todaysTasks.length ? Math.round((completedCount / todaysTasks.length) * 100) : 0;
-  const priorities = [
-    todayPlan.data?.priority_1,
-    todayPlan.data?.priority_2,
-    todayPlan.data?.priority_3,
-  ].filter((value): value is string => Boolean(value?.trim()));
-  const tomorrowPriorities = [
-    tomorrowPlan.data?.priority_1,
-    tomorrowPlan.data?.priority_2,
-    tomorrowPlan.data?.priority_3,
-  ].filter((value): value is string => Boolean(value?.trim()));
+  const priorities = getDayPlanPriorities(todayPlan.data);
+  const tomorrowPriorities = getDayPlanPriorities(tomorrowPlan.data);
   const activeGoals = (goals.data ?? []).filter((goal) => goal.status === "active").slice(0, 3);
   const activeProjects = (projects.data ?? [])
     .filter((project) => project.status === "active" || project.status === "planning")
@@ -102,7 +94,9 @@ function HomePage() {
     (task) => task.due_date !== null && task.due_date >= weekRange.start && task.due_date <= today,
   );
   const weekCompletedTasks = weekTasks.filter((task) => task.status === "done").length;
-  const weekProgress = weekTasks.length ? Math.round((weekCompletedTasks / weekTasks.length) * 100) : 0;
+  const weekProgress = weekTasks.length
+    ? Math.round((weekCompletedTasks / weekTasks.length) * 100)
+    : 0;
 
   return (
     <AppShell>
@@ -128,7 +122,7 @@ function HomePage() {
         <section className="nexora-panel border-primary/25 p-5 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="nexora-label">Today's 3 priorities</p>
+              <p className="nexora-label">Today's priorities</p>
               <p className="mt-1 text-sm text-muted-foreground">
                 The few things that matter most today.
               </p>
@@ -148,7 +142,7 @@ function HomePage() {
           ) : priorities.length === 0 ? (
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
               <p className="text-sm text-muted-foreground">
-                Choose the three things that matter today.
+                Choose what matters today, or leave the list empty.
               </p>
               <Button size="sm" asChild>
                 <Link to="/planning">Set today's priorities</Link>
@@ -300,8 +294,8 @@ function HomePage() {
               <p className="mt-1 text-sm text-muted-foreground">
                 {tomorrowPlan.isLoading
                   ? "Loading tomorrow's plan…"
-                  : tomorrowPriorities.length === 3
-                    ? "Tomorrow's three priorities are ready."
+                  : tomorrowPriorities.length > 0
+                    ? `${tomorrowPriorities.length} ${tomorrowPriorities.length === 1 ? "priority is" : "priorities are"} ready for tomorrow.`
                     : "Before you finish today, decide what matters tomorrow."}
               </p>
             </div>

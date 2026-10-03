@@ -68,10 +68,13 @@ export function formatPlanningDate(dateISO: string, options?: Intl.DateTimeForma
   return new Date(`${dateISO}T12:00:00`).toLocaleDateString(undefined, options);
 }
 
-export function getDayPlanPriorities(plan: DailyPlan | undefined) {
-  return [plan?.priority_1, plan?.priority_2, plan?.priority_3].filter(
-    (priority): priority is string => Boolean(priority?.trim()),
-  );
+export function getDayPlanPriorities(plan: DailyPlan | null | undefined) {
+  const priorities =
+    (plan?.priorities?.length ? plan.priorities : null) ??
+    [plan?.priority_1, plan?.priority_2, plan?.priority_3].filter((priority): priority is string =>
+      Boolean(priority?.trim()),
+    );
+  return priorities.filter((priority): priority is string => Boolean(priority?.trim()));
 }
 
 export function dayPlanningData(

@@ -468,10 +468,7 @@ export function useCreateFutureExpense() {
 export function useUpdateFutureExpense() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({
-      id,
-      ...values
-    }: Partial<FutureExpenseInput> & { id: string }) => {
+    mutationFn: async ({ id, ...values }: Partial<FutureExpenseInput> & { id: string }) => {
       await currentUserId();
       return unwrap(
         await supabase.from("future_expenses").update(values).eq("id", id).select().single(),
@@ -536,7 +533,11 @@ export function useCreateDebt() {
     mutationFn: async (input: DebtInput) => {
       const userId = await currentUserId();
       return unwrap(
-        await supabase.from("debts").insert({ ...input, user_id: userId }).select().single(),
+        await supabase
+          .from("debts")
+          .insert({ ...input, user_id: userId })
+          .select()
+          .single(),
       );
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["debts"] }),
@@ -820,10 +821,14 @@ export function useSaveDailyPlan() {
   return useMutation({
     mutationFn: async (input: {
       plan_date: string;
+      priorities?: string[];
       priority_1?: string | null;
       priority_2?: string | null;
       priority_3?: string | null;
     }) => {
+      if (input.plan_date < todayISO()) {
+        throw new Error("Past daily priorities are read-only");
+      }
       const userId = await currentUserId();
       return unwrap(
         await supabase

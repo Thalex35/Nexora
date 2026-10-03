@@ -4,6 +4,7 @@ import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { TaskRow } from "@/components/task-row";
 import { Button } from "@/components/ui/button";
 import { timestampDateISO, todayISO, useDailyPlan, useTasks } from "@/lib/nexora-data";
+import { getDayPlanPriorities } from "@/lib/planning";
 import type { Task } from "@/lib/nexora-data";
 
 function completedToday(task: Task, today: string) {
@@ -30,9 +31,7 @@ export function DailyReview() {
   );
   const completed = todayTasks.filter((task) => completedToday(task, today));
   const incomplete = todayTasks.filter((task) => task.status !== "done");
-  const priorities = [plan.data?.priority_1, plan.data?.priority_2, plan.data?.priority_3].filter(
-    (value): value is string => Boolean(value?.trim()),
-  );
+  const priorities = getDayPlanPriorities(plan.data);
   const tasksLoading = plan.isLoading || tasksQuery.isLoading;
 
   return (
