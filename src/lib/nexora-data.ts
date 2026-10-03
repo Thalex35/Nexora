@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth";
 import { isAuthorizedUserId } from "@/lib/single-user";
 
 export type Task = Database["public"]["Tables"]["tasks"]["Row"];
+export type Achievement = Database["public"]["Tables"]["achievements"]["Row"];
 export type Goal = Database["public"]["Tables"]["goals"]["Row"];
 export type Project = Database["public"]["Tables"]["projects"]["Row"];
 export type Transaction = Database["public"]["Tables"]["transactions"]["Row"];
@@ -126,6 +127,78 @@ export type TaskInput = {
   due_date?: string | null;
   project_id?: string | null;
 };
+
+export type AchievementInput = {
+  title: string;
+  description?: string | null;
+  category: string;
+  achievement_date: string;
+  notes?: string | null;
+  goal_id?: string | null;
+  project_id?: string | null;
+  learning_item_id?: string | null;
+  task_id?: string | null;
+};
+
+export function useAchievements() {
+  const { authorized } = useAuth();
+  return useQuery({
+    queryKey: ["achievements"],
+    enabled: authorized,
+    queryFn: async () => {
+      await currentUserId();
+      return unwrap(
+        await supabase
+          .from("achievements")
+          .select("*")
+          .order("achievement_date", { ascending: false })
+          .order("created_at", { ascending: false }),
+      ) as Achievement[];
+    },
+  });
+}
+
+export function useCreateAchievement() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: AchievementInput) => {
+      const userId = await currentUserId();
+      return unwrap(
+        await supabase
+          .from("achievements")
+          .insert({ ...input, user_id: userId })
+          .select()
+          .single(),
+      ) as Achievement;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["achievements"] }),
+  });
+}
+
+export function useUpdateAchievement() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...values }: Partial<AchievementInput> & { id: string }) => {
+      await currentUserId();
+      return unwrap(
+        await supabase.from("achievements").update(values).eq("id", id).select().single(),
+      ) as Achievement;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["achievements"] }),
+  });
+}
+
+export function useDeleteAchievement() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await currentUserId();
+      const { error } = await supabase.from("achievements").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["achievements"] }),
+  });
+}
 
 export function useCreateTask() {
   const qc = useQueryClient();
