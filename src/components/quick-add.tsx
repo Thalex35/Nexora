@@ -25,6 +25,7 @@ import { formatMoney } from "@/lib/finance";
 import {
   todayISO,
   useCreateGoal,
+  useCreateAchievement,
   useCreateLearningItem,
   useCreateProject,
   useCreateRoutine,
@@ -42,6 +43,7 @@ type QuickAddType =
   | "goal"
   | "project"
   | "learning"
+  | "achievement"
   | "note";
 
 const typeLabels: Record<QuickAddType, string> = {
@@ -52,6 +54,7 @@ const typeLabels: Record<QuickAddType, string> = {
   goal: "Add Goal",
   project: "Add Project",
   learning: "Add Learning",
+  achievement: "Add Achievement",
   note: "Add Note",
 };
 
@@ -104,6 +107,7 @@ export function QuickAdd({ defaultType = "task" }: { defaultType?: QuickAddType 
 function QuickAddForm({ type, onDone }: { type: QuickAddType; onDone: () => void }) {
   const createTask = useCreateTask();
   const createGoal = useCreateGoal();
+  const createAchievement = useCreateAchievement();
   const createLearningItem = useCreateLearningItem();
   const createProject = useCreateProject();
   const createRoutine = useCreateRoutine();
@@ -121,6 +125,7 @@ function QuickAddForm({ type, onDone }: { type: QuickAddType; onDone: () => void
 
   const pending =
     createTask.isPending ||
+    createAchievement.isPending ||
     createGoal.isPending ||
     createLearningItem.isPending ||
     createProject.isPending ||
@@ -171,6 +176,13 @@ function QuickAddForm({ type, onDone }: { type: QuickAddType; onDone: () => void
           category: category.trim() || null,
           target_date: date || null,
         });
+      } else if (type === "achievement") {
+        await createAchievement.mutateAsync({
+          title: title.trim(),
+          description: notes.trim() || null,
+          category: category.trim() || "Personal",
+          achievement_date: date || todayISO(),
+        });
       } else if (type === "income" || type === "expense") {
         const value = Number(amount);
         if (!Number.isFinite(value) || value <= 0) {
@@ -195,7 +207,9 @@ function QuickAddForm({ type, onDone }: { type: QuickAddType; onDone: () => void
       reset();
       onDone();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Something went wrong. Please try again.");
+      toast.error(
+        error instanceof Error ? error.message : "Something went wrong. Please try again.",
+      );
     }
   }
 
@@ -210,7 +224,12 @@ function QuickAddForm({ type, onDone }: { type: QuickAddType; onDone: () => void
 
   const isMoney = type === "income" || type === "expense";
   const hasDate =
-    type === "task" || type === "goal" || type === "project" || type === "learning" || isMoney;
+    type === "task" ||
+    type === "goal" ||
+    type === "project" ||
+    type === "learning" ||
+    type === "achievement" ||
+    isMoney;
 
   return (
     <form onSubmit={submit} className="space-y-4">
@@ -274,7 +293,9 @@ function QuickAddForm({ type, onDone }: { type: QuickAddType; onDone: () => void
                 ? "Routine name"
                 : type === "learning"
                   ? "Learning item"
-                  : "Title"}
+                  : type === "achievement"
+                    ? "Achievement"
+                    : "Title"}
           </Label>
           <Input
             id="qa-title"
@@ -288,20 +309,24 @@ function QuickAddForm({ type, onDone }: { type: QuickAddType; onDone: () => void
                   ? "Morning walk"
                   : type === "learning"
                     ? "What do you want to learn?"
-                    : "What needs doing?"
+                    : type === "achievement"
+                      ? "What meaningful milestone did you reach?"
+                      : "What needs doing?"
             }
           />
         </div>
       )}
 
-      {type === "learning" && (
+      {(type === "learning" || type === "achievement") && (
         <div className="space-y-2">
-          <Label htmlFor="qa-category">Category or topic</Label>
+          <Label htmlFor="qa-category">
+            {type === "achievement" ? "Category" : "Category or topic"}
+          </Label>
           <Input
             id="qa-category"
             value={category}
             onChange={(event) => setCategory(event.target.value)}
-            placeholder="Programming, Languages…"
+            placeholder={type === "achievement" ? "Personal" : "Programming, Languages…"}
           />
         </div>
       )}
@@ -333,7 +358,9 @@ function QuickAddForm({ type, onDone }: { type: QuickAddType; onDone: () => void
                   ? "Deadline"
                   : type === "learning"
                     ? "Target date"
-                    : "Date"}
+                    : type === "achievement"
+                      ? "Achievement date"
+                      : "Date"}
           </Label>
           <Input
             id="qa-date"

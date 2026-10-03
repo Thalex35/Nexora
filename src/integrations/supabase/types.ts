@@ -56,6 +56,83 @@ export type Database = {
         }
         Relationships: []
       }
+      achievements: {
+        Row: {
+          achievement_date: string
+          category: string
+          created_at: string
+          description: string | null
+          goal_id: string | null
+          id: string
+          learning_item_id: string | null
+          notes: string | null
+          project_id: string | null
+          task_id: string | null
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          achievement_date: string
+          category: string
+          created_at?: string
+          description?: string | null
+          goal_id?: string | null
+          id?: string
+          learning_item_id?: string | null
+          notes?: string | null
+          project_id?: string | null
+          task_id?: string | null
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          achievement_date?: string
+          category?: string
+          created_at?: string
+          description?: string | null
+          goal_id?: string | null
+          id?: string
+          learning_item_id?: string | null
+          notes?: string | null
+          project_id?: string | null
+          task_id?: string | null
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "achievements_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "goals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "achievements_learning_item_id_fkey"
+            columns: ["learning_item_id"]
+            isOneToOne: false
+            referencedRelation: "learning_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "achievements_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "achievements_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       daily_plans: {
         Row: {
           created_at: string

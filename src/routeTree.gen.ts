@@ -16,6 +16,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as FinanceRouteImport } from './routes/finance'
 import { Route as GoalsRouteImport } from './routes/goals'
 import { Route as LearningRouteImport } from './routes/learning'
+import { Route as LifeHistoryRouteImport } from './routes/life-history'
 import { Route as NotesRouteImport } from './routes/notes'
 import { Route as PlanningRouteImport } from './routes/planning'
 import { Route as ProfileRouteImport } from './routes/profile'
@@ -62,6 +63,11 @@ const GoalsRoute = GoalsRouteImport.update({
 const LearningRoute = LearningRouteImport.update({
   id: '/learning',
   path: '/learning',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LifeHistoryRoute = LifeHistoryRouteImport.update({
+  id: '/life-history',
+  path: '/life-history',
   getParentRoute: () => rootRouteImport,
 } as any)
 const NotesRoute = NotesRouteImport.update({
@@ -133,6 +139,7 @@ export interface FileRoutesByFullPath {
   '/finance': typeof FinanceRouteWithChildren
   '/goals': typeof GoalsRouteWithChildren
   '/learning': typeof LearningRouteWithChildren
+  '/life-history': typeof LifeHistoryRoute
   '/notes': typeof NotesRoute
   '/planning': typeof PlanningRoute
   '/profile': typeof ProfileRoute
@@ -154,6 +161,7 @@ export interface FileRoutesByTo {
   '/finance': typeof FinanceRouteWithChildren
   '/goals': typeof GoalsRouteWithChildren
   '/learning': typeof LearningRouteWithChildren
+  '/life-history': typeof LifeHistoryRoute
   '/notes': typeof NotesRoute
   '/planning': typeof PlanningRoute
   '/profile': typeof ProfileRoute
@@ -176,6 +184,7 @@ export interface FileRoutesById {
   '/finance': typeof FinanceRouteWithChildren
   '/goals': typeof GoalsRouteWithChildren
   '/learning': typeof LearningRouteWithChildren
+  '/life-history': typeof LifeHistoryRoute
   '/notes': typeof NotesRoute
   '/planning': typeof PlanningRoute
   '/profile': typeof ProfileRoute
@@ -199,6 +208,7 @@ export interface FileRouteTypes {
     | '/finance'
     | '/goals'
     | '/learning'
+    | '/life-history'
     | '/notes'
     | '/planning'
     | '/profile'
@@ -220,6 +230,7 @@ export interface FileRouteTypes {
     | '/finance'
     | '/goals'
     | '/learning'
+    | '/life-history'
     | '/notes'
     | '/planning'
     | '/profile'
@@ -241,6 +252,7 @@ export interface FileRouteTypes {
     | '/finance'
     | '/goals'
     | '/learning'
+    | '/life-history'
     | '/notes'
     | '/planning'
     | '/profile'
@@ -263,6 +275,7 @@ export interface RootRouteChildren {
   FinanceRoute: typeof FinanceRouteWithChildren
   GoalsRoute: typeof GoalsRouteWithChildren
   LearningRoute: typeof LearningRouteWithChildren
+  LifeHistoryRoute: typeof LifeHistoryRoute
   NotesRoute: typeof NotesRoute
   PlanningRoute: typeof PlanningRoute
   ProfileRoute: typeof ProfileRoute
@@ -322,6 +335,13 @@ declare module '@tanstack/react-router' {
       path: '/learning'
       fullPath: '/learning'
       preLoaderRoute: typeof LearningRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/life-history': {
+      id: '/life-history'
+      path: '/life-history'
+      fullPath: '/life-history'
+      preLoaderRoute: typeof LifeHistoryRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/notes': {
@@ -464,6 +484,7 @@ const rootRouteChildren: RootRouteChildren = {
   FinanceRoute: FinanceRouteWithChildren,
   GoalsRoute: GoalsRouteWithChildren,
   LearningRoute: LearningRouteWithChildren,
+  LifeHistoryRoute: LifeHistoryRoute,
   NotesRoute: NotesRoute,
   PlanningRoute: PlanningRoute,
   ProfileRoute: ProfileRoute,

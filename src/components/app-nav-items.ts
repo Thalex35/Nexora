@@ -6,6 +6,7 @@ import {
   CheckSquare,
   FolderKanban,
   Home,
+  History,
   NotebookPen,
   ListChecks,
   Settings,
@@ -28,6 +29,7 @@ export type NavItem = {
     | "/finance"
     | "/learning"
     | "/achievements"
+    | "/life-history"
     | "/notes"
     | "/settings"
     | "/profile";
@@ -45,6 +47,7 @@ export const mainNav: NavItem[] = [
   { title: "Finance", url: "/finance", icon: Wallet },
   { title: "Learning", url: "/learning", icon: BookOpen },
   { title: "Achievements", url: "/achievements", icon: Award },
+  { title: "Life History", url: "/life-history", icon: History },
   { title: "Notes", url: "/notes", icon: NotebookPen },
 ];
 
