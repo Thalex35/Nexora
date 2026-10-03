@@ -16,6 +16,8 @@ export type Routine = Database["public"]["Tables"]["routines"]["Row"];
 export type RoutineCompletion = Database["public"]["Tables"]["routine_completions"]["Row"];
 export type FutureExpense = Database["public"]["Tables"]["future_expenses"]["Row"];
 export type Debt = Database["public"]["Tables"]["debts"]["Row"];
+export type LearningItem = Database["public"]["Tables"]["learning_items"]["Row"];
+export type LearningSession = Database["public"]["Tables"]["learning_sessions"]["Row"];
 
 export type TaskStatus = Database["public"]["Enums"]["task_status"];
 export type TaskPriority = Database["public"]["Enums"]["task_priority"];
@@ -25,6 +27,7 @@ export type TransactionType = Database["public"]["Enums"]["transaction_type"];
 export type AllocationType = IncomeAllocation["allocation_type"];
 export type FutureExpenseStatus = FutureExpense["status"];
 export type DebtStatus = Debt["status"];
+export type LearningStatus = LearningItem["status"];
 
 function unwrap<T>({ data, error }: { data: T | null; error: { message: string } | null }): T {
   if (error) throw new Error(error.message);
@@ -811,5 +814,128 @@ export function useSaveDailyPlan() {
       );
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["daily_plan"] }),
+  });
+}
+
+/* --------------------------------- learning --------------------------------- */
+
+export type LearningItemInput = {
+  title: string;
+  description?: string | null;
+  category?: string | null;
+  status?: LearningStatus;
+  progress?: number;
+  target_date?: string | null;
+  goal_id?: string | null;
+  project_id?: string | null;
+  task_id?: string | null;
+};
+
+export type LearningSessionInput = {
+  learning_item_id: string;
+  learning_item_title: string;
+  session_date: string;
+  duration_minutes: number;
+  studied: string;
+  notes?: string | null;
+};
+
+export function useLearningItems() {
+  const { authorized } = useAuth();
+  return useQuery({
+    queryKey: ["learning_items"],
+    enabled: authorized,
+    queryFn: async () => {
+      const userId = await currentUserId();
+      return unwrap(
+        await supabase
+          .from("learning_items")
+          .select("*")
+          .eq("user_id", userId)
+          .order("updated_at", { ascending: false }),
+      ) as LearningItem[];
+    },
+  });
+}
+
+export function useCreateLearningItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: LearningItemInput) => {
+      const userId = await currentUserId();
+      return unwrap(
+        await supabase
+          .from("learning_items")
+          .insert({ ...input, user_id: userId })
+          .select()
+          .single(),
+      ) as LearningItem;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["learning_items"] }),
+  });
+}
+
+export function useUpdateLearningItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...values }: Partial<LearningItemInput> & { id: string }) => {
+      await currentUserId();
+      return unwrap(
+        await supabase.from("learning_items").update(values).eq("id", id).select().single(),
+      ) as LearningItem;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["learning_items"] }),
+  });
+}
+
+export function useDeleteLearningItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await currentUserId();
+      const { error } = await supabase.from("learning_items").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: ["learning_items"] }),
+        qc.invalidateQueries({ queryKey: ["learning_sessions"] }),
+      ]),
+  });
+}
+
+export function useLearningSessions() {
+  const { authorized } = useAuth();
+  return useQuery({
+    queryKey: ["learning_sessions"],
+    enabled: authorized,
+    queryFn: async () => {
+      const userId = await currentUserId();
+      return unwrap(
+        await supabase
+          .from("learning_sessions")
+          .select("*")
+          .eq("user_id", userId)
+          .order("session_date", { ascending: false })
+          .order("created_at", { ascending: false }),
+      ) as LearningSession[];
+    },
+  });
+}
+
+export function useCreateLearningSession() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: LearningSessionInput) => {
+      const userId = await currentUserId();
+      return unwrap(
+        await supabase
+          .from("learning_sessions")
+          .insert({ ...input, user_id: userId })
+          .select()
+          .single(),
+      ) as LearningSession;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["learning_sessions"] }),
   });
 }

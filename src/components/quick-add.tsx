@@ -25,6 +25,7 @@ import { formatMoney } from "@/lib/finance";
 import {
   todayISO,
   useCreateGoal,
+  useCreateLearningItem,
   useCreateProject,
   useCreateRoutine,
   useCreateTask,
@@ -33,7 +34,15 @@ import {
   type TaskPriority,
 } from "@/lib/nexora-data";
 
-type QuickAddType = "task" | "routine" | "expense" | "income" | "goal" | "project" | "note";
+type QuickAddType =
+  | "task"
+  | "routine"
+  | "expense"
+  | "income"
+  | "goal"
+  | "project"
+  | "learning"
+  | "note";
 
 const typeLabels: Record<QuickAddType, string> = {
   task: "Add Task",
@@ -42,6 +51,7 @@ const typeLabels: Record<QuickAddType, string> = {
   income: "Add Income",
   goal: "Add Goal",
   project: "Add Project",
+  learning: "Add Learning",
   note: "Add Note",
 };
 
@@ -94,6 +104,7 @@ export function QuickAdd({ defaultType = "task" }: { defaultType?: QuickAddType 
 function QuickAddForm({ type, onDone }: { type: QuickAddType; onDone: () => void }) {
   const createTask = useCreateTask();
   const createGoal = useCreateGoal();
+  const createLearningItem = useCreateLearningItem();
   const createProject = useCreateProject();
   const createRoutine = useCreateRoutine();
   const createTransaction = useCreateTransaction();
@@ -111,6 +122,7 @@ function QuickAddForm({ type, onDone }: { type: QuickAddType; onDone: () => void
   const pending =
     createTask.isPending ||
     createGoal.isPending ||
+    createLearningItem.isPending ||
     createProject.isPending ||
     createRoutine.isPending ||
     createTransaction.isPending;
@@ -152,6 +164,13 @@ function QuickAddForm({ type, onDone }: { type: QuickAddType; onDone: () => void
           name: title.trim(),
           description: notes || null,
         });
+      } else if (type === "learning") {
+        await createLearningItem.mutateAsync({
+          title: title.trim(),
+          description: notes.trim() || null,
+          category: category.trim() || null,
+          target_date: date || null,
+        });
       } else if (type === "income" || type === "expense") {
         const value = Number(amount);
         if (!Number.isFinite(value) || value <= 0) {
@@ -175,8 +194,8 @@ function QuickAddForm({ type, onDone }: { type: QuickAddType; onDone: () => void
       toast.success(`${typeLabels[type].replace("Add ", "")} saved`);
       reset();
       onDone();
-    } catch {
-      toast.error("Something went wrong. Please try again.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Something went wrong. Please try again.");
     }
   }
 
@@ -190,7 +209,8 @@ function QuickAddForm({ type, onDone }: { type: QuickAddType; onDone: () => void
   }
 
   const isMoney = type === "income" || type === "expense";
-  const hasDate = type === "task" || type === "goal" || type === "project" || isMoney;
+  const hasDate =
+    type === "task" || type === "goal" || type === "project" || type === "learning" || isMoney;
 
   return (
     <form onSubmit={submit} className="space-y-4">
@@ -248,7 +268,13 @@ function QuickAddForm({ type, onDone }: { type: QuickAddType; onDone: () => void
       ) : (
         <div className="space-y-2">
           <Label htmlFor="qa-title">
-            {type === "project" ? "Project name" : type === "routine" ? "Routine name" : "Title"}
+            {type === "project"
+              ? "Project name"
+              : type === "routine"
+                ? "Routine name"
+                : type === "learning"
+                  ? "Learning item"
+                  : "Title"}
           </Label>
           <Input
             id="qa-title"
@@ -260,8 +286,22 @@ function QuickAddForm({ type, onDone }: { type: QuickAddType; onDone: () => void
                 ? "Run a half marathon"
                 : type === "routine"
                   ? "Morning walk"
-                  : "What needs doing?"
+                  : type === "learning"
+                    ? "What do you want to learn?"
+                    : "What needs doing?"
             }
+          />
+        </div>
+      )}
+
+      {type === "learning" && (
+        <div className="space-y-2">
+          <Label htmlFor="qa-category">Category or topic</Label>
+          <Input
+            id="qa-category"
+            value={category}
+            onChange={(event) => setCategory(event.target.value)}
+            placeholder="Programming, Languages…"
           />
         </div>
       )}
@@ -291,7 +331,9 @@ function QuickAddForm({ type, onDone }: { type: QuickAddType; onDone: () => void
                 ? "Target date"
                 : type === "project"
                   ? "Deadline"
-                  : "Date"}
+                  : type === "learning"
+                    ? "Target date"
+                    : "Date"}
           </Label>
           <Input
             id="qa-date"

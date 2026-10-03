@@ -222,6 +222,120 @@ export type Database = {
           },
         ]
       }
+      learning_items: {
+        Row: {
+          category: string | null
+          created_at: string
+          description: string | null
+          goal_id: string | null
+          id: string
+          progress: number
+          project_id: string | null
+          status: "not_started" | "in_progress" | "completed"
+          target_date: string | null
+          task_id: string | null
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          description?: string | null
+          goal_id?: string | null
+          id?: string
+          progress?: number
+          project_id?: string | null
+          status?: "not_started" | "in_progress" | "completed"
+          target_date?: string | null
+          task_id?: string | null
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          description?: string | null
+          goal_id?: string | null
+          id?: string
+          progress?: number
+          project_id?: string | null
+          status?: "not_started" | "in_progress" | "completed"
+          target_date?: string | null
+          task_id?: string | null
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "learning_items_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "goals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "learning_items_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "learning_items_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      learning_sessions: {
+        Row: {
+          created_at: string
+          duration_minutes: number
+          id: string
+          learning_item_id: string | null
+          learning_item_title: string
+          notes: string | null
+          session_date: string
+          studied: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          duration_minutes: number
+          id?: string
+          learning_item_id?: string | null
+          learning_item_title: string
+          notes?: string | null
+          session_date?: string
+          studied: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          duration_minutes?: number
+          id?: string
+          learning_item_id?: string | null
+          learning_item_title?: string
+          notes?: string | null
+          session_date?: string
+          studied?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "learning_sessions_learning_item_id_fkey"
+            columns: ["learning_item_id"]
+            isOneToOne: false
+            referencedRelation: "learning_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null

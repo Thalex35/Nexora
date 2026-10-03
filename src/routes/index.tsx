@@ -1,5 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { CalendarDays, CheckCircle2, CircleAlert, FolderKanban, Plus, Target } from "lucide-react";
+import {
+  BookOpen,
+  CalendarDays,
+  CheckCircle2,
+  CircleAlert,
+  FolderKanban,
+  Plus,
+  Target,
+} from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
@@ -14,6 +22,7 @@ import {
   todayISO,
   useDailyPlan,
   useGoals,
+  useLearningItems,
   useProfile,
   useProjects,
   useTasks,
@@ -51,6 +60,7 @@ function HomePage() {
   const tasks = useTasks();
   const goals = useGoals();
   const projects = useProjects();
+  const learning = useLearningItems();
   const today = todayISO();
   const todayPlan = useDailyPlan(today);
   const tomorrowPlan = useDailyPlan(dateOffsetISO(1));
@@ -80,6 +90,9 @@ function HomePage() {
   const activeGoals = (goals.data ?? []).filter((goal) => goal.status === "active").slice(0, 3);
   const activeProjects = (projects.data ?? [])
     .filter((project) => project.status === "active" || project.status === "planning")
+    .slice(0, 3);
+  const currentLearning = (learning.data ?? [])
+    .filter((item) => item.status === "in_progress")
     .slice(0, 3);
 
   return (
@@ -235,6 +248,12 @@ function HomePage() {
               params: { projectId: project.id },
             }))}
           />
+          <LearningCompactList
+            items={currentLearning}
+            loading={learning.isLoading}
+            error={learning.isError}
+            onRetry={() => void learning.refetch()}
+          />
         </section>
 
         <section className="nexora-panel flex flex-col justify-between gap-4 p-5 sm:flex-row sm:items-center">
@@ -257,6 +276,71 @@ function HomePage() {
         </section>
       </div>
     </AppShell>
+  );
+}
+
+function LearningCompactList({
+  items,
+  loading,
+  error,
+  onRetry,
+}: {
+  items: Array<{ id: string; title: string; progress: number }>;
+  loading: boolean;
+  error: boolean;
+  onRetry: () => void;
+}) {
+  return (
+    <section className="nexora-panel min-w-0 space-y-3 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+          <BookOpen className="h-4 w-4 text-primary" />
+          Learning now
+        </h2>
+        <Link to="/learning" className="text-xs text-primary hover:underline">
+          View all
+        </Link>
+      </div>
+      {loading ? (
+        <p className="text-sm text-muted-foreground">Loading…</p>
+      ) : error ? (
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">Couldn't load learning.</p>
+          <Button variant="ghost" size="sm" onClick={onRetry}>
+            Retry
+          </Button>
+        </div>
+      ) : items.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No learning in progress.</p>
+      ) : (
+        <ul className="space-y-3">
+          {items.map((item) => (
+            <li key={item.id} className="min-w-0">
+              <div className="flex items-center justify-between gap-3">
+                <Link
+                  to="/learning/$learningId"
+                  params={{ learningId: item.id }}
+                  className="min-w-0 truncate text-sm text-foreground hover:text-primary"
+                >
+                  {item.title}
+                </Link>
+                <span className="shrink-0 text-xs text-muted-foreground">{item.progress}%</span>
+              </div>
+              <Progress value={item.progress} className="mt-1.5 h-1.5" />
+              <div className="mt-1 text-right">
+                <Link
+                  to="/learning/$learningId"
+                  params={{ learningId: item.id }}
+                  className="text-xs font-medium text-primary hover:underline"
+                >
+                  Continue
+                </Link>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 
