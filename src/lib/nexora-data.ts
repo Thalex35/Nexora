@@ -795,6 +795,26 @@ export function useDailyPlan(planDate: string) {
   });
 }
 
+export function useDailyPlans(fromDate: string, throughDate: string) {
+  const { authorized } = useAuth();
+  return useQuery({
+    queryKey: ["daily_plans", fromDate, throughDate],
+    enabled: authorized,
+    queryFn: async () => {
+      const userId = await currentUserId();
+      return unwrap(
+        await supabase
+          .from("daily_plans")
+          .select("*")
+          .eq("user_id", userId)
+          .gte("plan_date", fromDate)
+          .lte("plan_date", throughDate)
+          .order("plan_date", { ascending: true }),
+      ) as DailyPlan[];
+    },
+  });
+}
+
 export function useSaveDailyPlan() {
   const qc = useQueryClient();
   return useMutation({
@@ -813,7 +833,11 @@ export function useSaveDailyPlan() {
           .single(),
       );
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["daily_plan"] }),
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: ["daily_plan"] }),
+        qc.invalidateQueries({ queryKey: ["daily_plans"] }),
+      ]),
   });
 }
 
