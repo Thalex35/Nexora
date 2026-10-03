@@ -33,6 +33,7 @@ import {
   formatMoney,
   monthlyFinanceTotals,
   shiftFinanceMonth,
+  toggleDebtStatus,
 } from "@/lib/finance";
 import {
   todayISO,
@@ -404,15 +405,20 @@ function FinancePage() {
                   setEditingDebt(debt);
                   setDebtDialogOpen(true);
                 }}
-                onMarkPaid={(debt) =>
+                onToggleStatus={(debt) => {
+                  const markingPaid = debt.status === "unpaid";
                   updateDebt.mutate(
-                    { id: debt.id, status: "paid", paid_date: todayISO() },
                     {
-                      onSuccess: () => toast.success("Debt marked paid"),
+                      id: debt.id,
+                      ...toggleDebtStatus(debt.status, todayISO()),
+                    },
+                    {
+                      onSuccess: () =>
+                        toast.success(markingPaid ? "Debt marked paid" : "Debt marked unpaid"),
                       onError: () => toast.error("Couldn't update this debt"),
                     },
-                  )
-                }
+                  );
+                }}
                 updating={updateDebt.isPending}
               />
             </section>
@@ -662,13 +668,13 @@ function DebtsPanel({
   debts,
   onAdd,
   onEdit,
-  onMarkPaid,
+  onToggleStatus,
   updating,
 }: {
   debts: Debt[];
   onAdd: () => void;
   onEdit: (debt: Debt) => void;
-  onMarkPaid: (debt: Debt) => void;
+  onToggleStatus: (debt: Debt) => void;
   updating: boolean;
 }) {
   const outstanding = debts
@@ -725,16 +731,14 @@ function DebtsPanel({
                 >
                   Edit
                 </Button>
-                {debt.status === "unpaid" && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={updating}
-                    onClick={() => onMarkPaid(debt)}
-                  >
-                    Mark paid
-                  </Button>
-                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={updating}
+                  onClick={() => onToggleStatus(debt)}
+                >
+                  Mark {debt.status === "unpaid" ? "paid" : "unpaid"}
+                </Button>
               </div>
             </li>
           ))}

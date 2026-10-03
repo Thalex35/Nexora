@@ -16,6 +16,15 @@ export function allocationAmount(
   return roundMoney(amount);
 }
 
+export function toggleDebtStatus(
+  status: Debt["status"],
+  paidDate: string,
+): Pick<Debt, "status" | "paid_date"> {
+  return status === "unpaid"
+    ? { status: "paid", paid_date: paidDate }
+    : { status: "unpaid", paid_date: null };
+}
+
 const roundMoney = (amount: number) => Math.round((amount + Number.EPSILON) * 100) / 100;
 
 export function currentFinanceMonth() {
