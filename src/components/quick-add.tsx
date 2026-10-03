@@ -27,6 +27,7 @@ import {
   useCreateGoal,
   useCreateAchievement,
   useCreateLearningItem,
+  useCreateNote,
   useCreateProject,
   useCreateRoutine,
   useCreateTask,
@@ -108,6 +109,7 @@ function QuickAddForm({ type, onDone }: { type: QuickAddType; onDone: () => void
   const createTask = useCreateTask();
   const createGoal = useCreateGoal();
   const createAchievement = useCreateAchievement();
+  const createNote = useCreateNote();
   const createLearningItem = useCreateLearningItem();
   const createProject = useCreateProject();
   const createRoutine = useCreateRoutine();
@@ -126,6 +128,7 @@ function QuickAddForm({ type, onDone }: { type: QuickAddType; onDone: () => void
   const pending =
     createTask.isPending ||
     createAchievement.isPending ||
+    createNote.isPending ||
     createGoal.isPending ||
     createLearningItem.isPending ||
     createProject.isPending ||
@@ -183,6 +186,12 @@ function QuickAddForm({ type, onDone }: { type: QuickAddType; onDone: () => void
           category: category.trim() || "Personal",
           achievement_date: date || todayISO(),
         });
+      } else if (type === "note") {
+        await createNote.mutateAsync({
+          title: title.trim(),
+          content: notes,
+          category: category.trim() || "Personal",
+        });
       } else if (type === "income" || type === "expense") {
         const value = Number(amount);
         if (!Number.isFinite(value) || value <= 0) {
@@ -198,10 +207,7 @@ function QuickAddForm({ type, onDone }: { type: QuickAddType; onDone: () => void
           income_id: type === "expense" && linkedIncomeId !== "unlinked" ? linkedIncomeId : null,
         });
       } else {
-        toast.info("Notes arrive in a later sprint", {
-          description: "The Notes module is still a foundation — nothing was saved.",
-        });
-        return;
+        throw new Error("This item type is not supported.");
       }
       toast.success(`${typeLabels[type].replace("Add ", "")} saved`);
       reset();
@@ -211,15 +217,6 @@ function QuickAddForm({ type, onDone }: { type: QuickAddType; onDone: () => void
         error instanceof Error ? error.message : "Something went wrong. Please try again.",
       );
     }
-  }
-
-  if (type === "note") {
-    return (
-      <div className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
-        Notes are a foundation in this release. Once the Notes module ships, quick-added notes will
-        save here.
-      </div>
-    );
   }
 
   const isMoney = type === "income" || type === "expense";
@@ -295,7 +292,9 @@ function QuickAddForm({ type, onDone }: { type: QuickAddType; onDone: () => void
                   ? "Learning item"
                   : type === "achievement"
                     ? "Achievement"
-                    : "Title"}
+                    : type === "note"
+                      ? "Note title"
+                      : "Title"}
           </Label>
           <Input
             id="qa-title"
@@ -311,22 +310,26 @@ function QuickAddForm({ type, onDone }: { type: QuickAddType; onDone: () => void
                     ? "What do you want to learn?"
                     : type === "achievement"
                       ? "What meaningful milestone did you reach?"
-                      : "What needs doing?"
+                      : type === "note"
+                        ? "Give this note a useful title"
+                        : "What needs doing?"
             }
           />
         </div>
       )}
 
-      {(type === "learning" || type === "achievement") && (
+      {(type === "learning" || type === "achievement" || type === "note") && (
         <div className="space-y-2">
           <Label htmlFor="qa-category">
-            {type === "achievement" ? "Category" : "Category or topic"}
+            {type === "achievement" || type === "note" ? "Category" : "Category or topic"}
           </Label>
           <Input
             id="qa-category"
             value={category}
             onChange={(event) => setCategory(event.target.value)}
-            placeholder={type === "achievement" ? "Personal" : "Programming, Languages…"}
+            placeholder={
+              type === "achievement" || type === "note" ? "Personal" : "Programming, Languages…"
+            }
           />
         </div>
       )}
@@ -373,7 +376,9 @@ function QuickAddForm({ type, onDone }: { type: QuickAddType; onDone: () => void
 
       {type !== "task" && (
         <div className="space-y-2">
-          <Label htmlFor="qa-notes">{isMoney ? "Description" : "Details"}</Label>
+          <Label htmlFor="qa-notes">
+            {type === "note" ? "Content" : isMoney ? "Description" : "Details"}
+          </Label>
           <Textarea
             id="qa-notes"
             rows={2}

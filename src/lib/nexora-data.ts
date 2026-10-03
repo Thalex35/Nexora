@@ -7,6 +7,7 @@ import { isAuthorizedUserId } from "@/lib/single-user";
 
 export type Task = Database["public"]["Tables"]["tasks"]["Row"];
 export type Achievement = Database["public"]["Tables"]["achievements"]["Row"];
+export type Note = Database["public"]["Tables"]["notes"]["Row"];
 export type Goal = Database["public"]["Tables"]["goals"]["Row"];
 export type Project = Database["public"]["Tables"]["projects"]["Row"];
 export type Transaction = Database["public"]["Tables"]["transactions"]["Row"];
@@ -139,6 +140,79 @@ export type AchievementInput = {
   learning_item_id?: string | null;
   task_id?: string | null;
 };
+
+export type NoteInput = {
+  title: string;
+  content: string;
+  category?: string;
+  tags?: string[];
+  is_pinned?: boolean;
+  archived_at?: string | null;
+  goal_id?: string | null;
+  project_id?: string | null;
+  task_id?: string | null;
+  learning_item_id?: string | null;
+};
+
+export function useNotes() {
+  const { authorized } = useAuth();
+  return useQuery({
+    queryKey: ["notes"],
+    enabled: authorized,
+    queryFn: async () => {
+      await currentUserId();
+      return unwrap(
+        await supabase
+          .from("notes")
+          .select("*")
+          .order("is_pinned", { ascending: false })
+          .order("updated_at", { ascending: false }),
+      ) as Note[];
+    },
+  });
+}
+
+export function useCreateNote() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: NoteInput) => {
+      const userId = await currentUserId();
+      return unwrap(
+        await supabase
+          .from("notes")
+          .insert({ ...input, user_id: userId })
+          .select()
+          .single(),
+      ) as Note;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["notes"] }),
+  });
+}
+
+export function useUpdateNote() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...values }: Partial<NoteInput> & { id: string }) => {
+      await currentUserId();
+      return unwrap(
+        await supabase.from("notes").update(values).eq("id", id).select().single(),
+      ) as Note;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["notes"] }),
+  });
+}
+
+export function useDeleteNote() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await currentUserId();
+      const { error } = await supabase.from("notes").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["notes"] }),
+  });
+}
 
 export function useAchievements() {
   const { authorized } = useAuth();

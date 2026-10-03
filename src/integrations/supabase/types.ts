@@ -416,6 +416,86 @@ export type Database = {
           },
         ]
       }
+      notes: {
+        Row: {
+          archived_at: string | null
+          category: string
+          content: string
+          created_at: string
+          goal_id: string | null
+          id: string
+          is_pinned: boolean
+          learning_item_id: string | null
+          project_id: string | null
+          tags: string[]
+          task_id: string | null
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          archived_at?: string | null
+          category?: string
+          content?: string
+          created_at?: string
+          goal_id?: string | null
+          id?: string
+          is_pinned?: boolean
+          learning_item_id?: string | null
+          project_id?: string | null
+          tags?: string[]
+          task_id?: string | null
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          archived_at?: string | null
+          category?: string
+          content?: string
+          created_at?: string
+          goal_id?: string | null
+          id?: string
+          is_pinned?: boolean
+          learning_item_id?: string | null
+          project_id?: string | null
+          tags?: string[]
+          task_id?: string | null
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notes_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "goals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notes_learning_item_id_fkey"
+            columns: ["learning_item_id"]
+            isOneToOne: false
+            referencedRelation: "learning_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notes_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notes_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
