@@ -259,7 +259,7 @@ function DayPlanning({
       <DailyPlanEditor
         planDate={date}
         label={date === todayISO() ? "Today's priorities" : "Daily priorities"}
-        description="Three clear priorities make the day easier to navigate."
+        description="Add, remove, or reorder as many priorities as you need. Zero is fine."
       />
       {summary.tasks.length > 0 && (
         <section className="nexora-panel space-y-3 p-4 sm:p-5">

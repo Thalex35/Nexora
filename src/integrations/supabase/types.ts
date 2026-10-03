@@ -61,6 +61,7 @@ export type Database = {
           created_at: string
           id: string
           plan_date: string
+          priorities: string[]
           priority_1: string | null
           priority_2: string | null
           priority_3: string | null
@@ -71,6 +72,7 @@ export type Database = {
           created_at?: string
           id?: string
           plan_date?: string
+          priorities?: string[]
           priority_1?: string | null
           priority_2?: string | null
           priority_3?: string | null
@@ -81,6 +83,7 @@ export type Database = {
           created_at?: string
           id?: string
           plan_date?: string
+          priorities?: string[]
           priority_1?: string | null
           priority_2?: string | null
           priority_3?: string | null
