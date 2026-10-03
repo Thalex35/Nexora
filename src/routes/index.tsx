@@ -12,6 +12,7 @@ import {
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
 import { RecentMilestones } from "@/components/recent-milestones";
+import { RecentNotes } from "@/components/recent-notes";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { TaskRow } from "@/components/task-row";
 import { TodayRoutines } from "@/components/today-routines";
@@ -288,6 +289,7 @@ function HomePage() {
         </section>
 
         <RecentMilestones />
+        <RecentNotes />
 
         <section className="nexora-panel flex flex-col justify-between gap-4 p-5 sm:flex-row sm:items-center">
           <div className="flex items-start gap-3">
