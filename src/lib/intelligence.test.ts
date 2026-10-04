@@ -3,6 +3,19 @@ import test from "node:test";
 
 import { resolveAchievementReference } from "./achievement-links.ts";
 import { buildFocusRecommendations, parseQuickCapture } from "./intelligence.ts";
+import {
+  applyNotificationReadState,
+  buildNotificationCandidates,
+  unreadNotificationCount,
+} from "./notifications.ts";
+import {
+  getRecoveryLinkMessage,
+  hasRecoveryCallback,
+  MIN_PASSWORD_LENGTH,
+  passwordUpdateErrorMessage,
+  validateNewPassword,
+  validatePasswordConfirmation,
+} from "./password-validation.ts";
 
 test("focus ranking prioritizes overdue and upcoming tasks without replacing chosen priorities", () => {
   const recommendations = buildFocusRecommendations({
@@ -134,4 +147,79 @@ test("achievement links retain their destination when linked names cannot be loa
     ),
     null,
   );
+});
+
+test("notifications include actionable dates once and deduplicate stable reminder keys", () => {
+  const candidates = buildNotificationCandidates({
+    today: "2026-10-03",
+    tasks: [
+      { id: "t1", title: "Overdue", status: "todo", priority: "high", due_date: "2026-10-01" },
+      { id: "t1", title: "Overdue", status: "todo", priority: "high", due_date: "2026-10-01" },
+      { id: "t2", title: "Today", status: "todo", priority: "medium", due_date: "2026-10-03" },
+      { id: "t3", title: "Later", status: "todo", priority: "low", due_date: "2026-10-08" },
+      { id: "t4", title: "Done", status: "done", priority: "high", due_date: "2026-10-03" },
+    ],
+    goals: [
+      { id: "g1", title: "Goal", status: "active", target_date: "2026-10-10", progress: 40 },
+      {
+        id: "g2",
+        title: "Complete",
+        status: "completed",
+        target_date: "2026-10-04",
+        progress: 100,
+      },
+    ],
+    projects: [
+      { id: "p1", name: "Project", status: "planning", deadline: "2026-10-04" },
+      { id: "p2", name: "Archived", status: "archived", deadline: "2026-10-04" },
+    ],
+    learningItems: [
+      { id: "l1", title: "Course", status: "in_progress", target_date: "2026-10-05" },
+    ],
+    routines: [
+      { id: "r1", is_active: true },
+      { id: "r2", is_active: true },
+      { id: "r3", is_active: false },
+    ],
+    completedRoutineIds: ["r1"],
+  });
+  assert.deepEqual(
+    candidates.map((item) => item.sourceKey),
+    [
+      "task:t1:2026-10-01",
+      "task:t2:2026-10-03",
+      "routine-checklist:2026-10-03",
+      "project:p1:2026-10-04",
+      "goal:g1:2026-10-10",
+      "learning:l1:2026-10-05",
+    ],
+  );
+  const withReadState = applyNotificationReadState(candidates, [
+    { source_key: "task:t1:2026-10-01", read_at: "2026-10-03T12:00:00Z" },
+  ]);
+  assert.equal(unreadNotificationCount(withReadState), 5);
+});
+
+test("password rules require a minimum length and matching confirmation", () => {
+  assert.equal(MIN_PASSWORD_LENGTH, 8);
+  assert.ok(validateNewPassword("short"));
+  assert.equal(validateNewPassword("eight888"), null);
+  assert.equal(validatePasswordConfirmation("eight888", "different"), "Passwords do not match.");
+  assert.equal(validatePasswordConfirmation("eight888", "eight888"), null);
+  assert.match(passwordUpdateErrorMessage(422), /account password requirements/);
+  assert.match(passwordUpdateErrorMessage(401), /Sign in again/);
+});
+
+test("reset callback detects expired and invalid links without exposing provider messages", () => {
+  assert.equal(
+    getRecoveryLinkMessage("", "#error=access_denied&error_code=otp_expired"),
+    "This password-reset link has expired. Request a new one to continue.",
+  );
+  assert.match(
+    getRecoveryLinkMessage("", "#error=access_denied") ?? "",
+    /invalid or has already been used/,
+  );
+  assert.equal(hasRecoveryCallback("", "#access_token=token&type=recovery"), true);
+  assert.equal(hasRecoveryCallback("?code=abc", ""), true);
+  assert.equal(hasRecoveryCallback("", ""), false);
 });

@@ -46,23 +46,33 @@ function AuthPage() {
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
+    if (busy || googleBusy) return;
     setBusy(true);
     try {
       if (mode === "signin") {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
       } else {
+        const redirectTo = new URL("/reset-password", window.location.origin).toString();
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `${window.location.origin}/reset-password`,
+          redirectTo,
         });
         if (error) throw error;
-        toast.success("Reset link sent", {
-          description: "Follow the link in your email to choose a new password.",
+        toast.success("Reset request submitted", {
+          description:
+            "If this address belongs to an account, a reset message should arrive. Check spam if it does not; email delivery depends on the Supabase mail configuration.",
         });
+        setPassword("");
         setMode("signin");
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Something went wrong");
+      toast.error(
+        mode === "reset"
+          ? "Couldn't request a password reset. Check your connection and try again."
+          : error instanceof Error
+            ? error.message
+            : "Couldn't sign in. Check your details and try again.",
+      );
     } finally {
       setBusy(false);
     }
