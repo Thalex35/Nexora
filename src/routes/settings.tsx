@@ -61,15 +61,24 @@ function SettingsPage() {
 
     setPasswordPending(true);
     try {
-      const { error } = await supabase.auth.updateUser({ password });
+      const {
+        data: { user: updatedUser },
+        error,
+      } = await supabase.auth.updateUser({ password });
       if (error) {
         toast.error(passwordUpdateErrorMessage(error.status));
+        return;
+      }
+      if (!user || !updatedUser || updatedUser.id !== user.id) {
+        toast.error("The updated account couldn't be verified. Sign in again and retry.");
         return;
       }
       setPassword("");
       setConfirmation("");
       setPasswordVisible(false);
-      toast.success("Password changed");
+      toast.success("Password changed", {
+        description: `The password for ${user.email ?? "this account"} was updated.`,
+      });
     } catch {
       toast.error(passwordUpdateErrorMessage(undefined));
     } finally {
