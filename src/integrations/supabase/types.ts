@@ -64,6 +64,7 @@ export type Database = {
           description: string | null
           goal_id: string | null
           id: string
+          is_project_completion: boolean
           learning_item_id: string | null
           notes: string | null
           project_id: string | null
@@ -79,6 +80,7 @@ export type Database = {
           description?: string | null
           goal_id?: string | null
           id?: string
+          is_project_completion?: boolean
           learning_item_id?: string | null
           notes?: string | null
           project_id?: string | null
@@ -94,6 +96,7 @@ export type Database = {
           description?: string | null
           goal_id?: string | null
           id?: string
+          is_project_completion?: boolean
           learning_item_id?: string | null
           notes?: string | null
           project_id?: string | null
@@ -174,6 +177,7 @@ export type Database = {
           created_at: string
           description: string | null
           id: string
+          project_id: string | null
           progress: number
           status: Database["public"]["Enums"]["goal_status"]
           target_date: string | null
@@ -185,6 +189,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          project_id?: string | null
           progress?: number
           status?: Database["public"]["Enums"]["goal_status"]
           target_date?: string | null
@@ -196,6 +201,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          project_id?: string | null
           progress?: number
           status?: Database["public"]["Enums"]["goal_status"]
           target_date?: string | null
@@ -203,7 +209,15 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "goals_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       income_allocations: {
         Row: {

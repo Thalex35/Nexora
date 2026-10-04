@@ -31,7 +31,9 @@ function GoalDetailPage() {
   const [editing, setEditing] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<Goal | null>(null);
   const goal = (goals.data ?? []).find((item) => item.id === goalId);
-  const relatedProjects = (projects.data ?? []).filter((project) => project.goal_id === goalId);
+  const relatedProjects = (projects.data ?? []).filter(
+    (project) => project.goal_id === goalId || project.id === goal?.project_id,
+  );
 
   if (goals.isLoading || projects.isLoading) {
     return (

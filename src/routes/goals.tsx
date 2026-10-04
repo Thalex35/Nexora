@@ -12,7 +12,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useDeleteGoal, useGoals, useUpdateGoal, type Goal } from "@/lib/nexora-data";
+import {
+  useDeleteGoal,
+  useGoals,
+  useProjects,
+  useUpdateGoal,
+  type Goal,
+  type Project,
+} from "@/lib/nexora-data";
+import { filterGoalsByProjectState, goalProjectId } from "@/lib/project-goals";
 
 export const Route = createFileRoute("/goals")({
   head: () => ({
@@ -32,22 +40,37 @@ export const Route = createFileRoute("/goals")({
   component: GoalsPage,
 });
 
-type GoalFilter = "active" | "completed" | "paused" | "archived" | "all";
+type GoalFilter =
+  | "active"
+  | "completed"
+  | "paused"
+  | "archived"
+  | "all"
+  | "without-project"
+  | "with-project"
+  | "in-progress";
 
 function GoalsPage() {
   const goals = useGoals();
+  const projects = useProjects();
   const updateGoal = useUpdateGoal();
   const deleteGoal = useDeleteGoal();
   const [filter, setFilter] = useState<GoalFilter>("active");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Goal | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Goal | null>(null);
-  const visible = (goals.data ?? []).filter((goal) => {
+  const statusFiltered = (goals.data ?? []).filter((goal) => {
     if (filter === "all") return true;
-    if (filter === "paused") return goal.status === "paused";
-    return goal.status === filter;
+    if (filter === "without-project" || filter === "with-project") return true;
+    if (filter === "in-progress") return goal.status === "active";
+    if (filter === "paused" || filter === "archived" || filter === "completed")
+      return goal.status === filter;
+    return goal.status === "active";
   });
-
+  const visible =
+    filter === "without-project" || filter === "with-project"
+      ? filterGoalsByProjectState(goals.data ?? [], projects.data ?? [], filter)
+      : statusFiltered;
   function openCreate() {
     setEditing(null);
     setOpen(true);
@@ -73,13 +96,16 @@ function GoalsPage() {
             <TabsTrigger value="paused">Paused</TabsTrigger>
             <TabsTrigger value="archived">Archived</TabsTrigger>
             <TabsTrigger value="all">All</TabsTrigger>
+            <TabsTrigger value="without-project">Without project</TabsTrigger>
+            <TabsTrigger value="with-project">With project</TabsTrigger>
+            <TabsTrigger value="in-progress">In progress</TabsTrigger>
           </TabsList>
         </Tabs>
 
-        {goals.isLoading ? (
+        {goals.isLoading || projects.isLoading ? (
           <LoadingState />
-        ) : goals.isError ? (
-          <ErrorState onRetry={() => void goals.refetch()} />
+        ) : goals.isError || projects.isError ? (
+          <ErrorState onRetry={() => void Promise.all([goals.refetch(), projects.refetch()])} />
         ) : visible.length === 0 ? (
           <EmptyState
             icon={<Target className="h-5 w-5" />}
@@ -110,6 +136,7 @@ function GoalsPage() {
                         {goal.description}
                       </p>
                     )}
+                    <GoalProjectLink goal={goal} projects={projects.data ?? []} />
                   </div>
                   <Badge variant="outline" className="shrink-0 capitalize">
                     {goal.status}
@@ -228,5 +255,22 @@ function GoalsPage() {
         }}
       />
     </AppShell>
+  );
+}
+
+function GoalProjectLink({ goal, projects }: { goal: Goal; projects: Project[] }) {
+  const projectId = goalProjectId(goal, projects);
+  const project = projects.find((item) => item.id === projectId);
+  if (!project) return null;
+
+  return (
+    <Link
+      to="/projects/$projectId"
+      params={{ projectId: project.id }}
+      search={{ goalId: undefined }}
+      className="mt-2 inline-block max-w-full truncate text-xs text-primary hover:underline"
+    >
+      Project: {project.name}
+    </Link>
   );
 }

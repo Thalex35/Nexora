@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Plus, Target, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/app-shell";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { GoalDialog } from "@/components/goal-dialog";
 import { PageHeader } from "@/components/page-header";
 import { ProjectDialog } from "@/components/project-dialog";
 import { TaskRow } from "@/components/task-row";
@@ -27,6 +28,9 @@ import {
   useGoals,
   useProjects,
   useTasks,
+  useUpdateGoal,
+  useUpdateProject,
+  type Goal,
   type Project,
   type TaskPriority,
 } from "@/lib/nexora-data";
@@ -47,14 +51,22 @@ function ProjectDetailPage() {
   const goals = useGoals();
   const tasks = useTasks();
   const createTask = useCreateTask();
+  const updateGoal = useUpdateGoal();
   const deleteProject = useDeleteProject();
+  const updateProject = useUpdateProject();
   const [editing, setEditing] = useState(false);
+  const [goalDialogOpen, setGoalDialogOpen] = useState(false);
+  const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
+  const [pendingGoalDelete, setPendingGoalDelete] = useState<Goal | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Project | null>(null);
   const [taskTitle, setTaskTitle] = useState("");
   const [priority, setPriority] = useState<TaskPriority>("medium");
   const [dueDate, setDueDate] = useState("");
   const project = (projects.data ?? []).find((item) => item.id === projectId);
   const goal = (goals.data ?? []).find((item) => item.id === project?.goal_id);
+  const projectGoals = (goals.data ?? []).filter(
+    (item) => item.project_id === projectId || item.id === project?.goal_id,
+  );
   const projectTasks = (tasks.data ?? []).filter((task) => task.project_id === projectId);
   const loading = projects.isLoading || goals.isLoading || tasks.isLoading;
 
@@ -74,6 +86,11 @@ function ProjectDetailPage() {
     } catch {
       toast.error("Couldn't add that task. Please try again.");
     }
+  }
+
+  function openGoalDialog(goalToEdit: Goal | null = null) {
+    setEditingGoal(goalToEdit);
+    setGoalDialogOpen(true);
   }
 
   if (loading) {
@@ -188,6 +205,110 @@ function ProjectDetailPage() {
         </section>
 
         <section className="space-y-4">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-foreground">Project goals</h2>
+              <p className="text-sm text-muted-foreground">
+                {projectGoals.length === 0
+                  ? "Add goals to track this project’s progress."
+                  : `${projectGoals.length} ${projectGoals.length === 1 ? "goal" : "goals"} · progress is calculated from completed goals.`}
+              </p>
+            </div>
+            <Button size="sm" onClick={() => openGoalDialog()}>
+              <Target className="mr-1 h-4 w-4" />
+              Add goal
+            </Button>
+          </div>
+          {projectGoals.length === 0 ? (
+            <p className="nexora-panel p-4 text-sm text-muted-foreground">
+              This project has no linked goals yet. Its status and progress will remain unchanged
+              until you add one.
+            </p>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {projectGoals.map((projectGoal) => (
+                <article key={projectGoal.id} className="nexora-panel min-w-0 space-y-3 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <Link
+                      to="/goals/$goalId"
+                      params={{ goalId: projectGoal.id }}
+                      className="break-words font-medium text-foreground hover:text-primary"
+                    >
+                      {projectGoal.title}
+                    </Link>
+                    <Badge variant="outline" className="shrink-0 capitalize">
+                      {projectGoal.status}
+                    </Badge>
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>Goal progress</span>
+                      <span>{projectGoal.progress}%</span>
+                    </div>
+                    <Progress value={projectGoal.progress} />
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={updateGoal.isPending}
+                      onClick={() => openGoalDialog(projectGoal)}
+                    >
+                      Edit
+                    </Button>
+                    {projectGoal.status !== "completed" ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={updateGoal.isPending}
+                        onClick={() =>
+                          updateGoal.mutate(
+                            { id: projectGoal.id, status: "completed", progress: 100 },
+                            {
+                              onSuccess: () => toast.success("Goal completed"),
+                              onError: () => toast.error("Couldn’t complete that goal"),
+                            },
+                          )
+                        }
+                      >
+                        Mark complete
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={updateGoal.isPending}
+                        onClick={() =>
+                          updateGoal.mutate(
+                            { id: projectGoal.id, status: "active", progress: 0 },
+                            {
+                              onSuccess: () => toast.success("Goal reopened"),
+                              onError: () => toast.error("Couldn’t reopen that goal"),
+                            },
+                          )
+                        }
+                      >
+                        Reopen
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-muted-foreground hover:text-destructive"
+                      disabled={updateGoal.isPending || updateProject.isPending}
+                      onClick={() => setPendingGoalDelete(projectGoal)}
+                    >
+                      <Trash2 className="mr-1 h-4 w-4" />
+                      Remove
+                    </Button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="space-y-4">
           <div className="flex items-end justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold text-foreground">Project tasks</h2>
@@ -261,6 +382,36 @@ function ProjectDetailPage() {
         </section>
       </div>
 
+      <GoalDialog
+        open={goalDialogOpen}
+        onOpenChange={setGoalDialogOpen}
+        goal={editingGoal}
+        projectId={editingGoal ? null : projectId}
+      />
+      <ConfirmDialog
+        open={pendingGoalDelete !== null}
+        onOpenChange={(next) => !next && setPendingGoalDelete(null)}
+        title="Remove this project goal?"
+        description="The goal will remain in Goals but will no longer contribute to this project's progress."
+        confirmLabel="Remove goal"
+        onConfirm={() => {
+          if (!pendingGoalDelete) return;
+          const onSuccess = () => toast.success("Goal removed from project");
+          const onError = () => toast.error("Couldn't remove that goal");
+          if (
+            pendingGoalDelete.project_id === projectId ||
+            pendingGoalDelete.id !== project?.goal_id
+          ) {
+            updateGoal.mutate(
+              { id: pendingGoalDelete.id, project_id: null },
+              { onSuccess, onError },
+            );
+          } else {
+            updateProject.mutate({ id: projectId, goal_id: null }, { onSuccess, onError });
+          }
+          setPendingGoalDelete(null);
+        }}
+      />
       <ProjectDialog open={editing} onOpenChange={setEditing} project={project} />
       <ConfirmDialog
         open={pendingDelete !== null}

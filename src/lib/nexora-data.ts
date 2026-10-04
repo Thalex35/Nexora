@@ -336,6 +336,7 @@ export type GoalInput = {
   status?: GoalStatus;
   target_date?: string | null;
   progress?: number;
+  project_id?: string | null;
 };
 
 export function useCreateGoal() {
