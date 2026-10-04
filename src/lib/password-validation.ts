@@ -1,5 +1,9 @@
 export const MIN_PASSWORD_LENGTH = 8;
 
+export function normalizeAuthEmail(email: string) {
+  return email.trim();
+}
+
 export function validateNewPassword(password: string) {
   if (password.length < MIN_PASSWORD_LENGTH) {
     return `Use at least ${MIN_PASSWORD_LENGTH} characters.`;

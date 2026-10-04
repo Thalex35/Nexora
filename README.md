@@ -34,6 +34,12 @@ with `https://nexora-lmg.vercel.app` as the Site URL and add
 Add local or preview callback URLs only when those environments are used, and
 keep public sign-up disabled.
 
+The browser Auth client uses Supabase's PKCE flow for recovery and OAuth callbacks.
+Open recovery links in the same browser that requested them so the PKCE verifier
+is available. After deploying an authentication-flow change, request a fresh
+recovery email; links already issued under an earlier flow may not complete in
+the updated client.
+
 Email delivery is controlled by Supabase, not by the application build. Verify
 the project’s SMTP provider, sender identity/domain, delivery/rate limits, and
 the Authentication email template’s confirmation URL. For a missing message,

@@ -112,7 +112,27 @@ function ResetPasswordPage() {
 
     setBusy(true);
     try {
-      const { error } = await supabase.auth.updateUser({ password });
+      const {
+        data: { user: recoveryUser },
+        error: recoveryError,
+      } = await supabase.auth.getUser();
+      if (recoveryError || !recoveryUser) {
+        setLinkMessage(
+          "Couldn't verify this password-reset session. Request a new link to continue.",
+        );
+        setStatus("invalid");
+        return;
+      }
+      if (!isAuthorizedUserId(recoveryUser.id)) {
+        setLinkMessage("This account isn't authorized for this private Nexora workspace.");
+        setStatus("invalid");
+        return;
+      }
+
+      const {
+        data: { user: updatedUser },
+        error,
+      } = await supabase.auth.updateUser({ password });
       if (error) {
         if (error.code === "otp_expired" || error.message.toLocaleLowerCase().includes("expired")) {
           setLinkMessage("This password-reset link has expired. Request a new one to continue.");
@@ -120,6 +140,15 @@ function ResetPasswordPage() {
           return;
         }
         toast.error(passwordUpdateErrorMessage(error.status));
+        return;
+      }
+      if (
+        !updatedUser ||
+        updatedUser.id !== recoveryUser.id ||
+        !isAuthorizedUserId(updatedUser.id)
+      ) {
+        setLinkMessage("The updated account couldn't be verified. Request a new reset link.");
+        setStatus("invalid");
         return;
       }
       setPassword("");

@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { normalizeAuthEmail } from "@/lib/password-validation";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
@@ -49,12 +50,16 @@ function AuthPage() {
     if (busy || googleBusy) return;
     setBusy(true);
     try {
+      const normalizedEmail = normalizeAuthEmail(email);
       if (mode === "signin") {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { error } = await supabase.auth.signInWithPassword({
+          email: normalizedEmail,
+          password,
+        });
         if (error) throw error;
       } else {
         const redirectTo = new URL("/reset-password", window.location.origin).toString();
-        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
           redirectTo,
         });
         if (error) throw error;

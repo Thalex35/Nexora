@@ -12,6 +12,7 @@ import {
   getRecoveryLinkMessage,
   hasRecoveryCallback,
   MIN_PASSWORD_LENGTH,
+  normalizeAuthEmail,
   passwordUpdateErrorMessage,
   validateNewPassword,
   validatePasswordConfirmation,
@@ -202,6 +203,7 @@ test("notifications include actionable dates once and deduplicate stable reminde
 
 test("password rules require a minimum length and matching confirmation", () => {
   assert.equal(MIN_PASSWORD_LENGTH, 8);
+  assert.equal(normalizeAuthEmail("  person@example.com \t"), "person@example.com");
   assert.ok(validateNewPassword("short"));
   assert.equal(validateNewPassword("eight888"), null);
   assert.equal(validatePasswordConfirmation("eight888", "different"), "Passwords do not match.");
