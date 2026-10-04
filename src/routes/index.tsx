@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
+import { DailyIntelligence } from "@/components/daily-intelligence";
 import { PageHeader } from "@/components/page-header";
 import { RecentMilestones } from "@/components/recent-milestones";
 import { RecentNotes } from "@/components/recent-notes";
@@ -166,6 +167,8 @@ function HomePage() {
             </ol>
           )}
         </section>
+
+        <DailyIntelligence />
 
         <section className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
