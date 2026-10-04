@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { Archive, ArchiveRestore, FolderKanban, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -19,6 +19,7 @@ import {
   useUpdateProject,
   type Project,
 } from "@/lib/nexora-data";
+import { isProjectDetailPath } from "@/lib/project-routing";
 
 export const Route = createFileRoute("/projects")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -44,6 +45,7 @@ export const Route = createFileRoute("/projects")({
 type ProjectFilter = "active" | "completed" | "paused" | "archived" | "all";
 
 function ProjectsPage() {
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
   const search = Route.useSearch();
   const projects = useProjects();
   const goals = useGoals();
@@ -64,6 +66,10 @@ function ProjectsPage() {
   function openCreate() {
     setEditing(null);
     setOpen(true);
+  }
+
+  if (isProjectDetailPath(pathname)) {
+    return <Outlet />;
   }
 
   return (
@@ -108,17 +114,22 @@ function ProjectsPage() {
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
             {visible.map((project) => (
-              <article key={project.id} className="nexora-panel min-w-0 space-y-4 p-4 sm:p-5">
-                <div className="flex items-start justify-between gap-3">
+              <article
+                key={project.id}
+                className="nexora-panel group relative min-w-0 space-y-4 p-4 sm:p-5"
+              >
+                <Link
+                  to="/projects/$projectId"
+                  params={{ projectId: project.id }}
+                  search={search}
+                  aria-label={`Open project: ${project.name}`}
+                  className="absolute inset-0 z-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                />
+                <div className="pointer-events-none relative z-10 flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <Link
-                      to="/projects/$projectId"
-                      params={{ projectId: project.id }}
-                      search={search}
-                      className="break-words font-semibold text-foreground hover:text-primary"
-                    >
+                    <h2 className="break-words font-semibold text-foreground group-hover:text-primary">
                       {project.name}
-                    </Link>
+                    </h2>
                     {project.description && (
                       <p className="mt-1 line-clamp-2 break-words text-sm text-muted-foreground">
                         {project.description}
@@ -128,7 +139,7 @@ function ProjectsPage() {
                       <Link
                         to="/goals/$goalId"
                         params={{ goalId: project.goal_id }}
-                        className="mt-2 inline-block max-w-full truncate text-xs text-primary hover:underline"
+                        className="pointer-events-auto relative z-20 mt-2 inline-block max-w-full truncate text-xs text-primary hover:underline"
                       >
                         Goal: {goalNames.get(project.goal_id)}
                       </Link>
@@ -138,7 +149,7 @@ function ProjectsPage() {
                     {project.status === "on_hold" ? "paused" : project.status}
                   </Badge>
                 </div>
-                <div className="space-y-2">
+                <div className="pointer-events-none relative z-10 space-y-2">
                   <div className="flex justify-between text-xs text-muted-foreground">
                     <span>Progress</span>
                     <span>{project.progress}%</span>
@@ -150,7 +161,7 @@ function ProjectsPage() {
                         ? `Deadline ${new Date(`${project.deadline}T00:00:00`).toLocaleDateString()}`
                         : "No deadline"}
                     </span>
-                    <div className="flex shrink-0 items-center">
+                    <div className="pointer-events-auto relative z-20 flex shrink-0 items-center">
                       {filter === "archived" ? (
                         <Button
                           variant="ghost"
