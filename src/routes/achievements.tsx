@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatPlanningDate } from "@/lib/planning";
+import { resolveAchievementReference } from "@/lib/achievement-links";
 import {
   useAchievements,
   useDeleteAchievement,
@@ -58,6 +59,21 @@ function AchievementsPage() {
   const categories = [...new Set((achievements.data ?? []).map((item) => item.category))].sort(
     (left, right) => left.localeCompare(right),
   );
+  const hasGoalLinks = (achievements.data ?? []).some((item) => item.goal_id);
+  const hasProjectLinks = (achievements.data ?? []).some((item) => item.project_id);
+  const hasLearningLinks = (achievements.data ?? []).some((item) => item.learning_item_id);
+  const hasTaskLinks = (achievements.data ?? []).some((item) => item.task_id);
+  const failedLinkedLookups =
+    (hasGoalLinks && goals.isError) ||
+    (hasProjectLinks && projects.isError) ||
+    (hasLearningLinks && learningItems.isError) ||
+    (hasTaskLinks && tasks.isError);
+  const linkedLookupQueries = [
+    ...(hasGoalLinks ? [goals] : []),
+    ...(hasProjectLinks ? [projects] : []),
+    ...(hasLearningLinks ? [learningItems] : []),
+    ...(hasTaskLinks ? [tasks] : []),
+  ];
   const visibleAchievements = useMemo(() => {
     const filtered = (achievements.data ?? []).filter(
       (item) =>
@@ -145,6 +161,23 @@ function AchievementsPage() {
           </Button>
         </section>
 
+        {failedLinkedLookups && (
+          <div
+            role="alert"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card p-3 text-sm text-muted-foreground"
+          >
+            <span>
+              Some linked record names could not be loaded. Their links are still available.
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void Promise.all(linkedLookupQueries.map((query) => query.refetch()))}
+            >
+              Retry linked records
+            </Button>
+          </div>
+        )}
         {achievements.isLoading ? (
           <LoadingState rows={3} />
         ) : achievements.isError ? (
@@ -169,7 +202,7 @@ function AchievementsPage() {
         ) : (
           <div className="grid gap-3 md:grid-cols-2">
             {visibleAchievements.map((achievement) => {
-              const linkedRecord = getLinkedRecord(achievement, {
+              const linkedRecord = resolveAchievementReference(achievement, {
                 goals: goals.data ?? [],
                 projects: projects.data ?? [],
                 learningItems: learningItems.data ?? [],
@@ -206,7 +239,8 @@ function AchievementsPage() {
                   )}
                   {linkedRecord && (
                     <p className="text-xs text-muted-foreground">
-                      Linked to: <LinkedRecord achievement={achievement} title={linkedRecord} />
+                      Linked to: <LinkedRecord reference={linkedRecord} />
+                      {!linkedRecord.title && failedLinkedLookups && " (name unavailable)"}
                     </p>
                   )}
                   <div className="flex justify-end gap-2 border-t border-border pt-2">
@@ -254,51 +288,28 @@ function AchievementsPage() {
   );
 }
 
-function getLinkedRecord(
-  achievement: Achievement,
-  records: {
-    goals: NonNullable<ReturnType<typeof useGoals>["data"]>;
-    projects: NonNullable<ReturnType<typeof useProjects>["data"]>;
-    learningItems: NonNullable<ReturnType<typeof useLearningItems>["data"]>;
-    tasks: NonNullable<ReturnType<typeof useTasks>["data"]>;
-  },
-) {
-  if (achievement.goal_id) {
-    const record = records.goals.find((item) => item.id === achievement.goal_id);
-    return record ? `Goal · ${record.title}` : "Goal";
-  }
-  if (achievement.project_id) {
-    const record = records.projects.find((item) => item.id === achievement.project_id);
-    return record ? `Project · ${record.name}` : "Project";
-  }
-  if (achievement.learning_item_id) {
-    const record = records.learningItems.find((item) => item.id === achievement.learning_item_id);
-    return record ? `Learning · ${record.title}` : "Learning";
-  }
-  if (achievement.task_id) {
-    const record = records.tasks.find((item) => item.id === achievement.task_id);
-    return record ? `Task · ${record.title}` : "Task";
-  }
-  return null;
-}
-
-function LinkedRecord({ achievement, title }: { achievement: Achievement; title: string }) {
-  if (achievement.goal_id) {
+function LinkedRecord({
+  reference,
+}: {
+  reference: NonNullable<ReturnType<typeof resolveAchievementReference>>;
+}) {
+  const title = `${reference.kind}${reference.title ? ` · ${reference.title}` : ""}`;
+  if (reference.kind === "Goal") {
     return (
       <Link
         to="/goals/$goalId"
-        params={{ goalId: achievement.goal_id }}
+        params={{ goalId: reference.id }}
         className="text-primary hover:underline"
       >
         {title}
       </Link>
     );
   }
-  if (achievement.project_id) {
+  if (reference.kind === "Project") {
     return (
       <Link
         to="/projects/$projectId"
-        params={{ projectId: achievement.project_id }}
+        params={{ projectId: reference.id }}
         search={{ goalId: undefined }}
         className="text-primary hover:underline"
       >
@@ -306,11 +317,11 @@ function LinkedRecord({ achievement, title }: { achievement: Achievement; title:
       </Link>
     );
   }
-  if (achievement.learning_item_id) {
+  if (reference.kind === "Learning") {
     return (
       <Link
         to="/learning/$learningId"
-        params={{ learningId: achievement.learning_item_id }}
+        params={{ learningId: reference.id }}
         className="text-primary hover:underline"
       >
         {title}

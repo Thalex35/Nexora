@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { toast } from "sonner";
 
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
@@ -22,6 +24,18 @@ export const Route = createFileRoute("/settings")({
 
 function SettingsPage() {
   const { user, signOut } = useAuth();
+  const [signingOut, setSigningOut] = useState(false);
+
+  async function handleSignOut() {
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      await signOut();
+    } catch {
+      toast.error("Couldn't log out. Please try again.");
+      setSigningOut(false);
+    }
+  }
 
   return (
     <AppShell>
@@ -37,8 +51,13 @@ function SettingsPage() {
             <Button asChild variant="outline" size="sm">
               <Link to="/profile">Edit profile</Link>
             </Button>
-            <Button variant="outline" size="sm" onClick={() => void signOut()}>
-              Log out
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void handleSignOut()}
+              disabled={signingOut}
+            >
+              {signingOut ? "Logging out…" : "Log out"}
             </Button>
           </div>
         </section>
@@ -46,8 +65,7 @@ function SettingsPage() {
         <section className="nexora-panel max-w-xl p-6">
           <h2 className="text-base font-semibold text-foreground">Coming later</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Notification preferences, currency and locale, and integrations arrive in later
-            sprints.
+            Notification preferences, currency and locale, and integrations arrive in later sprints.
           </p>
         </section>
       </div>

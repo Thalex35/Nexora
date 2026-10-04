@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { resolveAchievementReference } from "./achievement-links.ts";
 import { buildFocusRecommendations, parseQuickCapture } from "./intelligence.ts";
 
 test("focus ranking prioritizes overdue and upcoming tasks without replacing chosen priorities", () => {
@@ -108,4 +109,29 @@ test("quick capture prepares only an explicit, reviewable proposal", () => {
   assert.equal(expense?.amount, "12.50");
   assert.equal(expense?.notes, "lunch");
   assert.equal(expense?.date, "2026-10-03");
+});
+
+test("achievement links retain their destination when linked names cannot be loaded", () => {
+  const reference = resolveAchievementReference(
+    {
+      goal_id: "goal-1",
+      project_id: null,
+      learning_item_id: null,
+      task_id: null,
+    },
+    { goals: [], projects: [], learningItems: [], tasks: [] },
+  );
+  assert.deepEqual(reference, { kind: "Goal", id: "goal-1", title: null });
+  assert.equal(
+    resolveAchievementReference(
+      {
+        goal_id: null,
+        project_id: null,
+        learning_item_id: null,
+        task_id: null,
+      },
+      { goals: [], projects: [], learningItems: [], tasks: [] },
+    ),
+    null,
+  );
 });
