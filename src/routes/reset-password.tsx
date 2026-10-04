@@ -30,15 +30,21 @@ function ResetPasswordPage() {
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
+    if (busy) return;
     setBusy(true);
-    const { error } = await supabase.auth.updateUser({ password });
-    setBusy(false);
-    if (error) {
-      toast.error(error.message);
-      return;
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      toast.success("Password updated");
+      void navigate({ to: "/", replace: true });
+    } catch {
+      toast.error("Couldn't update your password. Please try again.");
+    } finally {
+      setBusy(false);
     }
-    toast.success("Password updated");
-    void navigate({ to: "/", replace: true });
   }
 
   return (

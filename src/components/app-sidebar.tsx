@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { LogOut } from "lucide-react";
+import { toast } from "sonner";
 
 import { NexoraLogo } from "@/components/nexora-logo";
 import { mainNav, secondaryNav } from "@/components/app-nav-items";
@@ -24,10 +26,22 @@ export function AppSidebar() {
   const { signOut, user } = useAuth();
   const { data: profile } = useProfile();
   const { setOpenMobile, isMobile } = useSidebar();
+  const [signingOut, setSigningOut] = useState(false);
 
   const closeOnMobile = () => {
     if (isMobile) setOpenMobile(false);
   };
+
+  async function handleSignOut() {
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      await signOut();
+    } catch {
+      toast.error("Couldn't log out. Please try again.");
+      setSigningOut(false);
+    }
+  }
 
   return (
     <Sidebar collapsible="offcanvas">
@@ -82,9 +96,9 @@ export function AppSidebar() {
           </p>
           <p className="truncate text-xs text-muted-foreground">{user?.email}</p>
         </div>
-        <SidebarMenuButton onClick={() => void signOut()}>
+        <SidebarMenuButton onClick={() => void handleSignOut()} disabled={signingOut}>
           <LogOut className="h-4 w-4" />
-          <span>Log out</span>
+          <span>{signingOut ? "Logging out…" : "Log out"}</span>
         </SidebarMenuButton>
       </SidebarFooter>
     </Sidebar>

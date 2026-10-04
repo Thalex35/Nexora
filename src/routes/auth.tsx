@@ -36,6 +36,7 @@ function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  const [googleBusy, setGoogleBusy] = useState(false);
 
   useEffect(() => {
     if (!loading && session && authorized) {
@@ -68,13 +69,21 @@ function AuthPage() {
   }
 
   async function handleGoogle() {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: window.location.origin,
-      },
-    });
-    if (error) toast.error(error.message);
+    if (busy || googleBusy) return;
+    setGoogleBusy(true);
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: window.location.origin,
+        },
+      });
+      if (error) toast.error("Couldn't start Google sign-in. Please try again.");
+    } catch {
+      toast.error("Couldn't start Google sign-in. Please try again.");
+    } finally {
+      setGoogleBusy(false);
+    }
   }
 
   return (
@@ -95,9 +104,7 @@ function AuthPage() {
             {mode === "reset" ? "Reset your password" : "Welcome back"}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {mode === "reset"
-              ? "We'll email you a secure link."
-              : "Use your email to continue."}
+            {mode === "reset" ? "We'll email you a secure link." : "Use your email to continue."}
           </p>
 
           {accessDenied && (
@@ -139,12 +146,8 @@ function AuthPage() {
               </div>
             )}
 
-            <Button type="submit" className="w-full" disabled={busy}>
-              {busy
-                ? "Please wait…"
-                : mode === "reset"
-                  ? "Send reset link"
-                  : "Sign in"}
+            <Button type="submit" className="w-full" disabled={busy || googleBusy}>
+              {busy ? "Please wait…" : mode === "reset" ? "Send reset link" : "Sign in"}
             </Button>
           </form>
 
@@ -160,8 +163,9 @@ function AuthPage() {
                 variant="outline"
                 className="w-full"
                 onClick={() => void handleGoogle()}
+                disabled={busy || googleBusy}
               >
-                Continue with Google
+                {googleBusy ? "Connecting…" : "Continue with Google"}
               </Button>
             </>
           )}
