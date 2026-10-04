@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { formatMoney } from "@/lib/finance";
+import { parseQuickCapture } from "@/lib/intelligence";
 import {
   todayISO,
   useCreateGoal,
@@ -45,7 +46,8 @@ type QuickAddType =
   | "project"
   | "learning"
   | "achievement"
-  | "note";
+  | "note"
+  | "capture";
 
 const typeLabels: Record<QuickAddType, string> = {
   task: "Add Task",
@@ -57,6 +59,7 @@ const typeLabels: Record<QuickAddType, string> = {
   learning: "Add Learning",
   achievement: "Add Achievement",
   note: "Add Note",
+  capture: "Quick Capture",
 };
 
 export function QuickAdd({ defaultType = "task" }: { defaultType?: QuickAddType }) {
@@ -99,9 +102,242 @@ export function QuickAdd({ defaultType = "task" }: { defaultType?: QuickAddType 
           </Select>
         </div>
 
-        <QuickAddForm type={type} onDone={() => setOpen(false)} />
+        {type === "capture" ? (
+          <QuickCaptureForm onDone={() => setOpen(false)} />
+        ) : (
+          <QuickAddForm type={type} onDone={() => setOpen(false)} />
+        )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+type CaptureProposal = NonNullable<ReturnType<typeof parseQuickCapture>>;
+
+function QuickCaptureForm({ onDone }: { onDone: () => void }) {
+  const createTask = useCreateTask();
+  const createNote = useCreateNote();
+  const createTransaction = useCreateTransaction();
+  const [input, setInput] = useState("");
+  const [proposal, setProposal] = useState<CaptureProposal | null>(null);
+  const [category, setCategory] = useState("");
+  const [capturePriority, setCapturePriority] = useState<TaskPriority>("medium");
+  const [parseFailed, setParseFailed] = useState(false);
+  const pending = createTask.isPending || createNote.isPending || createTransaction.isPending;
+
+  function prepare(event: React.FormEvent) {
+    event.preventDefault();
+    const next = parseQuickCapture(input, todayISO());
+    setProposal(next);
+    setParseFailed(!next);
+    setCategory("");
+    setCapturePriority("medium");
+  }
+
+  function updateProposal(values: Partial<CaptureProposal>) {
+    setProposal((current) => (current ? { ...current, ...values } : current));
+  }
+
+  async function confirm(event: React.FormEvent) {
+    event.preventDefault();
+    if (!proposal) return;
+    try {
+      if (proposal.type === "task") {
+        if (!proposal.title.trim()) {
+          toast.error("Add a task title before saving");
+          return;
+        }
+        await createTask.mutateAsync({
+          title: proposal.title.trim(),
+          description: proposal.notes.trim() || null,
+          priority: capturePriority,
+          due_date: proposal.date || null,
+        });
+      } else if (proposal.type === "note") {
+        if (!proposal.title.trim()) {
+          toast.error("Add a note title before saving");
+          return;
+        }
+        await createNote.mutateAsync({
+          title: proposal.title.trim(),
+          content: proposal.notes,
+          category: category.trim() || "Personal",
+        });
+      } else {
+        const amountValue = Number(proposal.amount);
+        if (!Number.isFinite(amountValue) || amountValue <= 0 || !proposal.notes.trim()) {
+          toast.error("Enter a valid amount and expense description");
+          return;
+        }
+        await createTransaction.mutateAsync({
+          type: "expense",
+          amount: amountValue,
+          category: category.trim() || null,
+          description: proposal.notes.trim(),
+          transaction_date: proposal.date || todayISO(),
+          income_id: null,
+        });
+      }
+      toast.success(
+        `${proposal.type === "expense" ? "Expense" : proposal.type === "note" ? "Note" : "Task"} saved`,
+      );
+      onDone();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Something went wrong. Please try again.",
+      );
+    }
+  }
+
+  if (!proposal) {
+    return (
+      <form onSubmit={prepare} className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="qa-capture-input">Describe a task, note, or expense</Label>
+          <Textarea
+            id="qa-capture-input"
+            value={input}
+            onChange={(event) => setInput(event.target.value)}
+            placeholder={'"Call Sam tomorrow", "note: book ideas", or "spent $12 on lunch"'}
+            rows={3}
+            required
+          />
+          <p className="text-xs text-muted-foreground">
+            Nexora prepares a local draft only. Nothing is saved until you review and confirm it.
+          </p>
+          {parseFailed && (
+            <p className="text-xs text-destructive" role="alert">
+              Couldn't identify a task, note, or expense. Try adding “task:”, “note:”, or an expense
+              amount.
+            </p>
+          )}
+        </div>
+        <Button type="submit" className="w-full">
+          Prepare for review
+        </Button>
+      </form>
+    );
+  }
+
+  return (
+    <form onSubmit={confirm} className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="qa-capture-type">Proposed item</Label>
+        <Select
+          value={proposal.type}
+          onValueChange={(value) => {
+            if (value === "task" || value === "note" || value === "expense")
+              updateProposal({ type: value });
+          }}
+        >
+          <SelectTrigger id="qa-capture-type">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="task">Task</SelectItem>
+            <SelectItem value="note">Note</SelectItem>
+            <SelectItem value="expense">Expense</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      {proposal.type === "expense" ? (
+        <div className="space-y-2">
+          <Label htmlFor="qa-capture-amount">Amount</Label>
+          <Input
+            id="qa-capture-amount"
+            type="number"
+            min="0.01"
+            step="0.01"
+            required
+            value={proposal.amount}
+            onChange={(event) => updateProposal({ amount: event.target.value })}
+          />
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <Label htmlFor="qa-capture-title">
+            {proposal.type === "note" ? "Note title" : "Task title"}
+          </Label>
+          <Input
+            id="qa-capture-title"
+            required
+            value={proposal.title}
+            onChange={(event) => updateProposal({ title: event.target.value })}
+          />
+        </div>
+      )}
+      {proposal.type === "task" && (
+        <div className="space-y-2">
+          <Label htmlFor="qa-capture-priority">Priority</Label>
+          <Select
+            value={capturePriority}
+            onValueChange={(value) => setCapturePriority(value as TaskPriority)}
+          >
+            <SelectTrigger id="qa-capture-priority">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="low">Low</SelectItem>
+              <SelectItem value="medium">Medium</SelectItem>
+              <SelectItem value="high">High</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+      {proposal.type !== "task" && (
+        <div className="space-y-2">
+          <Label htmlFor="qa-capture-category">Category</Label>
+          <Input
+            id="qa-capture-category"
+            value={category}
+            onChange={(event) => setCategory(event.target.value)}
+            placeholder={proposal.type === "note" ? "Personal" : "Groceries"}
+          />
+        </div>
+      )}
+      {proposal.type !== "task" && (
+        <div className="space-y-2">
+          <Label htmlFor="qa-capture-description">
+            {proposal.type === "note" ? "Content" : "Expense description"}
+          </Label>
+          <Textarea
+            id="qa-capture-description"
+            value={proposal.notes}
+            onChange={(event) => updateProposal({ notes: event.target.value })}
+            rows={2}
+          />
+        </div>
+      )}
+      {proposal.type !== "note" && (
+        <div className="space-y-2">
+          <Label htmlFor="qa-capture-date">
+            {proposal.type === "task" ? "Due date (optional)" : "Expense date"}
+          </Label>
+          <Input
+            id="qa-capture-date"
+            type="date"
+            value={proposal.date}
+            onChange={(event) => updateProposal({ date: event.target.value })}
+          />
+        </div>
+      )}
+      <div className="flex gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          className="flex-1"
+          onClick={() => {
+            setProposal(null);
+            setParseFailed(false);
+          }}
+        >
+          Cancel draft
+        </Button>
+        <Button type="submit" className="flex-1" disabled={pending}>
+          {pending ? "Saving…" : `Confirm ${proposal.type}`}
+        </Button>
+      </div>
+    </form>
   );
 }
 
