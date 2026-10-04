@@ -50,6 +50,8 @@ export function ProjectDialog({
   const [startDate, setStartDate] = useState("");
   const [deadline, setDeadline] = useState("");
   const [goalId, setGoalId] = useState(NO_GOAL);
+  const hasLinkedGoals =
+    goalId !== NO_GOAL || (goals.data ?? []).some((item) => item.project_id === project?.id);
 
   useEffect(() => {
     if (!open) return;
@@ -148,17 +150,23 @@ export function ProjectDialog({
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="project-progress">Progress (%)</Label>
-              <Input
-                id="project-progress"
-                type="number"
-                min="0"
-                max="100"
-                value={progress}
-                onChange={(event) => setProgress(event.target.value)}
-              />
-            </div>
+            {hasLinkedGoals ? (
+              <p className="self-center text-sm text-muted-foreground sm:col-span-2">
+                Progress is calculated from this project’s linked goals.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                <Label htmlFor="project-progress">Progress (%)</Label>
+                <Input
+                  id="project-progress"
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={progress}
+                  onChange={(event) => setProgress(event.target.value)}
+                />
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="project-start">Start date</Label>
               <Input

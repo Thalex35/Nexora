@@ -25,10 +25,12 @@ export function GoalDialog({
   open,
   onOpenChange,
   goal,
+  projectId = null,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   goal: Goal | null;
+  projectId?: string | null;
 }) {
   const createGoal = useCreateGoal();
   const updateGoal = useUpdateGoal();
@@ -54,7 +56,8 @@ export function GoalDialog({
       description: description.trim() || null,
       status,
       target_date: targetDate || null,
-      progress: Math.min(100, Math.max(0, Number(progress) || 0)),
+      progress: status === "completed" ? 100 : Math.min(100, Math.max(0, Number(progress) || 0)),
+      ...(projectId ? { project_id: projectId } : {}),
     };
     try {
       if (goal) {
@@ -76,7 +79,14 @@ export function GoalDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90dvh] max-w-md overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{goal ? "Edit goal" : "New goal"}</DialogTitle>
+          <DialogTitle>
+            {goal ? "Edit goal" : projectId ? "New project goal" : "New goal"}
+          </DialogTitle>
+          {!goal && projectId && (
+            <p className="text-sm text-muted-foreground">
+              This goal will be linked to the current project.
+            </p>
+          )}
         </DialogHeader>
         <form onSubmit={submit} className="space-y-4">
           <div className="space-y-2">
