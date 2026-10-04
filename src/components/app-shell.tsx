@@ -3,6 +3,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 
 import { AppSidebar } from "@/components/app-sidebar";
 import { NexoraLogo } from "@/components/nexora-logo";
+import { NotificationCenter } from "@/components/notification-center";
 import { QuickAdd } from "@/components/quick-add";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { useAuth } from "@/lib/auth";
@@ -25,10 +26,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <p className="mt-2 text-sm text-muted-foreground">
           Sign in with the authorized Nexora account to continue.
         </p>
-        <Link
-          to="/auth"
-          className="mt-5 text-sm font-medium text-primary hover:underline"
-        >
+        <Link to="/auth" className="mt-5 text-sm font-medium text-primary hover:underline">
           Back to sign in
         </Link>
       </div>
@@ -53,7 +51,8 @@ export function AppShell({ children }: { children: ReactNode }) {
             <div className="min-w-0 flex-1 md:hidden">
               <NexoraLogo size={22} />
             </div>
-            <div className="ml-auto">
+            <div className="ml-auto flex items-center gap-1">
+              <NotificationCenter />
               <QuickAdd />
             </div>
           </header>

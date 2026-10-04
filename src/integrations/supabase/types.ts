@@ -496,6 +496,24 @@ export type Database = {
           },
         ]
       }
+      notification_read_states: {
+        Row: {
+          read_at: string
+          source_key: string
+          user_id: string
+        }
+        Insert: {
+          read_at?: string
+          source_key: string
+          user_id: string
+        }
+        Update: {
+          read_at?: string
+          source_key?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
