@@ -67,9 +67,9 @@ export function NotificationCenter() {
         sideOffset={8}
         collisionPadding={12}
         aria-label="Notifications"
-        className="flex max-h-[var(--radix-popover-content-available-height)] w-[min(24rem,calc(100vw-1.5rem))] flex-col overflow-hidden p-0"
+        className="flex max-h-[var(--radix-popover-content-available-height)] w-[min(24rem,calc(100vw-1.5rem))] flex-col overflow-hidden border-primary/35 bg-surface text-surface-foreground shadow-xl shadow-black/50 p-0"
       >
-        <div className="flex shrink-0 flex-col items-start gap-2 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+        <div className="flex shrink-0 flex-col items-start gap-2 border-b border-border/80 bg-background/20 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
           <div>
             <h2 className="text-sm font-semibold text-foreground">Reminders</h2>
             <p className="mt-0.5 text-xs text-muted-foreground">
@@ -112,7 +112,7 @@ export function NotificationCenter() {
             You’re all caught up. New actionable deadlines will appear here.
           </p>
         ) : (
-          <ul className="min-h-0 max-h-[calc(var(--radix-popover-content-available-height)_-_12rem)] shrink divide-y divide-border overflow-y-auto overscroll-contain md:max-h-[min(70vh,32rem)]">
+          <ul className="min-h-0 max-h-[calc(var(--radix-popover-content-available-height)_-_12rem)] shrink divide-y divide-border/70 overflow-y-auto overscroll-contain md:max-h-[min(70vh,32rem)]">
             {visibleItems.map((item) => (
               <li key={item.sourceKey} className="flex items-start gap-2 p-3">
                 <span
