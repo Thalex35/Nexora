@@ -65,10 +65,11 @@ export function NotificationCenter() {
       <PopoverContent
         align="end"
         sideOffset={8}
+        collisionPadding={12}
         aria-label="Notifications"
-        className="w-[min(24rem,calc(100vw-2rem))] p-0"
+        className="flex max-h-[var(--radix-popover-content-available-height)] w-[min(24rem,calc(100vw-1.5rem))] flex-col overflow-hidden p-0"
       >
-        <div className="flex items-center justify-between gap-3 border-b border-border p-4">
+        <div className="flex shrink-0 flex-col items-start gap-2 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
           <div>
             <h2 className="text-sm font-semibold text-foreground">Reminders</h2>
             <p className="mt-0.5 text-xs text-muted-foreground">
@@ -111,7 +112,7 @@ export function NotificationCenter() {
             You’re all caught up. New actionable deadlines will appear here.
           </p>
         ) : (
-          <ul className="max-h-[min(70vh,32rem)] divide-y divide-border overflow-y-auto">
+          <ul className="min-h-0 max-h-[calc(var(--radix-popover-content-available-height)_-_12rem)] shrink divide-y divide-border overflow-y-auto overscroll-contain md:max-h-[min(70vh,32rem)]">
             {visibleItems.map((item) => (
               <li key={item.sourceKey} className="flex items-start gap-2 p-3">
                 <span
@@ -157,8 +158,12 @@ function NotificationLink({ item }: { item: InAppNotification }) {
   const content = (
     <>
       <span className="sr-only">{item.readAt ? "Read reminder. " : "Unread reminder. "}</span>
-      <span className="block break-words text-sm font-medium text-foreground">{item.title}</span>
-      <span className="mt-0.5 block text-xs text-muted-foreground">{item.description}</span>
+      <span className="block break-words [overflow-wrap:anywhere] text-sm font-medium text-foreground">
+        {item.title}
+      </span>
+      <span className="mt-0.5 block break-words [overflow-wrap:anywhere] text-xs text-muted-foreground">
+        {item.description}
+      </span>
       <time dateTime={item.date} className="mt-1 block text-xs text-muted-foreground">
         {formatPlanningDate(item.date, { day: "numeric", month: "short", year: "numeric" })}
       </time>
