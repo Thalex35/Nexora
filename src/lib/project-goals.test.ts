@@ -4,8 +4,10 @@ import test from "node:test";
 
 import {
   calculateProjectGoalProgress,
+  filterGoalsByProject,
   filterGoalsByProjectState,
   goalProjectId,
+  sortGoalsChronologically,
 } from "./project-goals.ts";
 
 const goals = [
@@ -83,6 +85,56 @@ test("goal filters keep standalone, linked, completed, and active goals distinct
   assert.deepEqual(
     filterGoalsByProjectState(goals, projects, "in-progress").map((goal) => goal.id),
     ["g1"],
+  );
+});
+
+test("goals are ordered by target date, tie-broken by creation time, and undated goals go last", () => {
+  const unorderedGoals = [
+    { id: "g-undated", status: "active", target_date: null, created_at: "2026-01-10T00:00:00Z" },
+    {
+      id: "g-earliest",
+      status: "active",
+      target_date: "2026-02-10",
+      created_at: "2026-01-03T00:00:00Z",
+    },
+    {
+      id: "g-same-date-late",
+      status: "active",
+      target_date: "2026-03-01",
+      created_at: "2026-03-02T00:00:00Z",
+    },
+    {
+      id: "g-same-date-early",
+      status: "active",
+      target_date: "2026-03-01",
+      created_at: "2026-02-28T00:00:00Z",
+    },
+    {
+      id: "g-latest",
+      status: "active",
+      target_date: "2026-04-15",
+      created_at: "2026-04-01T00:00:00Z",
+    },
+  ];
+
+  assert.deepEqual(
+    sortGoalsChronologically(unorderedGoals).map((goal) => goal.id),
+    ["g-earliest", "g-same-date-early", "g-same-date-late", "g-latest", "g-undated"],
+  );
+});
+
+test("project filtering keeps only the selected project while preserving standalone goals with the null option", () => {
+  assert.deepEqual(
+    filterGoalsByProject(goals, projects, "p1").map((goal) => goal.id),
+    ["g2"],
+  );
+  assert.deepEqual(
+    filterGoalsByProject(goals, projects, null).map((goal) => goal.id),
+    ["g1"],
+  );
+  assert.deepEqual(
+    filterGoalsByProject(goals, projects, "missing-project").map((goal) => goal.id),
+    [],
   );
 });
 

@@ -34,6 +34,8 @@ import {
   type Project,
   type TaskPriority,
 } from "@/lib/nexora-data";
+import { downloadProjectReport } from "@/lib/project-pdf";
+import { sortGoalsChronologically } from "@/lib/project-goals";
 
 export const Route = createFileRoute("/projects/$projectId")({
   head: () => ({
@@ -64,8 +66,10 @@ function ProjectDetailPage() {
   const [dueDate, setDueDate] = useState("");
   const project = (projects.data ?? []).find((item) => item.id === projectId);
   const goal = (goals.data ?? []).find((item) => item.id === project?.goal_id);
-  const projectGoals = (goals.data ?? []).filter(
-    (item) => item.project_id === projectId || item.id === project?.goal_id,
+  const projectGoals = sortGoalsChronologically(
+    (goals.data ?? []).filter(
+      (item) => item.project_id === projectId || item.id === project?.goal_id,
+    ),
   );
   const projectTasks = (tasks.data ?? []).filter((task) => task.project_id === projectId);
   const loading = projects.isLoading || goals.isLoading || tasks.isLoading;
@@ -91,6 +95,11 @@ function ProjectDetailPage() {
   function openGoalDialog(goalToEdit: Goal | null = null) {
     setEditingGoal(goalToEdit);
     setGoalDialogOpen(true);
+  }
+
+  function handleDownloadPdf() {
+    if (!project) return;
+    downloadProjectReport(project, projectGoals);
   }
 
   if (loading) {
@@ -156,7 +165,10 @@ function ProjectDetailPage() {
                 </Link>
               )}
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" onClick={handleDownloadPdf}>
+                Download PDF
+              </Button>
               <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
                 Edit project
               </Button>
