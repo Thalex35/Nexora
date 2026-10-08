@@ -64,28 +64,157 @@ function formatMoney(amount: number, currency: string) {
 const serviceBrandMarks: Record<string, { slug: string; color: string }> = {
   adobe: { slug: "adobe", color: "ff0000" },
   amazon: { slug: "amazon", color: "ff9900" },
+  anthropic: { slug: "anthropic", color: "d97757" },
   apple: { slug: "apple", color: "ffffff" },
+  avalanche: { slug: "avalanche", color: "e84142" },
+  binance: { slug: "binance", color: "f0b90b" },
+  binancecoin: { slug: "binance", color: "f0b90b" },
+  bitcoin: { slug: "bitcoin", color: "f7931a" },
+  bybit: { slug: "bybit", color: "f7a600" },
   canva: { slug: "canva", color: "00c4cc" },
+  chatgpt: { slug: "openai", color: "ffffff" },
+  claude: { slug: "anthropic", color: "d97757" },
+  coinbase: { slug: "coinbase", color: "0052ff" },
+  "coinbase wallet": { slug: "coinbasewallet", color: "0052ff" },
+  copilot: { slug: "githubcopilot", color: "ffffff" },
+  crypto: { slug: "cryptodotcom", color: "1199fa" },
+  "crypto.com": { slug: "cryptodotcom", color: "1199fa" },
+  deepseek: { slug: "deepseek", color: "4d6bfe" },
+  discord: { slug: "discord", color: "5865f2" },
   disney: { slug: "disneyplus", color: "113ccf" },
   "disney+": { slug: "disneyplus", color: "113ccf" },
+  dogecoin: { slug: "dogecoin", color: "c2a633" },
+  ethereum: { slug: "ethereum", color: "627eea" },
+  exodus: { slug: "exodus", color: "5e6eec" },
+  facebook: { slug: "facebook", color: "0866ff" },
+  github: { slug: "github", color: "ffffff" },
+  gemini: { slug: "googlegemini", color: "8e75b2" },
   google: { slug: "google", color: "4285f4" },
+  grok: { slug: "grok", color: "ffffff" },
   hulu: { slug: "hulu", color: "1ce783" },
+  instagram: { slug: "instagram", color: "e4405f" },
+  kraken: { slug: "kraken", color: "5741d9" },
+  kucoin: { slug: "kucoin", color: "23af91" },
+  ledger: { slug: "ledger", color: "ffffff" },
+  linkedin: { slug: "linkedin", color: "0a66c2" },
+  messenger: { slug: "messenger", color: "0866ff" },
+  metamask: { slug: "metamask", color: "f6851b" },
   microsoft: { slug: "microsoft", color: "f25022" },
   netflix: { slug: "netflix", color: "e50914" },
+  notion: { slug: "notion", color: "ffffff" },
+  okx: { slug: "okx", color: "ffffff" },
+  openai: { slug: "openai", color: "ffffff" },
+  perplexity: { slug: "perplexity", color: "20b8cd" },
+  phantom: { slug: "phantom", color: "ab9ff2" },
+  pinterest: { slug: "pinterest", color: "bd081c" },
+  polygon: { slug: "polygon", color: "8247e5" },
+  ripple: { slug: "ripple", color: "0085c0" },
+  reddit: { slug: "reddit", color: "ff4500" },
+  signal: { slug: "signal", color: "3a76f0" },
+  slack: { slug: "slack", color: "e01e5a" },
+  snapchat: { slug: "snapchat", color: "fffc00" },
+  solana: { slug: "solana", color: "9945ff" },
   spotify: { slug: "spotify", color: "1ed760" },
   steam: { slug: "steam", color: "66c0f4" },
+  telegram: { slug: "telegram", color: "26a5e4" },
+  threads: { slug: "threads", color: "ffffff" },
+  tiktok: { slug: "tiktok", color: "ffffff" },
+  tether: { slug: "tether", color: "26a17b" },
+  trezor: { slug: "trezor", color: "84bb29" },
+  twitch: { slug: "twitch", color: "9146ff" },
   uber: { slug: "uber", color: "ffffff" },
   upwork: { slug: "upwork", color: "6fda44" },
+  viber: { slug: "viber", color: "7360f2" },
+  watsapp: { slug: "whatsapp", color: "25d366" },
+  wechat: { slug: "wechat", color: "07c160" },
+  whatsapp: { slug: "whatsapp", color: "25d366" },
+  "trust wallet": { slug: "trustwallet", color: "3375bb" },
+  uniswap: { slug: "uniswap", color: "ff007a" },
+  x: { slug: "x", color: "ffffff" },
   youtube: { slug: "youtube", color: "ff0000" },
   zoom: { slug: "zoom", color: "2d8cff" },
 };
 
+function normalizeBrandName(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function typoDistance(left: string, right: string) {
+  if (Math.abs(left.length - right.length) > 2) return 3;
+
+  const distances = Array.from({ length: left.length + 1 }, (_, row) =>
+    Array.from({ length: right.length + 1 }, (_, column) =>
+      row === 0 ? column : column === 0 ? row : 0,
+    ),
+  );
+
+  for (let row = 1; row <= left.length; row += 1) {
+    const currentRow = distances[row];
+    const previousRow = distances[row - 1];
+    if (!currentRow || !previousRow) return 3;
+
+    for (let column = 1; column <= right.length; column += 1) {
+      currentRow[column] = Math.min(
+        (previousRow[column] ?? 3) + 1,
+        (currentRow[column - 1] ?? 3) + 1,
+        (previousRow[column - 1] ?? 3) + (left[row - 1] === right[column - 1] ? 0 : 1),
+      );
+      if (
+        row > 1 &&
+        column > 1 &&
+        left[row - 1] === right[column - 2] &&
+        left[row - 2] === right[column - 1]
+      ) {
+        currentRow[column] = Math.min(
+          currentRow[column] ?? 3,
+          (distances[row - 2]?.[column - 2] ?? 3) + 1,
+        );
+      }
+    }
+  }
+
+  return distances[left.length]?.[right.length] ?? 3;
+}
+
+const serviceBrandEntries = Object.entries(serviceBrandMarks)
+  .map(([name, brand]) => [normalizeBrandName(name), brand] as const)
+  .sort(([left], [right]) => right.length - left.length);
+
 function ServiceLogo({ name }: { name: string }) {
   const [logoFailed, setLogoFailed] = useState(false);
-  const brandName = name.trim().toLowerCase();
-  const brand = Object.entries(serviceBrandMarks).find(
-    ([knownName]) => brandName === knownName || brandName.startsWith(`${knownName} `),
+  const trimmedName = name.trim();
+  const words = trimmedName.split(/\s+/);
+  const brandCandidates = [
+    normalizeBrandName(words[0] ?? ""),
+    normalizeBrandName(words.slice(0, 2).join("")),
+  ];
+  const exactBrand = serviceBrandEntries.find(([knownName]) =>
+    brandCandidates.some(
+      (candidate) =>
+        candidate === knownName || (knownName.length >= 3 && candidate.startsWith(knownName)),
+    ),
   )?.[1];
+  const fuzzyMatches = exactBrand
+    ? []
+    : serviceBrandEntries.flatMap(([knownName, brand]) =>
+        brandCandidates
+          .filter((candidate) => {
+            const shorterLength = Math.min(knownName.length, candidate.length);
+            if (shorterLength < 5 || Math.abs(knownName.length - candidate.length) > 2) {
+              return false;
+            }
+
+            const distanceLimit = shorterLength >= 10 ? 2 : 1;
+            return typoDistance(candidate, knownName) <= distanceLimit;
+          })
+          .map((candidate) => ({
+            brand,
+            distance: typoDistance(candidate, knownName),
+          })),
+      );
+  const fuzzyBrand =
+    exactBrand ??
+    fuzzyMatches.sort((left, right) => (left.distance ?? 3) - (right.distance ?? 3))[0]?.brand;
   const initials = name.trim().slice(0, 2).toUpperCase() || "?";
 
   return (
@@ -93,9 +222,9 @@ function ServiceLogo({ name }: { name: string }) {
       aria-hidden="true"
       className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-lg border border-border/80 bg-surface/80"
     >
-      {brand && !logoFailed ? (
+      {fuzzyBrand && !logoFailed ? (
         <img
-          src={`https://cdn.simpleicons.org/${brand.slug}/${brand.color}`}
+          src={`https://cdn.simpleicons.org/${fuzzyBrand.slug}/${fuzzyBrand.color}`}
           alt=""
           loading="lazy"
           className="h-5 w-5 object-contain"
