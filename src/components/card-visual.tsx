@@ -15,6 +15,13 @@ function accentFor(provider: string) {
   return cardGradients[hash % cardGradients.length];
 }
 
+function gradientFor(priority: number, provider: string) {
+  if (priority === 1) return "from-amber-400 via-yellow-800 to-black";
+  if (priority === 2) return "from-slate-700 via-slate-900 to-black";
+  if (priority === 3) return "from-teal-500 via-emerald-900 to-slate-950";
+  return accentFor(provider);
+}
+
 export function CardVisual({
   card,
   primary = false,
@@ -28,7 +35,7 @@ export function CardVisual({
     <div
       role="img"
       aria-label={`${card.provider} ${card.name}, assigned priority ${card.priority}. No payment credentials displayed.`}
-      className={`relative isolate flex aspect-[1.62] min-w-0 flex-col justify-between overflow-hidden rounded-xl border border-white/10 bg-gradient-to-br ${accentFor(card.provider)} p-4 shadow-lg shadow-black/20 ${compact ? "w-full max-w-[15rem] p-3" : "w-full"}`}
+      className={`relative isolate flex aspect-[1.62] min-w-0 flex-col justify-between overflow-hidden rounded-xl border border-white/10 bg-gradient-to-br ${gradientFor(card.priority, card.provider)} p-4 shadow-lg shadow-black/20 ${compact ? "w-full max-w-[15rem] p-3" : "w-full"}`}
     >
       <div
         aria-hidden="true"
