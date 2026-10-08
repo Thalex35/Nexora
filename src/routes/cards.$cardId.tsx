@@ -284,7 +284,7 @@ function CardDetailsPage() {
           <div className="min-w-0 space-y-4">
             <section className="nexora-panel min-w-0 space-y-4 p-4 sm:p-5">
               <h2 className="text-sm font-semibold text-foreground">Card details</h2>
-              <dl className="grid gap-3 text-sm sm:grid-cols-2">
+              <dl className="grid gap-3 text-sm sm:grid-cols-2 sm:gap-x-10 lg:gap-x-12">
                 <div className="flex min-w-0 items-center gap-3">
                   <CreditCard className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
                   <dt className="text-muted-foreground">Provider</dt>
