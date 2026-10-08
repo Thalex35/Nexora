@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { getSupabaseProjectUsage } from "@/lib/supabase-project-usage.functions";
 import {
   MIN_PASSWORD_LENGTH,
   passwordUpdateErrorMessage,
@@ -40,6 +41,22 @@ const supabaseProjectRef = (() => {
     return null;
   }
 })();
+
+function formatBytes(value: number) {
+  if (value < 1024) return `${value} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let size = value / 1024;
+  let unitIndex = 0;
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex += 1;
+  }
+  return `${size.toFixed(1)} ${units[unitIndex]}`;
+}
+
+function diskUsagePercent(usedBytes: number, sizeBytes: number) {
+  return sizeBytes > 0 ? Math.min(100, (usedBytes / sizeBytes) * 100) : 0;
+}
 
 async function loadSupabaseUsage(userId: string) {
   const results = await Promise.all([
@@ -111,6 +128,12 @@ function SettingsPage() {
       if (!user) throw new Error("Sign in to view your Supabase data summary.");
       return loadSupabaseUsage(user.id);
     },
+  });
+  const projectUsage = useQuery({
+    queryKey: ["settings", "supabase-project-usage"],
+    enabled: !!user?.id,
+    queryFn: () => getSupabaseProjectUsage(),
+    staleTime: 5 * 60 * 1000,
   });
   const [signingOut, setSigningOut] = useState(false);
   const [password, setPassword] = useState("");
@@ -186,11 +209,11 @@ function SettingsPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => void supabaseUsage.refetch()}
-              disabled={supabaseUsage.isFetching || !user}
+              onClick={() => void Promise.all([supabaseUsage.refetch(), projectUsage.refetch()])}
+              disabled={supabaseUsage.isFetching || projectUsage.isFetching || !user}
             >
               <RefreshCw
-                className={`mr-2 h-4 w-4 ${supabaseUsage.isFetching ? "animate-spin" : ""}`}
+                className={`mr-2 h-4 w-4 ${supabaseUsage.isFetching || projectUsage.isFetching ? "animate-spin" : ""}`}
                 aria-hidden="true"
               />
               Refresh
@@ -245,23 +268,120 @@ function SettingsPage() {
           <div className="grid gap-3 border-t border-border pt-4 sm:grid-cols-2">
             <div className="rounded-lg border border-border/80 p-4">
               <p className="flex items-center gap-2 text-sm font-medium text-foreground">
+                <HardDrive className="h-4 w-4 text-primary" aria-hidden="true" />
+                Database disk usage
+              </p>
+              {projectUsage.isLoading ? (
+                <p className="mt-2 text-sm text-muted-foreground">Loading disk metrics…</p>
+              ) : projectUsage.data?.disk.utilization ? (
+                <>
+                  <p className="mt-2 text-lg font-semibold text-foreground">
+                    {formatBytes(projectUsage.data.disk.utilization.usedBytes)} used
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatBytes(projectUsage.data.disk.utilization.availableBytes)} available
+                    {projectUsage.data.disk.allocatedGb !== null &&
+                      ` · ${projectUsage.data.disk.allocatedGb} GB configured`}
+                  </p>
+                  <div
+                    className="mt-3 h-2 overflow-hidden rounded-full bg-surface"
+                    role="progressbar"
+                    aria-label="Database disk used"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={Math.round(
+                      diskUsagePercent(
+                        projectUsage.data.disk.utilization.usedBytes,
+                        projectUsage.data.disk.utilization.sizeBytes,
+                      ),
+                    )}
+                  >
+                    <div
+                      className="h-full rounded-full bg-primary"
+                      style={{
+                        width: `${diskUsagePercent(
+                          projectUsage.data.disk.utilization.usedBytes,
+                          projectUsage.data.disk.utilization.sizeBytes,
+                        )}%`,
+                      }}
+                    />
+                  </div>
+                  {projectUsage.data.disk.configError && (
+                    <p className="mt-2 text-xs text-destructive">
+                      Disk configuration unavailable: {projectUsage.data.disk.configError}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className="mt-2 text-sm text-destructive">
+                  {projectUsage.data?.disk.utilizationError ??
+                    projectUsage.data?.setupError ??
+                    projectUsage.error?.message ??
+                    "Disk metrics are unavailable."}
+                </p>
+              )}
+            </div>
+            <div className="rounded-lg border border-border/80 p-4">
+              <p className="flex items-center gap-2 text-sm font-medium text-foreground">
+                <Database className="h-4 w-4 text-primary" aria-hidden="true" />
+                Supabase Storage buckets
+              </p>
+              {projectUsage.isLoading ? (
+                <p className="mt-2 text-sm text-muted-foreground">Loading buckets…</p>
+              ) : projectUsage.data?.buckets.items ? (
+                <>
+                  <p className="mt-2 text-lg font-semibold text-foreground">
+                    {projectUsage.data.buckets.items.length}{" "}
+                    {projectUsage.data.buckets.items.length === 1 ? "bucket" : "buckets"}
+                  </p>
+                  {projectUsage.data.buckets.items.length > 0 ? (
+                    <ul className="mt-2 space-y-1">
+                      {projectUsage.data.buckets.items.map((bucket) => (
+                        <li
+                          key={bucket.name}
+                          className="flex items-center justify-between gap-2 text-xs"
+                        >
+                          <span className="truncate text-foreground">{bucket.name}</span>
+                          <span className="shrink-0 text-muted-foreground">
+                            {bucket.isPublic ? "Public" : "Private"}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-1 text-xs text-muted-foreground">No Storage buckets found.</p>
+                  )}
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    The Management API lists buckets but does not report total file size or quota
+                    remaining here.
+                  </p>
+                </>
+              ) : (
+                <p className="mt-2 text-sm text-destructive">
+                  {projectUsage.data?.buckets.error ??
+                    projectUsage.data?.setupError ??
+                    projectUsage.error?.message ??
+                    "Storage buckets are unavailable."}
+                </p>
+              )}
+            </div>
+            <div className="rounded-lg border border-border/80 p-4 sm:col-span-2">
+              <p className="flex items-center gap-2 text-sm font-medium text-foreground">
                 <Activity className="h-4 w-4 text-primary" aria-hidden="true" />
                 Egress remaining
               </p>
               <p className="mt-2 text-sm text-muted-foreground">
-                Not available through user-level access. Supabase only exposes project quota and
-                egress metrics through its Management API.
+                {projectUsage.data?.egressMessage ??
+                  "Billed egress quota is not available from the project metrics endpoint."}
               </p>
-            </div>
-            <div className="rounded-lg border border-border/80 p-4">
-              <p className="flex items-center gap-2 text-sm font-medium text-foreground">
-                <HardDrive className="h-4 w-4 text-primary" aria-hidden="true" />
-                Storage usage
-              </p>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Project-wide storage totals require admin access. Nexora currently does not upload
-                files to Supabase Storage.
-              </p>
+              <a
+                href="https://supabase.com/dashboard/org/_/usage"
+                target="_blank"
+                rel="noreferrer"
+                className="mt-2 inline-flex text-sm font-medium text-primary underline-offset-4 hover:underline"
+              >
+                View egress usage in Supabase
+              </a>
             </div>
           </div>
 
