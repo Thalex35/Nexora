@@ -21,6 +21,13 @@ import {
   type Project,
 } from "@/lib/nexora-data";
 import { filterGoalsByProjectState, goalProjectId } from "@/lib/project-goals";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export const Route = createFileRoute("/goals")({
   head: () => ({
@@ -56,6 +63,7 @@ function GoalsPage() {
   const updateGoal = useUpdateGoal();
   const deleteGoal = useDeleteGoal();
   const [filter, setFilter] = useState<GoalFilter>("active");
+  const [selectedProjectId, setSelectedProjectId] = useState<string>("all");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Goal | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Goal | null>(null);
@@ -67,10 +75,19 @@ function GoalsPage() {
       return goal.status === filter;
     return goal.status === "active";
   });
+  const projectFiltered =
+    selectedProjectId === "all"
+      ? statusFiltered
+      : statusFiltered.filter(
+          (goal) => goalProjectId(goal, projects.data ?? []) === selectedProjectId,
+        );
   const visible =
     filter === "without-project" || filter === "with-project"
-      ? filterGoalsByProjectState(goals.data ?? [], projects.data ?? [], filter)
-      : statusFiltered;
+      ? filterGoalsByProjectState(projectFiltered, projects.data ?? [], filter)
+      : projectFiltered;
+  const projectOptions = [...(projects.data ?? [])].sort((left, right) =>
+    left.name.localeCompare(right.name),
+  );
   function openCreate() {
     setEditing(null);
     setOpen(true);
@@ -89,18 +106,37 @@ function GoalsPage() {
           }
         />
 
-        <Tabs value={filter} onValueChange={(value) => setFilter(value as GoalFilter)}>
-          <TabsList className="h-auto w-full flex-wrap justify-start gap-1 sm:w-auto">
-            <TabsTrigger value="active">Active</TabsTrigger>
-            <TabsTrigger value="completed">Completed</TabsTrigger>
-            <TabsTrigger value="paused">Paused</TabsTrigger>
-            <TabsTrigger value="archived">Archived</TabsTrigger>
-            <TabsTrigger value="all">All</TabsTrigger>
-            <TabsTrigger value="without-project">Without project</TabsTrigger>
-            <TabsTrigger value="with-project">With project</TabsTrigger>
-            <TabsTrigger value="in-progress">In progress</TabsTrigger>
-          </TabsList>
-        </Tabs>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <Tabs value={filter} onValueChange={(value) => setFilter(value as GoalFilter)}>
+            <TabsList className="h-auto w-full flex-wrap justify-start gap-1 sm:w-auto">
+              <TabsTrigger value="active">Active</TabsTrigger>
+              <TabsTrigger value="completed">Completed</TabsTrigger>
+              <TabsTrigger value="paused">Paused</TabsTrigger>
+              <TabsTrigger value="archived">Archived</TabsTrigger>
+              <TabsTrigger value="all">All</TabsTrigger>
+              <TabsTrigger value="without-project">Without project</TabsTrigger>
+              <TabsTrigger value="with-project">With project</TabsTrigger>
+              <TabsTrigger value="in-progress">In progress</TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          <div className="w-full max-w-xs">
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">Project</label>
+            <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
+              <SelectTrigger className="w-full min-w-0">
+                <SelectValue placeholder="All Projects" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Projects</SelectItem>
+                {projectOptions.map((project) => (
+                  <SelectItem key={project.id} value={project.id}>
+                    {project.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
 
         {goals.isLoading || projects.isLoading ? (
           <LoadingState />

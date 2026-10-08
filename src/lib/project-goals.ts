@@ -2,11 +2,17 @@ export type GoalForProject = {
   id: string;
   status: string;
   project_id?: string | null;
+  target_date?: string | null;
+  created_at?: string | null;
+  title?: string | null;
+  description?: string | null;
+  progress?: number | null;
 };
 
 export type ProjectForGoal = {
   id: string;
   goal_id?: string | null;
+  name?: string | null;
 };
 
 export function calculateProjectGoalProgress(goals: GoalForProject[]) {
@@ -20,8 +26,46 @@ export function calculateProjectGoalProgress(goals: GoalForProject[]) {
   };
 }
 
+export function sortGoalsChronologically<TGoal extends GoalForProject>(goals: TGoal[]) {
+  return [...goals].sort((left, right) => {
+    const leftPriority = left.target_date ? 0 : 1;
+    const rightPriority = right.target_date ? 0 : 1;
+
+    if (leftPriority !== rightPriority) {
+      return leftPriority - rightPriority;
+    }
+
+    if (left.target_date && right.target_date) {
+      const dateComparison = left.target_date.localeCompare(right.target_date);
+      if (dateComparison !== 0) {
+        return dateComparison;
+      }
+    }
+
+    const leftCreatedAt = left.created_at ?? "";
+    const rightCreatedAt = right.created_at ?? "";
+    if (leftCreatedAt !== rightCreatedAt) {
+      return leftCreatedAt.localeCompare(rightCreatedAt);
+    }
+
+    return left.id.localeCompare(right.id);
+  });
+}
+
 export function goalProjectId(goal: GoalForProject, projects: ProjectForGoal[]): string | null {
   return goal.project_id ?? projects.find((project) => project.goal_id === goal.id)?.id ?? null;
+}
+
+export function filterGoalsByProject<TGoal extends GoalForProject, TProject extends ProjectForGoal>(
+  goals: TGoal[],
+  projects: TProject[],
+  projectId: string | null,
+) {
+  if (!projectId) {
+    return goals.filter((goal) => goalProjectId(goal, projects) === null);
+  }
+
+  return goals.filter((goal) => goalProjectId(goal, projects) === projectId);
 }
 
 export function filterGoalsByProjectState<
