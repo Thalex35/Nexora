@@ -1,6 +1,16 @@
 import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, Pencil, Plus, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  CalendarDays,
+  CreditCard,
+  Link2,
+  Pencil,
+  Plus,
+  ShoppingBag,
+  Trash2,
+  UserRound,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/app-shell";
@@ -49,6 +59,55 @@ function formatMoney(amount: number, currency: string) {
   } catch {
     return `${currency} ${amount.toFixed(2)}`;
   }
+}
+
+const serviceBrandMarks: Record<string, { slug: string; color: string }> = {
+  adobe: { slug: "adobe", color: "ff0000" },
+  amazon: { slug: "amazon", color: "ff9900" },
+  apple: { slug: "apple", color: "ffffff" },
+  canva: { slug: "canva", color: "00c4cc" },
+  disney: { slug: "disneyplus", color: "113ccf" },
+  "disney+": { slug: "disneyplus", color: "113ccf" },
+  google: { slug: "google", color: "4285f4" },
+  hulu: { slug: "hulu", color: "1ce783" },
+  microsoft: { slug: "microsoft", color: "f25022" },
+  netflix: { slug: "netflix", color: "e50914" },
+  spotify: { slug: "spotify", color: "1ed760" },
+  steam: { slug: "steam", color: "66c0f4" },
+  uber: { slug: "uber", color: "ffffff" },
+  upwork: { slug: "upwork", color: "6fda44" },
+  youtube: { slug: "youtube", color: "ff0000" },
+  zoom: { slug: "zoom", color: "2d8cff" },
+};
+
+function ServiceLogo({ name }: { name: string }) {
+  const [logoFailed, setLogoFailed] = useState(false);
+  const brandName = name.trim().toLowerCase();
+  const brand = Object.entries(serviceBrandMarks).find(
+    ([knownName]) => brandName === knownName || brandName.startsWith(`${knownName} `),
+  )?.[1];
+  const initials = name.trim().slice(0, 2).toUpperCase() || "?";
+
+  return (
+    <span
+      aria-hidden="true"
+      className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-lg border border-border/80 bg-surface/80"
+    >
+      {brand && !logoFailed ? (
+        <img
+          src={`https://cdn.simpleicons.org/${brand.slug}/${brand.color}`}
+          alt=""
+          loading="lazy"
+          className="h-5 w-5 object-contain"
+          onError={() => setLogoFailed(true)}
+        />
+      ) : (
+        <span className="text-[10px] font-bold tracking-wide text-muted-foreground">
+          {initials}
+        </span>
+      )}
+    </span>
+  );
 }
 
 function CardDetailsPage() {
@@ -194,88 +253,173 @@ function CardDetailsPage() {
           </div>
         </div>
 
-        <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(18rem,0.9fr)]">
-          <section className="nexora-panel min-w-0 space-y-4 p-4 sm:p-5">
-            <div className="grid min-w-0 gap-4 sm:grid-cols-[minmax(14rem,0.8fr)_minmax(0,1fr)] sm:items-center">
-              <CardVisual card={card} primary={card.priority === 1} />
-              <div className="min-w-0 space-y-3">
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-[0.12em] text-primary">
-                    {card.provider}
-                  </p>
-                  <h1 className="mt-1 break-words text-xl font-semibold text-foreground">
-                    {card.name}
-                  </h1>
-                  <p className="mt-1 text-sm capitalize text-muted-foreground">
-                    {card.card_type} · {card.network}
-                  </p>
-                </div>
-                {card.primary_use && (
-                  <p className="rounded-lg border border-primary/15 bg-primary/[0.06] px-3 py-2 text-xs text-foreground">
-                    <span className="mb-1 block text-[10px] uppercase tracking-wider text-primary">
-                      Used for
-                    </span>
-                    {card.primary_use}
-                  </p>
-                )}
+        <section className="nexora-panel min-w-0 p-4 sm:p-5">
+          <div className="grid min-w-0 items-center gap-5 md:grid-cols-[minmax(14rem,0.7fr)_minmax(0,1fr)_auto]">
+            <CardVisual card={card} primary={card.priority === 1} />
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="break-words text-xl font-semibold text-foreground">{card.name}</h1>
+                {card.priority === 1 && <Badge>Primary</Badge>}
               </div>
+              <p className="mt-1 text-sm capitalize text-muted-foreground">
+                {card.card_type} · {card.network}
+              </p>
+              {card.primary_use && (
+                <p className="mt-3 inline-flex max-w-full items-start gap-2 rounded-full border border-primary/15 bg-primary/[0.06] px-3 py-1.5 text-xs text-foreground">
+                  <span className="shrink-0 font-medium text-primary">Used for:</span>
+                  <span className="break-words">{card.primary_use}</span>
+                </p>
+              )}
             </div>
-            <div className="border-t border-border pt-4">
-              <h2 className="mb-3 text-sm font-semibold text-foreground">Card details</h2>
-              <dl className="grid gap-x-4 gap-y-3 text-sm sm:grid-cols-3">
-                <div>
-                  <dt className="text-xs text-muted-foreground">Provider</dt>
-                  <dd className="mt-1 break-words text-foreground">{card.provider}</dd>
+            <div className="flex items-center gap-2 md:flex-col">
+              <span className="grid h-8 w-8 place-items-center rounded-full border border-primary/30 bg-primary/[0.08] text-sm font-semibold text-primary">
+                {card.priority}
+              </span>
+              <span className="text-xs text-muted-foreground">Priority</span>
+            </div>
+          </div>
+        </section>
+
+        <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(18rem,0.9fr)]">
+          <div className="min-w-0 space-y-4">
+            <section className="nexora-panel min-w-0 space-y-4 p-4 sm:p-5">
+              <h2 className="text-sm font-semibold text-foreground">Card details</h2>
+              <dl className="grid gap-3 text-sm sm:grid-cols-2">
+                <div className="flex min-w-0 items-center gap-3">
+                  <CreditCard className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                  <dt className="text-muted-foreground">Provider</dt>
+                  <dd className="ml-auto truncate text-right text-foreground">{card.provider}</dd>
                 </div>
-                <div>
-                  <dt className="text-xs text-muted-foreground">Type</dt>
-                  <dd className="mt-1 capitalize text-foreground">{card.card_type}</dd>
+                <div className="flex min-w-0 items-center gap-3">
+                  <CreditCard className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                  <dt className="text-muted-foreground">Type</dt>
+                  <dd className="ml-auto truncate text-right capitalize text-foreground">
+                    {card.card_type}
+                  </dd>
                 </div>
-                <div>
-                  <dt className="text-xs text-muted-foreground">Network</dt>
-                  <dd className="mt-1 capitalize text-foreground">{card.network}</dd>
+                <div className="flex min-w-0 items-center gap-3">
+                  <CreditCard className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                  <dt className="text-muted-foreground">Network</dt>
+                  <dd className="ml-auto truncate text-right capitalize text-foreground">
+                    {card.network}
+                  </dd>
                 </div>
-                <div>
-                  <dt className="text-xs text-muted-foreground">Assigned priority</dt>
-                  <dd className="mt-1 text-foreground">
+                <div className="flex min-w-0 items-center gap-3">
+                  <UserRound className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                  <dt className="text-muted-foreground">Assigned priority</dt>
+                  <dd className="ml-auto text-right text-foreground">
                     {card.priority} {card.priority === 1 ? "(Primary)" : ""}
                   </dd>
                 </div>
-                <div>
-                  <dt className="text-xs text-muted-foreground">Added</dt>
-                  <dd className="mt-1 text-foreground">
+                <div className="flex min-w-0 items-center gap-3 sm:col-span-2">
+                  <CalendarDays className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                  <dt className="text-muted-foreground">Added</dt>
+                  <dd className="ml-auto text-right text-foreground">
                     {formatDate(card.created_at.slice(0, 10))}
                   </dd>
                 </div>
               </dl>
-              <p className="mt-4 border-t border-border pt-3 text-xs text-muted-foreground">
-                This is a personal tracker. No real card credentials are stored or shown.
+              <p className="border-t border-border pt-3 text-xs text-muted-foreground">
+                No real card credentials are stored or shown.
               </p>
-            </div>
-            <dl className="grid grid-cols-3 gap-2 border-t border-border pt-4">
-              <div className="min-w-0 rounded-lg bg-surface/80 p-3">
-                <dt className="text-[11px] leading-snug text-muted-foreground">
-                  Active subscriptions
-                </dt>
-                <dd className="mt-1 text-lg font-semibold text-foreground">
-                  {usageSummary.activeSubscriptions}
-                </dd>
+              <dl className="grid grid-cols-3 gap-2 border-t border-border pt-3">
+                <div className="min-w-0 rounded-lg bg-surface/80 p-2.5">
+                  <dt className="text-[11px] leading-snug text-muted-foreground">Subscriptions</dt>
+                  <dd className="mt-1 text-lg font-semibold text-foreground">
+                    {usageSummary.activeSubscriptions}
+                  </dd>
+                </div>
+                <div className="min-w-0 rounded-lg bg-surface/80 p-2.5">
+                  <dt className="text-[11px] leading-snug text-muted-foreground">Active trials</dt>
+                  <dd className="mt-1 text-lg font-semibold text-foreground">
+                    {usageSummary.activeTrials}
+                  </dd>
+                </div>
+                <div className="min-w-0 rounded-lg bg-surface/80 p-2.5">
+                  <dt className="text-[11px] leading-snug text-muted-foreground">Purchases</dt>
+                  <dd className="mt-1 text-lg font-semibold text-foreground">
+                    {usageSummary.purchasesThisMonth}
+                  </dd>
+                  <dt className="text-[10px] text-muted-foreground">this month</dt>
+                </div>
+              </dl>
+            </section>
+
+            <section className="nexora-panel min-w-0 space-y-4 p-4 sm:p-5">
+              <div className="flex items-center gap-2">
+                <Link2 className="h-4 w-4 text-primary" aria-hidden="true" />
+                <h2 className="text-sm font-semibold text-foreground">Usage &amp; notes</h2>
               </div>
-              <div className="min-w-0 rounded-lg bg-surface/80 p-3">
-                <dt className="text-[11px] leading-snug text-muted-foreground">Active trials</dt>
-                <dd className="mt-1 text-lg font-semibold text-foreground">
-                  {usageSummary.activeTrials}
-                </dd>
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-xs font-medium text-foreground">
+                  <CreditCard className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+                  Subscriptions
+                </div>
+                {(subscriptions.data ?? []).length === 0 ? (
+                  <p className="pl-6 text-xs text-muted-foreground">No subscriptions recorded.</p>
+                ) : (
+                  (subscriptions.data ?? []).slice(0, 3).map((subscription) => (
+                    <div
+                      key={subscription.id}
+                      className="flex min-w-0 items-center gap-3 border-b border-border/70 pb-3 last:border-0 last:pb-0"
+                    >
+                      <ServiceLogo name={subscription.service_name} />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-xs font-medium text-foreground">
+                          {subscription.service_name}
+                        </p>
+                        <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                          Started: {formatDate(subscription.start_date)}
+                          {subscription.next_billing_date &&
+                            ` · Next billing: ${formatDate(subscription.next_billing_date)}`}
+                        </p>
+                      </div>
+                      <span className="shrink-0 text-right text-[11px] text-foreground">
+                        {subscription.is_free_trial
+                          ? "Free trial"
+                          : `${formatMoney(Number(subscription.amount), subscription.currency)} / ${subscription.billing_frequency.replace("_", " ")}`}
+                      </span>
+                    </div>
+                  ))
+                )}
               </div>
-              <div className="min-w-0 rounded-lg bg-surface/80 p-3">
-                <dt className="text-[11px] leading-snug text-muted-foreground">This month</dt>
-                <dd className="mt-1 text-lg font-semibold text-foreground">
-                  {usageSummary.purchasesThisMonth}
-                </dd>
-                <dt className="text-[10px] text-muted-foreground">purchases</dt>
+              <div className="space-y-3 border-t border-border pt-3">
+                <div className="flex items-center gap-2 text-xs font-medium text-foreground">
+                  <ShoppingBag className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+                  Purchases
+                </div>
+                {(purchases.data ?? []).length === 0 ? (
+                  <p className="pl-6 text-xs text-muted-foreground">No purchases recorded.</p>
+                ) : (
+                  (purchases.data ?? []).slice(0, 2).map((purchase) => (
+                    <div
+                      key={purchase.id}
+                      className="flex min-w-0 items-center gap-3 border-b border-border/70 pb-3 last:border-0 last:pb-0"
+                    >
+                      <ServiceLogo name={purchase.merchant} />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-xs font-medium text-foreground">
+                          {purchase.merchant}
+                        </p>
+                        <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                          {formatDate(purchase.purchase_date)}
+                          {purchase.item_description && ` · ${purchase.item_description}`}
+                        </p>
+                      </div>
+                      <span className="shrink-0 text-[11px] font-medium text-foreground">
+                        {formatMoney(Number(purchase.amount), purchase.currency)}
+                      </span>
+                    </div>
+                  ))
+                )}
               </div>
-            </dl>
-          </section>
+              {card.notes && (
+                <p className="whitespace-pre-wrap break-words border-t border-border pt-3 text-xs text-muted-foreground">
+                  {card.notes}
+                </p>
+              )}
+            </section>
+          </div>
 
           <section className="nexora-panel min-w-0 space-y-3 p-4 sm:p-5">
             <div className="flex items-center justify-between gap-2">
@@ -296,13 +440,16 @@ function CardDetailsPage() {
                     key={`${activity.type}-${activity.id}`}
                     className="flex min-w-0 items-center justify-between gap-3 py-3 first:pt-1 last:pb-1"
                   >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-foreground">
-                        {activity.title}
-                      </p>
-                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                        {activity.type} · {formatDate(activity.date)}
-                      </p>
+                    <div className="flex min-w-0 items-center gap-3">
+                      <ServiceLogo name={activity.title} />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-foreground">
+                          {activity.title}
+                        </p>
+                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                          {activity.type} · {formatDate(activity.date)}
+                        </p>
+                      </div>
                     </div>
                     <p className="shrink-0 text-right text-xs font-medium text-foreground">
                       {activity.amount}
