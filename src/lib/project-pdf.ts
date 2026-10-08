@@ -1,7 +1,8 @@
 import { jsPDF } from "jspdf";
 
-import type { Goal, Project } from "@/lib/nexora-data";
-import { sortGoalsChronologically } from "@/lib/project-goals";
+import type { Goal, Project, ProjectBudget, ProjectBudgetItem } from "./nexora-data.ts";
+import { calculateProjectBudgetSummary, formatBudgetAmount } from "./project-budget.ts";
+import { sortGoalsChronologically } from "./project-goals.ts";
 
 function formatDate(value: string | null | undefined) {
   if (!value) return "Not set";
@@ -26,7 +27,16 @@ export function sanitizeProjectFilename(name: string) {
   return safeName || "project";
 }
 
-export function downloadProjectReport(project: Project, goals: Goal[]) {
+export type ProjectBudgetReport = {
+  budget: ProjectBudget;
+  items: ProjectBudgetItem[];
+};
+
+export function createProjectReport(
+  project: Project,
+  goals: Goal[],
+  budgetReport?: ProjectBudgetReport,
+) {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
@@ -125,6 +135,74 @@ export function downloadProjectReport(project: Project, goals: Goal[]) {
     });
   }
 
-  const filename = `${sanitizeProjectFilename(projectName)}.pdf`;
+  if (budgetReport) {
+    const { budget, items } = budgetReport;
+    const budgetSummary = calculateProjectBudgetSummary(
+      budget.planned_amount,
+      budget.available_funds,
+      items,
+    );
+    addSection("Project Budget", [
+      `Currency: ${budget.currency}`,
+      `Planned budget: ${formatBudgetAmount(budget.planned_amount, budget.currency)}`,
+      `Allocated across items: ${formatBudgetAmount(budgetSummary.allocated, budget.currency)}`,
+      `Actual spending: ${formatBudgetAmount(budgetSummary.actual, budget.currency)}`,
+      `Variance (actual vs allocated): ${formatBudgetAmount(budgetSummary.variance, budget.currency)}`,
+      `Remaining: ${formatBudgetAmount(budgetSummary.remaining, budget.currency)}`,
+      `Budget used: ${Math.round(budgetSummary.progressPercent)}%`,
+      `Budget status: ${budgetSummary.overBudget ? "Over budget" : "Within plan"}`,
+      `Available funds: ${
+        budget.available_funds === null
+          ? "Not set"
+          : formatBudgetAmount(budget.available_funds, budget.currency)
+      }`,
+      `Available funds after spending: ${
+        budgetSummary.availableFundsRemaining === null
+          ? "Not set"
+          : formatBudgetAmount(budgetSummary.availableFundsRemaining, budget.currency)
+      }`,
+    ]);
+
+    for (const category of budgetSummary.categories) {
+      addText(
+        `${category.category} — planned: ${formatBudgetAmount(category.planned, budget.currency)} · actual: ${formatBudgetAmount(category.actual, budget.currency)} · variance: ${formatBudgetAmount(category.variance, budget.currency)}`,
+        { size: 10, color: [71, 85, 105] },
+      );
+    }
+
+    if (items.length === 0) {
+      addText("No budget items have been added.", { size: 10, color: [71, 85, 105] });
+    } else {
+      items.forEach((item, index) => {
+        if (y + 50 > bottom) {
+          doc.addPage();
+          y = margin;
+        }
+        addText(`${String(index + 1).padStart(2, "0")} — ${item.title}`, {
+          bold: true,
+          size: 12,
+          color: [15, 23, 42],
+        });
+        addText(`Category: ${item.category}`);
+        addText(
+          `Planned: ${formatBudgetAmount(item.planned_amount, budget.currency)} · Actual: ${formatBudgetAmount(item.actual_amount, budget.currency)}`,
+        );
+        addText(`Target date: ${formatDate(item.target_date)}`);
+        if (item.notes) addText(`Notes: ${item.notes}`);
+        y += 10;
+      });
+    }
+  }
+
+  return doc;
+}
+
+export function downloadProjectReport(
+  project: Project,
+  goals: Goal[],
+  budgetReport?: ProjectBudgetReport,
+) {
+  const doc = createProjectReport(project, goals, budgetReport);
+  const filename = `${sanitizeProjectFilename(project.name || "Project")}.pdf`;
   doc.save(filename);
 }
