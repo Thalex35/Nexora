@@ -22,19 +22,19 @@ type PdfTheme = {
 };
 
 const pdfTheme: PdfTheme = {
-  headerBackground: [9, 15, 20],
-  pageBackground: [245, 247, 249],
-  panelBackground: [255, 255, 255],
-  border: [221, 228, 234],
-  heading: [15, 23, 42],
-  body: [51, 65, 85],
-  muted: [100, 116, 139],
+  headerBackground: [11, 17, 25],
+  pageBackground: [9, 14, 20],
+  panelBackground: [17, 24, 32],
+  border: [42, 58, 72],
+  heading: [241, 245, 249],
+  body: [226, 232, 240],
+  muted: [148, 163, 184],
   accent: [45, 212, 191],
-  accentSoft: [207, 250, 254],
+  accentSoft: [20, 54, 55],
   success: [16, 185, 129],
   warning: [245, 158, 11],
   danger: [239, 68, 68],
-  shadow: [15, 23, 42],
+  shadow: [2, 6, 10],
 };
 
 function formatDate(value: string | null | undefined) {
@@ -151,7 +151,7 @@ function addProjectMeta(doc: jsPDF, project: Project, exportDate: string) {
   doc.setTextColor(...pdfTheme.muted);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
-  const ownerText = `Owner / Editor: Thalex Junior`;
+  const ownerText = `Owner / Editor: Theodore Louisjuste`;
   doc.text(ownerText, left + 24, cardY + 78);
 
   doc.setTextColor(...pdfTheme.heading);
@@ -239,7 +239,7 @@ export function downloadProjectReport(project: Project, goals: Goal[]) {
         doc.line(card.x, currentY + 26, card.x + card.width, currentY + 26);
       }
 
-      addDetailField(doc, card.x, currentY, card.width * 0.9, label, value, [15, 23, 42]);
+      addDetailField(doc, card.x, currentY, card.width * 0.9, label, value, pdfTheme.heading);
       currentY += 30;
     });
 
@@ -274,7 +274,7 @@ export function downloadProjectReport(project: Project, goals: Goal[]) {
   doc.setTextColor(200, 214, 224);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
-  doc.text(`Owner / Editor: Thalex Junior`, margin, 182);
+  doc.text(`Owner / Editor: Theodore Louisjuste`, margin, 182);
   doc.text(`Generated ${exportDate}`, pageWidth - 150, 182);
 
   let y = 230;
