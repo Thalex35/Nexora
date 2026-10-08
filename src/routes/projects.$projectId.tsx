@@ -7,6 +7,7 @@ import { AppShell } from "@/components/app-shell";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { GoalDialog } from "@/components/goal-dialog";
 import { PageHeader } from "@/components/page-header";
+import { ProjectBudgetSection } from "@/components/project-budget-section";
 import { ProjectDialog } from "@/components/project-dialog";
 import { TaskRow } from "@/components/task-row";
 import { ErrorState, LoadingState } from "@/components/states";
@@ -27,6 +28,8 @@ import {
   useDeleteProject,
   useGoals,
   useProjects,
+  useProjectBudget,
+  useProjectBudgetItems,
   useTasks,
   useUpdateGoal,
   useUpdateProject,
@@ -52,6 +55,8 @@ function ProjectDetailPage() {
   const projects = useProjects();
   const goals = useGoals();
   const tasks = useTasks();
+  const projectBudget = useProjectBudget(projectId);
+  const budgetItems = useProjectBudgetItems(projectBudget.data?.id);
   const createTask = useCreateTask();
   const updateGoal = useUpdateGoal();
   const deleteProject = useDeleteProject();
@@ -72,7 +77,12 @@ function ProjectDetailPage() {
     ),
   );
   const projectTasks = (tasks.data ?? []).filter((task) => task.project_id === projectId);
-  const loading = projects.isLoading || goals.isLoading || tasks.isLoading;
+  const loading =
+    projects.isLoading ||
+    goals.isLoading ||
+    tasks.isLoading ||
+    projectBudget.isLoading ||
+    (Boolean(projectBudget.data) && budgetItems.isLoading);
 
   async function addTask(event: React.FormEvent) {
     event.preventDefault();
@@ -99,7 +109,13 @@ function ProjectDetailPage() {
 
   function handleDownloadPdf() {
     if (!project) return;
-    downloadProjectReport(project, projectGoals);
+    downloadProjectReport(
+      project,
+      projectGoals,
+      projectBudget.data
+        ? { budget: projectBudget.data, items: budgetItems.data ?? [] }
+        : undefined,
+    );
   }
 
   if (loading) {
@@ -109,11 +125,25 @@ function ProjectDetailPage() {
       </AppShell>
     );
   }
-  if (projects.isError || goals.isError || tasks.isError) {
+  if (
+    projects.isError ||
+    goals.isError ||
+    tasks.isError ||
+    projectBudget.isError ||
+    budgetItems.isError
+  ) {
     return (
       <AppShell>
         <ErrorState
-          onRetry={() => void Promise.all([projects.refetch(), goals.refetch(), tasks.refetch()])}
+          onRetry={() =>
+            void Promise.all([
+              projects.refetch(),
+              goals.refetch(),
+              tasks.refetch(),
+              projectBudget.refetch(),
+              budgetItems.refetch(),
+            ])
+          }
         />
       </AppShell>
     );
@@ -215,6 +245,15 @@ function ProjectDetailPage() {
             </div>
           </dl>
         </section>
+
+        <ProjectBudgetSection
+          projectId={project.id}
+          budget={projectBudget.data ?? null}
+          items={budgetItems.data ?? []}
+          loading={
+            projectBudget.isLoading || (Boolean(projectBudget.data) && budgetItems.isLoading)
+          }
+        />
 
         <section className="space-y-4">
           <div className="flex flex-wrap items-end justify-between gap-3">

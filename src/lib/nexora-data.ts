@@ -23,6 +23,8 @@ export type LearningSession = Database["public"]["Tables"]["learning_sessions"][
 export type Card = Database["public"]["Tables"]["cards"]["Row"];
 export type CardSubscription = Database["public"]["Tables"]["card_subscriptions"]["Row"];
 export type CardPurchase = Database["public"]["Tables"]["card_purchases"]["Row"];
+export type ProjectBudget = Database["public"]["Tables"]["project_budgets"]["Row"];
+export type ProjectBudgetItem = Database["public"]["Tables"]["project_budget_items"]["Row"];
 
 export type TaskStatus = Database["public"]["Enums"]["task_status"];
 export type TaskPriority = Database["public"]["Enums"]["task_priority"];
@@ -471,6 +473,162 @@ export function useDeleteProject() {
         qc.invalidateQueries({ queryKey: ["tasks"] }),
         qc.invalidateQueries({ queryKey: ["goals"] }),
       ]),
+  });
+}
+
+/* ----------------------------- project budgets ----------------------------- */
+
+export type ProjectBudgetInput = {
+  project_id: string;
+  planned_amount: number;
+  currency: "USD" | "EUR" | "HTG";
+  available_funds?: number | null;
+};
+
+export type ProjectBudgetItemInput = {
+  budget_id: string;
+  title: string;
+  category: string;
+  planned_amount: number;
+  actual_amount?: number;
+  target_date?: string | null;
+  notes?: string | null;
+};
+
+export function useProjectBudget(projectId: string) {
+  const { authorized } = useAuth();
+  return useQuery({
+    queryKey: ["project_budget", projectId],
+    enabled: authorized && Boolean(projectId),
+    queryFn: async () => {
+      const userId = await currentUserId();
+      return unwrap(
+        await supabase
+          .from("project_budgets")
+          .select("*")
+          .eq("project_id", projectId)
+          .eq("user_id", userId)
+          .maybeSingle(),
+      ) as ProjectBudget | null;
+    },
+  });
+}
+
+export function useProjectBudgetItems(budgetId: string | undefined) {
+  const { authorized } = useAuth();
+  return useQuery({
+    queryKey: ["project_budget_items", budgetId],
+    enabled: authorized && Boolean(budgetId),
+    queryFn: async () => {
+      if (!budgetId) return [];
+      const userId = await currentUserId();
+      return unwrap(
+        await supabase
+          .from("project_budget_items")
+          .select("*")
+          .eq("budget_id", budgetId)
+          .eq("user_id", userId)
+          .order("target_date", { ascending: true, nullsFirst: false })
+          .order("created_at", { ascending: true }),
+      ) as ProjectBudgetItem[];
+    },
+  });
+}
+
+export function useCreateProjectBudget() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: ProjectBudgetInput) => {
+      const userId = await currentUserId();
+      return unwrap(
+        await supabase
+          .from("project_budgets")
+          .insert({ ...input, user_id: userId })
+          .select()
+          .single(),
+      ) as ProjectBudget;
+    },
+    onSuccess: (budget) =>
+      qc.invalidateQueries({ queryKey: ["project_budget", budget.project_id] }),
+  });
+}
+
+export function useUpdateProjectBudget() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...values }: Partial<ProjectBudgetInput> & { id: string }) => {
+      await currentUserId();
+      return unwrap(
+        await supabase.from("project_budgets").update(values).eq("id", id).select().single(),
+      ) as ProjectBudget;
+    },
+    onSuccess: (budget) =>
+      qc.invalidateQueries({ queryKey: ["project_budget", budget.project_id] }),
+  });
+}
+
+export function useDeleteProjectBudget() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, projectId }: { id: string; projectId: string }) => {
+      await currentUserId();
+      const { error } = await supabase.from("project_budgets").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+      return projectId;
+    },
+    onSuccess: (projectId) =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: ["project_budget", projectId] }),
+        qc.invalidateQueries({ queryKey: ["project_budget_items"] }),
+      ]),
+  });
+}
+
+export function useCreateProjectBudgetItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: ProjectBudgetItemInput) => {
+      const userId = await currentUserId();
+      return unwrap(
+        await supabase
+          .from("project_budget_items")
+          .insert({ ...input, user_id: userId })
+          .select()
+          .single(),
+      ) as ProjectBudgetItem;
+    },
+    onSuccess: (item) =>
+      qc.invalidateQueries({ queryKey: ["project_budget_items", item.budget_id] }),
+  });
+}
+
+export function useUpdateProjectBudgetItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      ...values
+    }: Partial<ProjectBudgetItemInput> & { id: string; budget_id: string }) => {
+      await currentUserId();
+      return unwrap(
+        await supabase.from("project_budget_items").update(values).eq("id", id).select().single(),
+      ) as ProjectBudgetItem;
+    },
+    onSuccess: (item) =>
+      qc.invalidateQueries({ queryKey: ["project_budget_items", item.budget_id] }),
+  });
+}
+
+export function useDeleteProjectBudgetItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, budgetId }: { id: string; budgetId: string }) => {
+      await currentUserId();
+      const { error } = await supabase.from("project_budget_items").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+      return budgetId;
+    },
+    onSuccess: (budgetId) => qc.invalidateQueries({ queryKey: ["project_budget_items", budgetId] }),
   });
 }
 

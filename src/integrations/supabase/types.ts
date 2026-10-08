@@ -721,6 +721,97 @@ export type Database = {
         }
         Relationships: []
       }
+      project_budget_items: {
+        Row: {
+          actual_amount: number
+          budget_id: string
+          category: string
+          created_at: string
+          id: string
+          notes: string | null
+          planned_amount: number
+          target_date: string | null
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          actual_amount?: number
+          budget_id: string
+          category: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          planned_amount: number
+          target_date?: string | null
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          actual_amount?: number
+          budget_id?: string
+          category?: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          planned_amount?: number
+          target_date?: string | null
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_budget_items_budget_owner_fkey"
+            columns: ["budget_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "project_budgets"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
+      }
+      project_budgets: {
+        Row: {
+          available_funds: number | null
+          created_at: string
+          currency: string
+          id: string
+          planned_amount: number
+          project_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          available_funds?: number | null
+          created_at?: string
+          currency?: string
+          id?: string
+          planned_amount: number
+          project_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          available_funds?: number | null
+          created_at?: string
+          currency?: string
+          id?: string
+          planned_amount?: number
+          project_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_budgets_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: true
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projects: {
         Row: {
           created_at: string
