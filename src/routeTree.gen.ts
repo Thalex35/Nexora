@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AchievementsRouteImport } from './routes/achievements'
 import { Route as AnalyticsRouteImport } from './routes/analytics'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as CardsRouteImport } from './routes/cards'
 import { Route as FinanceRouteImport } from './routes/finance'
 import { Route as GoalsRouteImport } from './routes/goals'
 import { Route as LearningRouteImport } from './routes/learning'
@@ -25,6 +26,7 @@ import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as RoutinesRouteImport } from './routes/routines'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as TasksRouteImport } from './routes/tasks'
+import { Route as CardsCardIdRouteImport } from './routes/cards.$cardId'
 import { Route as GoalsGoalIdRouteImport } from './routes/goals.$goalId'
 import { Route as LearningLearningIdRouteImport } from './routes/learning.$learningId'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
@@ -48,6 +50,11 @@ const AnalyticsRoute = AnalyticsRouteImport.update({
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CardsRoute = CardsRouteImport.update({
+  id: '/cards',
+  path: '/cards',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FinanceRoute = FinanceRouteImport.update({
@@ -110,6 +117,11 @@ const TasksRoute = TasksRouteImport.update({
   path: '/tasks',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CardsCardIdRoute = CardsCardIdRouteImport.update({
+  id: '/$cardId',
+  path: '/$cardId',
+  getParentRoute: () => CardsRoute,
+} as any)
 const GoalsGoalIdRoute = GoalsGoalIdRouteImport.update({
   id: '/$goalId',
   path: '/$goalId',
@@ -136,6 +148,7 @@ export interface FileRoutesByFullPath {
   '/achievements': typeof AchievementsRoute
   '/analytics': typeof AnalyticsRoute
   '/auth': typeof AuthRoute
+  '/cards': typeof CardsRouteWithChildren
   '/finance': typeof FinanceRouteWithChildren
   '/goals': typeof GoalsRouteWithChildren
   '/learning': typeof LearningRouteWithChildren
@@ -148,6 +161,7 @@ export interface FileRoutesByFullPath {
   '/routines': typeof RoutinesRoute
   '/settings': typeof SettingsRoute
   '/tasks': typeof TasksRoute
+  '/cards/$cardId': typeof CardsCardIdRoute
   '/goals/$goalId': typeof GoalsGoalIdRoute
   '/learning/$learningId': typeof LearningLearningIdRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
@@ -158,6 +172,7 @@ export interface FileRoutesByTo {
   '/achievements': typeof AchievementsRoute
   '/analytics': typeof AnalyticsRoute
   '/auth': typeof AuthRoute
+  '/cards': typeof CardsRouteWithChildren
   '/finance': typeof FinanceRouteWithChildren
   '/goals': typeof GoalsRouteWithChildren
   '/learning': typeof LearningRouteWithChildren
@@ -170,6 +185,7 @@ export interface FileRoutesByTo {
   '/routines': typeof RoutinesRoute
   '/settings': typeof SettingsRoute
   '/tasks': typeof TasksRoute
+  '/cards/$cardId': typeof CardsCardIdRoute
   '/goals/$goalId': typeof GoalsGoalIdRoute
   '/learning/$learningId': typeof LearningLearningIdRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
@@ -181,6 +197,7 @@ export interface FileRoutesById {
   '/achievements': typeof AchievementsRoute
   '/analytics': typeof AnalyticsRoute
   '/auth': typeof AuthRoute
+  '/cards': typeof CardsRouteWithChildren
   '/finance': typeof FinanceRouteWithChildren
   '/goals': typeof GoalsRouteWithChildren
   '/learning': typeof LearningRouteWithChildren
@@ -193,6 +210,7 @@ export interface FileRoutesById {
   '/routines': typeof RoutinesRoute
   '/settings': typeof SettingsRoute
   '/tasks': typeof TasksRoute
+  '/cards/$cardId': typeof CardsCardIdRoute
   '/goals/$goalId': typeof GoalsGoalIdRoute
   '/learning/$learningId': typeof LearningLearningIdRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
@@ -205,6 +223,7 @@ export interface FileRouteTypes {
     | '/achievements'
     | '/analytics'
     | '/auth'
+    | '/cards'
     | '/finance'
     | '/goals'
     | '/learning'
@@ -217,6 +236,7 @@ export interface FileRouteTypes {
     | '/routines'
     | '/settings'
     | '/tasks'
+    | '/cards/$cardId'
     | '/goals/$goalId'
     | '/learning/$learningId'
     | '/projects/$projectId'
@@ -227,6 +247,7 @@ export interface FileRouteTypes {
     | '/achievements'
     | '/analytics'
     | '/auth'
+    | '/cards'
     | '/finance'
     | '/goals'
     | '/learning'
@@ -239,6 +260,7 @@ export interface FileRouteTypes {
     | '/routines'
     | '/settings'
     | '/tasks'
+    | '/cards/$cardId'
     | '/goals/$goalId'
     | '/learning/$learningId'
     | '/projects/$projectId'
@@ -249,6 +271,7 @@ export interface FileRouteTypes {
     | '/achievements'
     | '/analytics'
     | '/auth'
+    | '/cards'
     | '/finance'
     | '/goals'
     | '/learning'
@@ -261,6 +284,7 @@ export interface FileRouteTypes {
     | '/routines'
     | '/settings'
     | '/tasks'
+    | '/cards/$cardId'
     | '/goals/$goalId'
     | '/learning/$learningId'
     | '/projects/$projectId'
@@ -272,6 +296,7 @@ export interface RootRouteChildren {
   AchievementsRoute: typeof AchievementsRoute
   AnalyticsRoute: typeof AnalyticsRoute
   AuthRoute: typeof AuthRoute
+  CardsRoute: typeof CardsRouteWithChildren
   FinanceRoute: typeof FinanceRouteWithChildren
   GoalsRoute: typeof GoalsRouteWithChildren
   LearningRoute: typeof LearningRouteWithChildren
@@ -314,6 +339,13 @@ declare module '@tanstack/react-router' {
       path: '/auth'
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cards': {
+      id: '/cards'
+      path: '/cards'
+      fullPath: '/cards'
+      preLoaderRoute: typeof CardsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/finance': {
@@ -400,6 +432,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TasksRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/cards/$cardId': {
+      id: '/cards/$cardId'
+      path: '/$cardId'
+      fullPath: '/cards/$cardId'
+      preLoaderRoute: typeof CardsCardIdRouteImport
+      parentRoute: typeof CardsRoute
+    }
     '/goals/$goalId': {
       id: '/goals/$goalId'
       path: '/$goalId'
@@ -430,6 +469,16 @@ declare module '@tanstack/react-router' {
     }
   }
 }
+
+interface CardsRouteChildren {
+  CardsCardIdRoute: typeof CardsCardIdRoute
+}
+
+const CardsRouteChildren: CardsRouteChildren = {
+  CardsCardIdRoute: CardsCardIdRoute,
+}
+
+const CardsRouteWithChildren = CardsRoute._addFileChildren(CardsRouteChildren)
 
 interface FinanceRouteChildren {
   FinanceIncomeIncomeIdRoute: typeof FinanceIncomeIncomeIdRoute
@@ -481,6 +530,7 @@ const rootRouteChildren: RootRouteChildren = {
   AchievementsRoute: AchievementsRoute,
   AnalyticsRoute: AnalyticsRoute,
   AuthRoute: AuthRoute,
+  CardsRoute: CardsRouteWithChildren,
   FinanceRoute: FinanceRouteWithChildren,
   GoalsRoute: GoalsRouteWithChildren,
   LearningRoute: LearningRouteWithChildren,

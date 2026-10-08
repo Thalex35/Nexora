@@ -14,6 +14,175 @@ export type Database = {
   }
   public: {
     Tables: {
+      cards: {
+        Row: {
+          card_type: string
+          created_at: string
+          id: string
+          name: string
+          network: string | null
+          notes: string | null
+          priority: number
+          primary_use: string | null
+          provider: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          card_type?: string
+          created_at?: string
+          id?: string
+          name: string
+          network?: string | null
+          notes?: string | null
+          priority: number
+          primary_use?: string | null
+          provider: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          card_type?: string
+          created_at?: string
+          id?: string
+          name?: string
+          network?: string | null
+          notes?: string | null
+          priority?: number
+          primary_use?: string | null
+          provider?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      card_purchases: {
+        Row: {
+          amount: number
+          card_id: string
+          created_at: string
+          currency: string
+          description: string | null
+          id: string
+          item_description: string
+          merchant: string
+          notes: string | null
+          purchase_date: string
+          purchase_type: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          card_id: string
+          created_at?: string
+          currency?: string
+          description?: string | null
+          id?: string
+          item_description: string
+          merchant: string
+          notes?: string | null
+          purchase_date?: string
+          purchase_type?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          card_id?: string
+          created_at?: string
+          currency?: string
+          description?: string | null
+          id?: string
+          item_description?: string
+          merchant?: string
+          notes?: string | null
+          purchase_date?: string
+          purchase_type?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "card_purchases_card_owner_fkey"
+            columns: ["card_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "cards"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
+      }
+      card_subscriptions: {
+        Row: {
+          amount: number
+          billing_frequency: string
+          card_id: string
+          created_at: string
+          currency: string
+          description: string | null
+          end_date: string | null
+          id: string
+          is_free_trial: boolean
+          next_billing_date: string | null
+          notes: string | null
+          service_name: string
+          start_date: string | null
+          status: string
+          trial_end_date: string | null
+          trial_start_date: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          billing_frequency: string
+          card_id: string
+          created_at?: string
+          currency?: string
+          description?: string | null
+          end_date?: string | null
+          id?: string
+          is_free_trial?: boolean
+          next_billing_date?: string | null
+          notes?: string | null
+          service_name: string
+          start_date?: string | null
+          status?: string
+          trial_end_date?: string | null
+          trial_start_date?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          billing_frequency?: string
+          card_id?: string
+          created_at?: string
+          currency?: string
+          description?: string | null
+          end_date?: string | null
+          id?: string
+          is_free_trial?: boolean
+          next_billing_date?: string | null
+          notes?: string | null
+          service_name?: string
+          start_date?: string | null
+          status?: string
+          trial_end_date?: string | null
+          trial_start_date?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "card_subscriptions_card_owner_fkey"
+            columns: ["card_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "cards"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
+      }
       debts: {
         Row: {
           amount: number
