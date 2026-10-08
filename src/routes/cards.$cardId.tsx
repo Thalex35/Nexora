@@ -5,10 +5,10 @@ import { toast } from "sonner";
 
 import { AppShell } from "@/components/app-shell";
 import { CardDialog } from "@/components/card-dialog";
+import { CardVisual } from "@/components/card-visual";
 import { CardPurchaseDialog, CardSubscriptionDialog } from "@/components/card-usage-dialogs";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
-import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -71,6 +71,25 @@ function CardDetailsPage() {
   const card = (cards.data ?? []).find((item) => item.id === cardId);
   const loading = cards.isLoading || subscriptions.isLoading || purchases.isLoading;
   const usageSummary = summarizeCardUsage(subscriptions.data ?? [], purchases.data ?? []);
+  const recentActivity = [
+    ...(subscriptions.data ?? []).map((subscription) => ({
+      id: subscription.id,
+      title: subscription.service_name,
+      type: subscription.is_free_trial ? "Free trial" : "Subscription",
+      date: subscription.start_date,
+      amount: `${formatMoney(Number(subscription.amount), subscription.currency)} / ${subscription.billing_frequency.replace("_", " ")}`,
+    })),
+    ...(purchases.data ?? []).map((purchase) => ({
+      id: purchase.id,
+      title: purchase.merchant,
+      type: "Purchase",
+      date: purchase.purchase_date,
+      amount: formatMoney(Number(purchase.amount), purchase.currency),
+    })),
+  ]
+    .filter((activity) => activity.date)
+    .sort((left, right) => right.date!.localeCompare(left.date!))
+    .slice(0, 5);
 
   function openSubscriptionDialog(subscription: CardSubscription | null = null) {
     setEditingSubscription(subscription);
@@ -151,125 +170,158 @@ function CardDetailsPage() {
   return (
     <AppShell>
       <div className="space-y-6">
-        <PageHeader
-          title={card.name}
-          description={`${card.provider} · ${card.card_type} · ${card.network}`}
-          actions={
-            <Button variant="ghost" size="sm" asChild>
-              <Link to="/cards">
-                <ArrowLeft className="mr-1 h-4 w-4" />
-                Cards
-              </Link>
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/80 bg-card/70 px-4 py-3">
+          <Button variant="ghost" size="sm" asChild className="-ml-2">
+            <Link to="/cards">
+              <ArrowLeft className="mr-1 h-4 w-4" />
+              Back to cards
+            </Link>
+          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => setEditCardOpen(true)}>
+              <Pencil className="mr-1 h-4 w-4" />
+              Edit
             </Button>
-          }
-        />
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Delete card"
+              className="text-muted-foreground hover:text-destructive"
+              onClick={() => setConfirmCardDelete(true)}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
 
-        <section className="nexora-panel min-w-0 space-y-5 p-5 sm:p-6">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="min-w-0">
-              <p className="text-xs font-medium uppercase tracking-[0.12em] text-primary">
-                {card.provider}
-              </p>
-              <h2 className="mt-1 break-words text-xl font-semibold text-foreground">
-                {card.name}
-              </h2>
-              <div className="mt-2 flex flex-wrap gap-2">
-                <Badge variant="outline">Priority {card.priority}</Badge>
-                <Badge variant="secondary" className="capitalize">
-                  {card.card_type}
-                </Badge>
-                <Badge variant="secondary" className="capitalize">
-                  {card.network}
-                </Badge>
+        <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(18rem,0.9fr)]">
+          <section className="nexora-panel min-w-0 space-y-4 p-4 sm:p-5">
+            <div className="grid min-w-0 gap-4 sm:grid-cols-[minmax(14rem,0.8fr)_minmax(0,1fr)] sm:items-center">
+              <CardVisual card={card} primary={card.priority === 1} />
+              <div className="min-w-0 space-y-3">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-[0.12em] text-primary">
+                    {card.provider}
+                  </p>
+                  <h1 className="mt-1 break-words text-xl font-semibold text-foreground">
+                    {card.name}
+                  </h1>
+                  <p className="mt-1 text-sm capitalize text-muted-foreground">
+                    {card.card_type} · {card.network}
+                  </p>
+                </div>
+                {card.primary_use && (
+                  <p className="rounded-lg border border-primary/15 bg-primary/[0.06] px-3 py-2 text-xs text-foreground">
+                    <span className="mb-1 block text-[10px] uppercase tracking-wider text-primary">
+                      Used for
+                    </span>
+                    {card.primary_use}
+                  </p>
+                )}
               </div>
             </div>
-            <div className="flex shrink-0 gap-2">
-              <Button variant="outline" size="sm" onClick={() => setEditCardOpen(true)}>
-                <Pencil className="mr-1 h-4 w-4" />
-                Edit
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Delete card"
-                className="text-muted-foreground hover:text-destructive"
-                onClick={() => setConfirmCardDelete(true)}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-
-          {card.primary_use && (
             <div className="border-t border-border pt-4">
-              <p className="text-xs text-muted-foreground">Primary use</p>
-              <p className="mt-1 break-words text-sm text-foreground">{card.primary_use}</p>
-            </div>
-          )}
-
-          <dl className="grid grid-cols-1 gap-3 border-t border-border pt-4 text-sm sm:grid-cols-3">
-            <div className="rounded-lg bg-surface p-3">
-              <dt className="text-xs text-muted-foreground">Active subscriptions</dt>
-              <dd className="mt-1 text-lg font-semibold text-foreground">
-                {usageSummary.activeSubscriptions}
-              </dd>
-            </div>
-            <div className="rounded-lg bg-surface p-3">
-              <dt className="text-xs text-muted-foreground">Active free trials</dt>
-              <dd className="mt-1 text-lg font-semibold text-foreground">
-                {usageSummary.activeTrials}
-              </dd>
-            </div>
-            <div className="rounded-lg bg-surface p-3">
-              <dt className="text-xs text-muted-foreground">Purchases this month</dt>
-              <dd className="mt-1 text-lg font-semibold text-foreground">
-                {usageSummary.purchasesThisMonth}
-              </dd>
-            </div>
-          </dl>
-        </section>
-
-        <Tabs defaultValue="overview" className="space-y-4">
-          <TabsList className="h-auto w-full flex-wrap justify-start gap-1 sm:w-auto">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="subscriptions">
-              Subscriptions ({(subscriptions.data ?? []).length})
-            </TabsTrigger>
-            <TabsTrigger value="purchases">Purchases ({(purchases.data ?? []).length})</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="overview" className="space-y-4">
-            <section className="nexora-panel space-y-2 p-5">
-              <h2 className="text-base font-semibold text-foreground">Card details</h2>
-              <dl className="grid gap-3 text-sm sm:grid-cols-2">
+              <h2 className="mb-3 text-sm font-semibold text-foreground">Card details</h2>
+              <dl className="grid gap-x-4 gap-y-3 text-sm sm:grid-cols-3">
                 <div>
-                  <dt className="text-muted-foreground">Provider</dt>
-                  <dd className="mt-1 text-foreground">{card.provider}</dd>
+                  <dt className="text-xs text-muted-foreground">Provider</dt>
+                  <dd className="mt-1 break-words text-foreground">{card.provider}</dd>
                 </div>
                 <div>
-                  <dt className="text-muted-foreground">Priority</dt>
-                  <dd className="mt-1 text-foreground">{card.priority} · lower is higher</dd>
+                  <dt className="text-xs text-muted-foreground">Type</dt>
+                  <dd className="mt-1 capitalize text-foreground">{card.card_type}</dd>
                 </div>
                 <div>
-                  <dt className="text-muted-foreground">Created</dt>
+                  <dt className="text-xs text-muted-foreground">Network</dt>
+                  <dd className="mt-1 capitalize text-foreground">{card.network}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">Assigned priority</dt>
+                  <dd className="mt-1 text-foreground">
+                    {card.priority} {card.priority === 1 ? "(Primary)" : ""}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">Added</dt>
                   <dd className="mt-1 text-foreground">
                     {formatDate(card.created_at.slice(0, 10))}
                   </dd>
                 </div>
               </dl>
-              {card.notes && (
-                <div className="border-t border-border pt-3">
-                  <h3 className="text-xs text-muted-foreground">Notes</h3>
-                  <p className="mt-1 whitespace-pre-wrap break-words text-sm text-foreground">
-                    {card.notes}
-                  </p>
-                </div>
-              )}
-              <p className="border-t border-border pt-3 text-xs text-muted-foreground">
-                For your safety, Nexora does not store or display actual card credentials.
+              <p className="mt-4 border-t border-border pt-3 text-xs text-muted-foreground">
+                This is a personal tracker. No real card credentials are stored or shown.
               </p>
-            </section>
-          </TabsContent>
+            </div>
+            <dl className="grid grid-cols-3 gap-2 border-t border-border pt-4">
+              <div className="min-w-0 rounded-lg bg-surface/80 p-3">
+                <dt className="text-[11px] leading-snug text-muted-foreground">
+                  Active subscriptions
+                </dt>
+                <dd className="mt-1 text-lg font-semibold text-foreground">
+                  {usageSummary.activeSubscriptions}
+                </dd>
+              </div>
+              <div className="min-w-0 rounded-lg bg-surface/80 p-3">
+                <dt className="text-[11px] leading-snug text-muted-foreground">Active trials</dt>
+                <dd className="mt-1 text-lg font-semibold text-foreground">
+                  {usageSummary.activeTrials}
+                </dd>
+              </div>
+              <div className="min-w-0 rounded-lg bg-surface/80 p-3">
+                <dt className="text-[11px] leading-snug text-muted-foreground">This month</dt>
+                <dd className="mt-1 text-lg font-semibold text-foreground">
+                  {usageSummary.purchasesThisMonth}
+                </dd>
+                <dt className="text-[10px] text-muted-foreground">purchases</dt>
+              </div>
+            </dl>
+          </section>
+
+          <section className="nexora-panel min-w-0 space-y-3 p-4 sm:p-5">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <h2 className="text-sm font-semibold text-foreground">Recent activity</h2>
+                <p className="mt-0.5 text-xs text-muted-foreground">Records for this card only</p>
+              </div>
+              <Badge variant="outline">{recentActivity.length}</Badge>
+            </div>
+            {recentActivity.length === 0 ? (
+              <p className="rounded-lg border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground">
+                Subscriptions and purchases you add will appear here.
+              </p>
+            ) : (
+              <ul className="divide-y divide-border">
+                {recentActivity.map((activity) => (
+                  <li
+                    key={`${activity.type}-${activity.id}`}
+                    className="flex min-w-0 items-center justify-between gap-3 py-3 first:pt-1 last:pb-1"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-foreground">
+                        {activity.title}
+                      </p>
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                        {activity.type} · {formatDate(activity.date)}
+                      </p>
+                    </div>
+                    <p className="shrink-0 text-right text-xs font-medium text-foreground">
+                      {activity.amount}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
+
+        <Tabs defaultValue="subscriptions" className="space-y-4">
+          <TabsList className="h-auto w-full flex-wrap justify-start gap-1 sm:w-auto">
+            <TabsTrigger value="subscriptions">
+              Subscriptions ({(subscriptions.data ?? []).length})
+            </TabsTrigger>
+            <TabsTrigger value="purchases">Purchases ({(purchases.data ?? []).length})</TabsTrigger>
+            <TabsTrigger value="notes">Notes</TabsTrigger>
+          </TabsList>
 
           <TabsContent value="subscriptions" className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -438,6 +490,21 @@ function CardDetailsPage() {
                 ))}
               </div>
             )}
+          </TabsContent>
+
+          <TabsContent value="notes" className="space-y-4">
+            <section className="nexora-panel min-w-0 p-5">
+              <h2 className="text-base font-semibold text-foreground">Card notes</h2>
+              {card.notes ? (
+                <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-relaxed text-muted-foreground">
+                  {card.notes}
+                </p>
+              ) : (
+                <p className="mt-3 text-sm text-muted-foreground">
+                  No notes added. Use Edit to add personal reminders for this card.
+                </p>
+              )}
+            </section>
           </TabsContent>
         </Tabs>
       </div>

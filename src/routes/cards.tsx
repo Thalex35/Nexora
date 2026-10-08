@@ -4,6 +4,7 @@ import { CreditCard, Plus } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
 import { CardDialog } from "@/components/card-dialog";
+import { CardVisual } from "@/components/card-visual";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -23,19 +24,6 @@ export const Route = createFileRoute("/cards")({
   component: CardsPage,
 });
 
-const cardAccents = [
-  "from-teal-500/15 via-card to-surface border-teal-400/25",
-  "from-emerald-500/15 via-card to-surface border-emerald-400/25",
-  "from-cyan-500/15 via-card to-surface border-cyan-400/25",
-  "from-sky-500/15 via-card to-surface border-sky-400/25",
-];
-
-function getCardAccent(value: string) {
-  let hash = 0;
-  for (const character of value) hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
-  return cardAccents[hash % cardAccents.length];
-}
-
 function CardsPage() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const cards = useCards();
@@ -48,21 +36,28 @@ function CardsPage() {
   return (
     <AppShell>
       <div className="space-y-6">
-        <PageHeader
-          title="Cards"
-          description="Manage your payment cards and track how you use them."
-          actions={
-            <Button size="sm" onClick={() => setAddOpen(true)}>
-              <Plus className="mr-1 h-4 w-4" />
-              Add card
-            </Button>
-          }
-        />
-
-        <p className="rounded-lg border border-border bg-surface px-4 py-3 text-sm text-muted-foreground">
-          Personal tracking only. Nexora never needs your real card number, security code, PIN, or
-          expiration date.
-        </p>
+        <div className="rounded-2xl border border-border/80 bg-gradient-to-br from-primary/[0.06] via-background to-background p-4 sm:p-6">
+          <PageHeader
+            title="Cards"
+            description="Manage your payment cards and track how you use them."
+            actions={
+              <Button size="sm" onClick={() => setAddOpen(true)}>
+                <Plus className="mr-1 h-4 w-4" />
+                Add card
+              </Button>
+            }
+          />
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-border/70 pt-4">
+            <p className="text-xs text-muted-foreground">
+              Personal tracking only · Never store card numbers, security codes, PINs, or expiry
+              dates.
+            </p>
+            <p className="shrink-0 text-xs font-medium text-foreground">
+              {sortedCards.length} {sortedCards.length === 1 ? "card" : "cards"}
+              <span className="ml-2 text-muted-foreground">· priority order</span>
+            </p>
+          </div>
+        </div>
 
         {cards.isLoading ? (
           <LoadingState />
@@ -77,11 +72,11 @@ function CardsPage() {
             onAction={() => setAddOpen(true)}
           />
         ) : (
-          <div className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid min-w-0 gap-3 xl:grid-cols-2">
             {sortedCards.map((card) => (
               <article
                 key={card.id}
-                className={`relative isolate min-w-0 overflow-hidden rounded-xl border bg-gradient-to-br p-5 transition-colors hover:border-primary/50 ${getCardAccent(`${card.provider}-${card.id}`)}`}
+                className="group relative isolate grid min-w-0 gap-4 overflow-hidden rounded-2xl border border-border/80 bg-card/70 p-3 transition-colors hover:border-primary/50 sm:grid-cols-[minmax(10rem,0.9fr)_minmax(0,1fr)] sm:items-center sm:p-4"
               >
                 <Link
                   to="/cards/$cardId"
@@ -89,32 +84,29 @@ function CardsPage() {
                   aria-label={`Open ${card.name}, priority ${card.priority}`}
                   className="absolute inset-0 z-0 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                 />
-                <div className="pointer-events-none relative z-10 flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-xs font-medium uppercase tracking-[0.12em] text-primary">
-                      {card.provider}
-                    </p>
-                    <h2 className="mt-2 break-words text-lg font-semibold text-foreground">
-                      {card.name}
-                    </h2>
-                    <p className="mt-1 text-sm capitalize text-muted-foreground">
-                      {card.card_type} · {card.network}
-                    </p>
-                  </div>
-                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-primary/30 bg-background/40 text-sm font-semibold text-primary">
-                    {card.priority}
-                  </div>
+                <div className="pointer-events-none relative z-10">
+                  <CardVisual card={card} compact primary={card.priority === 1} />
                 </div>
-                <div className="pointer-events-none relative z-10 mt-6 flex flex-wrap items-end justify-between gap-3 border-t border-border/70 pt-3">
-                  <div>
-                    <p className="text-[11px] text-muted-foreground">Nexora priority</p>
-                    <p className="text-sm font-medium text-foreground">
-                      {card.priority}{" "}
-                      <span className="font-normal text-muted-foreground">· lower is higher</span>
-                    </p>
+                <div className="pointer-events-none relative z-10 min-w-0 space-y-3 py-1">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium uppercase tracking-[0.12em] text-primary">
+                        {card.provider}
+                      </p>
+                      <h2 className="mt-1 break-words font-semibold text-foreground group-hover:text-primary">
+                        {card.name}
+                      </h2>
+                      <p className="mt-1 text-sm capitalize text-muted-foreground">
+                        {card.card_type} · {card.network}
+                      </p>
+                    </div>
+                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-primary/25 bg-primary/10 text-xs font-semibold text-primary">
+                      {card.priority}
+                    </span>
                   </div>
                   {card.primary_use && (
-                    <p className="max-w-[60%] truncate text-right text-xs text-muted-foreground">
+                    <p className="rounded-lg border border-border/70 bg-background/50 px-3 py-2 text-xs text-muted-foreground">
+                      <span className="mr-2 font-medium text-primary">Used for</span>
                       {card.primary_use}
                     </p>
                   )}
