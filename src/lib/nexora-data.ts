@@ -20,6 +20,9 @@ export type FutureExpense = Database["public"]["Tables"]["future_expenses"]["Row
 export type Debt = Database["public"]["Tables"]["debts"]["Row"];
 export type LearningItem = Database["public"]["Tables"]["learning_items"]["Row"];
 export type LearningSession = Database["public"]["Tables"]["learning_sessions"]["Row"];
+export type Card = Database["public"]["Tables"]["cards"]["Row"];
+export type CardSubscription = Database["public"]["Tables"]["card_subscriptions"]["Row"];
+export type CardPurchase = Database["public"]["Tables"]["card_purchases"]["Row"];
 
 export type TaskStatus = Database["public"]["Enums"]["task_status"];
 export type TaskPriority = Database["public"]["Enums"]["task_priority"];
@@ -1114,5 +1117,242 @@ export function useCreateLearningSession() {
       ) as LearningSession;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["learning_sessions"] }),
+  });
+}
+
+/* ----------------------------------- cards ---------------------------------- */
+
+export type CardInput = {
+  name: string;
+  provider: string;
+  card_type?: string;
+  network?: string | null;
+  priority: number;
+  primary_use?: string | null;
+  notes?: string | null;
+};
+
+export type CardSubscriptionInput = {
+  card_id: string;
+  service_name: string;
+  description?: string | null;
+  amount: number;
+  currency?: string;
+  billing_frequency: string;
+  start_date?: string | null;
+  next_billing_date?: string | null;
+  end_date?: string | null;
+  status?: string;
+  is_free_trial?: boolean;
+  trial_start_date?: string | null;
+  trial_end_date?: string | null;
+  notes?: string | null;
+};
+
+export type CardPurchaseInput = {
+  card_id: string;
+  merchant: string;
+  item_description: string;
+  amount: number;
+  currency?: string;
+  purchase_date?: string;
+  purchase_type?: string | null;
+  description?: string | null;
+  notes?: string | null;
+};
+
+export function useCards() {
+  const { authorized } = useAuth();
+  return useQuery({
+    queryKey: ["cards"],
+    enabled: authorized,
+    queryFn: async () => {
+      const userId = await currentUserId();
+      return unwrap(
+        await supabase
+          .from("cards")
+          .select("*")
+          .eq("user_id", userId)
+          .order("priority", { ascending: true }),
+      ) as Card[];
+    },
+  });
+}
+
+export function useCardSubscriptions(cardId: string) {
+  const { authorized } = useAuth();
+  return useQuery({
+    queryKey: ["card_subscriptions", cardId],
+    enabled: authorized && Boolean(cardId),
+    queryFn: async () => {
+      const userId = await currentUserId();
+      return unwrap(
+        await supabase
+          .from("card_subscriptions")
+          .select("*")
+          .eq("card_id", cardId)
+          .eq("user_id", userId)
+          .order("next_billing_date", { ascending: true, nullsFirst: false })
+          .order("service_name", { ascending: true }),
+      ) as CardSubscription[];
+    },
+  });
+}
+
+export function useCardPurchases(cardId: string) {
+  const { authorized } = useAuth();
+  return useQuery({
+    queryKey: ["card_purchases", cardId],
+    enabled: authorized && Boolean(cardId),
+    queryFn: async () => {
+      const userId = await currentUserId();
+      return unwrap(
+        await supabase
+          .from("card_purchases")
+          .select("*")
+          .eq("card_id", cardId)
+          .eq("user_id", userId)
+          .order("purchase_date", { ascending: false })
+          .order("created_at", { ascending: false }),
+      ) as CardPurchase[];
+    },
+  });
+}
+
+export function useCreateCard() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: CardInput) => {
+      const userId = await currentUserId();
+      return unwrap(
+        await supabase
+          .from("cards")
+          .insert({ ...input, user_id: userId })
+          .select()
+          .single(),
+      ) as Card;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["cards"] }),
+  });
+}
+
+export function useUpdateCard() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...values }: Partial<CardInput> & { id: string }) => {
+      await currentUserId();
+      return unwrap(
+        await supabase.from("cards").update(values).eq("id", id).select().single(),
+      ) as Card;
+    },
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: ["cards"] }),
+        qc.invalidateQueries({ queryKey: ["card_subscriptions"] }),
+        qc.invalidateQueries({ queryKey: ["card_purchases"] }),
+      ]),
+  });
+}
+
+export function useDeleteCard() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await currentUserId();
+      const { error } = await supabase.from("cards").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: ["cards"] }),
+        qc.invalidateQueries({ queryKey: ["card_subscriptions"] }),
+        qc.invalidateQueries({ queryKey: ["card_purchases"] }),
+      ]),
+  });
+}
+
+export function useCreateCardSubscription() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: CardSubscriptionInput) => {
+      const userId = await currentUserId();
+      return unwrap(
+        await supabase
+          .from("card_subscriptions")
+          .insert({ ...input, user_id: userId })
+          .select()
+          .single(),
+      ) as CardSubscription;
+    },
+    onSuccess: (_data, input) =>
+      qc.invalidateQueries({ queryKey: ["card_subscriptions", input.card_id] }),
+  });
+}
+
+export function useUpdateCardSubscription() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...values }: Partial<CardSubscriptionInput> & { id: string }) => {
+      await currentUserId();
+      return unwrap(
+        await supabase.from("card_subscriptions").update(values).eq("id", id).select().single(),
+      ) as CardSubscription;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["card_subscriptions"] }),
+  });
+}
+
+export function useDeleteCardSubscription() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await currentUserId();
+      const { error } = await supabase.from("card_subscriptions").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["card_subscriptions"] }),
+  });
+}
+
+export function useCreateCardPurchase() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: CardPurchaseInput) => {
+      const userId = await currentUserId();
+      return unwrap(
+        await supabase
+          .from("card_purchases")
+          .insert({ ...input, user_id: userId })
+          .select()
+          .single(),
+      ) as CardPurchase;
+    },
+    onSuccess: (_data, input) =>
+      qc.invalidateQueries({ queryKey: ["card_purchases", input.card_id] }),
+  });
+}
+
+export function useUpdateCardPurchase() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...values }: Partial<CardPurchaseInput> & { id: string }) => {
+      await currentUserId();
+      return unwrap(
+        await supabase.from("card_purchases").update(values).eq("id", id).select().single(),
+      ) as CardPurchase;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["card_purchases"] }),
+  });
+}
+
+export function useDeleteCardPurchase() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await currentUserId();
+      const { error } = await supabase.from("card_purchases").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["card_purchases"] }),
   });
 }

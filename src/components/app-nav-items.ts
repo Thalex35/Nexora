@@ -4,6 +4,7 @@ import {
   ChartNoAxesCombined,
   CalendarDays,
   CheckSquare,
+  CreditCard,
   FolderKanban,
   Home,
   History,
@@ -27,6 +28,7 @@ export type NavItem = {
     | "/goals"
     | "/projects"
     | "/finance"
+    | "/cards"
     | "/learning"
     | "/achievements"
     | "/life-history"
@@ -45,6 +47,7 @@ export const mainNav: NavItem[] = [
   { title: "Goals", url: "/goals", icon: Target },
   { title: "Projects", url: "/projects", icon: FolderKanban },
   { title: "Finance", url: "/finance", icon: Wallet },
+  { title: "Cards", url: "/cards", icon: CreditCard },
   { title: "Learning", url: "/learning", icon: BookOpen },
   { title: "Achievements", url: "/achievements", icon: Award },
   { title: "Life History", url: "/life-history", icon: History },
