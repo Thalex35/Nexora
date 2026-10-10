@@ -14,13 +14,19 @@ import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   useDeleteGoal,
+  useAllProjectSubprojects,
   useGoals,
   useProjects,
   useUpdateGoal,
   type Goal,
   type Project,
+  type ProjectSubproject,
 } from "@/lib/nexora-data";
-import { filterGoalsByProjectState, goalProjectId } from "@/lib/project-goals";
+import {
+  filterGoalsByProjectState,
+  filterGoalsBySubproject,
+  goalProjectId,
+} from "@/lib/project-goals";
 import {
   Select,
   SelectContent,
@@ -60,10 +66,12 @@ type GoalFilter =
 function GoalsPage() {
   const goals = useGoals();
   const projects = useProjects();
+  const subprojects = useAllProjectSubprojects();
   const updateGoal = useUpdateGoal();
   const deleteGoal = useDeleteGoal();
   const [filter, setFilter] = useState<GoalFilter>("active");
   const [selectedProjectId, setSelectedProjectId] = useState<string>("all");
+  const [selectedSubprojectId, setSelectedSubprojectId] = useState<string>("all");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Goal | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Goal | null>(null);
@@ -81,13 +89,22 @@ function GoalsPage() {
       : statusFiltered.filter(
           (goal) => goalProjectId(goal, projects.data ?? []) === selectedProjectId,
         );
+  const subprojectFiltered =
+    selectedSubprojectId === "all"
+      ? projectFiltered
+      : filterGoalsBySubproject(projectFiltered, selectedSubprojectId);
   const visible =
     filter === "without-project" || filter === "with-project"
-      ? filterGoalsByProjectState(projectFiltered, projects.data ?? [], filter)
-      : projectFiltered;
+      ? filterGoalsByProjectState(subprojectFiltered, projects.data ?? [], filter)
+      : subprojectFiltered;
   const projectOptions = [...(projects.data ?? [])].sort((left, right) =>
     left.name.localeCompare(right.name),
   );
+  const subprojectOptions = (subprojects.data ?? [])
+    .filter(
+      (subproject) => selectedProjectId === "all" || subproject.project_id === selectedProjectId,
+    )
+    .sort((left, right) => left.title.localeCompare(right.title));
   function openCreate() {
     setEditing(null);
     setOpen(true);
@@ -120,28 +137,60 @@ function GoalsPage() {
             </TabsList>
           </Tabs>
 
-          <div className="w-full max-w-xs">
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">Project</label>
-            <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
-              <SelectTrigger className="w-full min-w-0">
-                <SelectValue placeholder="All Projects" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Projects</SelectItem>
-                {projectOptions.map((project) => (
-                  <SelectItem key={project.id} value={project.id}>
-                    {project.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="grid w-full gap-3 sm:max-w-xl sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                Project
+              </label>
+              <Select
+                value={selectedProjectId}
+                onValueChange={(value) => {
+                  setSelectedProjectId(value);
+                  setSelectedSubprojectId("all");
+                }}
+              >
+                <SelectTrigger className="w-full min-w-0">
+                  <SelectValue placeholder="All Projects" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Projects</SelectItem>
+                  {projectOptions.map((project) => (
+                    <SelectItem key={project.id} value={project.id}>
+                      {project.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                Subproject
+              </label>
+              <Select value={selectedSubprojectId} onValueChange={setSelectedSubprojectId}>
+                <SelectTrigger className="w-full min-w-0">
+                  <SelectValue placeholder="All subprojects" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All subprojects</SelectItem>
+                  {subprojectOptions.map((subproject) => (
+                    <SelectItem key={subproject.id} value={subproject.id}>
+                      {subproject.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </div>
 
-        {goals.isLoading || projects.isLoading ? (
+        {goals.isLoading || projects.isLoading || subprojects.isLoading ? (
           <LoadingState />
-        ) : goals.isError || projects.isError ? (
-          <ErrorState onRetry={() => void Promise.all([goals.refetch(), projects.refetch()])} />
+        ) : goals.isError || projects.isError || subprojects.isError ? (
+          <ErrorState
+            onRetry={() =>
+              void Promise.all([goals.refetch(), projects.refetch(), subprojects.refetch()])
+            }
+          />
         ) : visible.length === 0 ? (
           <EmptyState
             icon={<Target className="h-5 w-5" />}
@@ -172,7 +221,11 @@ function GoalsPage() {
                         {goal.description}
                       </p>
                     )}
-                    <GoalProjectLink goal={goal} projects={projects.data ?? []} />
+                    <GoalProjectLink
+                      goal={goal}
+                      projects={projects.data ?? []}
+                      subprojects={subprojects.data ?? []}
+                    />
                   </div>
                   <Badge variant="outline" className="shrink-0 capitalize">
                     {goal.status}
@@ -294,19 +347,42 @@ function GoalsPage() {
   );
 }
 
-function GoalProjectLink({ goal, projects }: { goal: Goal; projects: Project[] }) {
+function GoalProjectLink({
+  goal,
+  projects,
+  subprojects,
+}: {
+  goal: Goal;
+  projects: Project[];
+  subprojects: ProjectSubproject[];
+}) {
   const projectId = goalProjectId(goal, projects);
   const project = projects.find((item) => item.id === projectId);
   if (!project) return null;
+  const subproject = subprojects.find((item) => item.id === goal.subproject_id);
 
   return (
-    <Link
-      to="/projects/$projectId"
-      params={{ projectId: project.id }}
-      search={{ goalId: undefined }}
-      className="mt-2 inline-block max-w-full truncate text-xs text-primary hover:underline"
-    >
-      Project: {project.name}
-    </Link>
+    <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+      <Link
+        to="/projects/$projectId"
+        params={{ projectId: project.id }}
+        search={{ goalId: undefined }}
+        className="max-w-full truncate text-primary hover:underline"
+      >
+        Project: {project.name}
+      </Link>
+      {subproject && (
+        <>
+          <span className="text-muted-foreground">/</span>
+          <Link
+            to="/subprojects/$subprojectId"
+            params={{ subprojectId: subproject.id }}
+            className="max-w-full truncate text-primary hover:underline"
+          >
+            {subproject.title}
+          </Link>
+        </>
+      )}
+    </div>
   );
 }

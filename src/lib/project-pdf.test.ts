@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { Project, ProjectBudget, ProjectBudgetItem } from "./nexora-data.ts";
+import type {
+  Goal,
+  Project,
+  ProjectBudget,
+  ProjectBudgetItem,
+  ProjectSubproject,
+} from "./nexora-data.ts";
 import { createProjectReport } from "./project-pdf.ts";
 
 const project: Project = {
@@ -45,6 +51,35 @@ const items: ProjectBudgetItem[] = [
   },
 ];
 
+const subproject: ProjectSubproject = {
+  id: "subproject-1",
+  user_id: "user-1",
+  project_id: project.id,
+  title: "MVP",
+  description: "Build the first usable release.",
+  objective: "Launch a working wallet.",
+  start_date: "2026-01-01",
+  deadline: "2026-03-01",
+  status: "active",
+  priority: "high",
+  notes: "Keep the first release focused.",
+  created_at: "2026-01-01T00:00:00Z",
+  updated_at: "2026-01-01T00:00:00Z",
+};
+const subprojectGoal: Goal = {
+  id: "goal-1",
+  user_id: "user-1",
+  project_id: project.id,
+  subproject_id: subproject.id,
+  title: "Complete onboarding",
+  description: "Implement account setup.",
+  status: "active",
+  progress: 30,
+  target_date: "2026-02-01",
+  created_at: "2026-01-02T00:00:00Z",
+  updated_at: "2026-01-02T00:00:00Z",
+};
+
 test("project report includes the optional budget summary and every budget item field", () => {
   const report = createProjectReport(project, [], { budget, items });
   const content = report.output();
@@ -62,4 +97,19 @@ test("project report includes the optional budget summary and every budget item 
 test("project report leaves out the budget section when no budget is provided", () => {
   const report = createProjectReport(project, []);
   assert.doesNotMatch(report.output(), /Project Budget/);
+});
+
+test("project report includes ordered subproject details and only its assigned goals", () => {
+  const report = createProjectReport(project, [subprojectGoal], undefined, [
+    { subproject, goals: [subprojectGoal] },
+  ]);
+  const content = report.output();
+
+  assert.match(content, /Subprojects/);
+  assert.match(content, /MVP/);
+  assert.match(content, /Build the first usable release/);
+  assert.match(content, /Launch a working wallet/);
+  assert.match(content, /Complete onboarding/);
+  assert.match(content, /Goals to organize/);
+  assert.match(content, /No legacy or unassigned project goals/);
 });

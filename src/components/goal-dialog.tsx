@@ -19,18 +19,29 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { useCreateGoal, useUpdateGoal, type Goal, type GoalStatus } from "@/lib/nexora-data";
+import {
+  useCreateGoal,
+  useUpdateGoal,
+  type Goal,
+  type GoalStatus,
+  type ProjectSubproject,
+} from "@/lib/nexora-data";
 
+const NO_SUBPROJECT = "__no_subproject__";
 export function GoalDialog({
   open,
   onOpenChange,
   goal,
   projectId = null,
+  subprojectId = null,
+  subprojects = [],
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   goal: Goal | null;
   projectId?: string | null;
+  subprojectId?: string | null;
+  subprojects?: ProjectSubproject[];
 }) {
   const createGoal = useCreateGoal();
   const updateGoal = useUpdateGoal();
@@ -39,6 +50,7 @@ export function GoalDialog({
   const [status, setStatus] = useState<GoalStatus>("active");
   const [targetDate, setTargetDate] = useState("");
   const [progress, setProgress] = useState("0");
+  const [selectedSubprojectId, setSelectedSubprojectId] = useState(NO_SUBPROJECT);
 
   useEffect(() => {
     if (!open) return;
@@ -47,7 +59,8 @@ export function GoalDialog({
     setStatus(goal?.status ?? "active");
     setTargetDate(goal?.target_date ?? "");
     setProgress(String(goal?.progress ?? 0));
-  }, [goal, open]);
+    setSelectedSubprojectId(subprojectId ?? goal?.subproject_id ?? NO_SUBPROJECT);
+  }, [goal, open, subprojectId]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -58,6 +71,14 @@ export function GoalDialog({
       target_date: targetDate || null,
       progress: status === "completed" ? 100 : Math.min(100, Math.max(0, Number(progress) || 0)),
       ...(projectId ? { project_id: projectId } : {}),
+      ...(subprojectId
+        ? { project_id: projectId, subproject_id: subprojectId }
+        : subprojects.length > 0
+          ? {
+              project_id: projectId,
+              subproject_id: selectedSubprojectId === NO_SUBPROJECT ? null : selectedSubprojectId,
+            }
+          : {}),
     };
     try {
       if (goal) {
@@ -122,6 +143,24 @@ export function GoalDialog({
                 </SelectContent>
               </Select>
             </div>
+            {!subprojectId && subprojects.length > 0 && (
+              <div className="space-y-2">
+                <Label htmlFor="goal-subproject">Subproject</Label>
+                <Select value={selectedSubprojectId} onValueChange={setSelectedSubprojectId}>
+                  <SelectTrigger id="goal-subproject">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NO_SUBPROJECT}>Not assigned to a subproject</SelectItem>
+                    {subprojects.map((subproject) => (
+                      <SelectItem key={subproject.id} value={subproject.id}>
+                        {subproject.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="goal-progress">Progress (%)</Label>
               <Input

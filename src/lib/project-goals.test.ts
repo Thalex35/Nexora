@@ -6,6 +6,7 @@ import {
   calculateProjectGoalProgress,
   filterGoalsByProject,
   filterGoalsByProjectState,
+  filterGoalsBySubproject,
   goalProjectId,
   sortGoalsChronologically,
 } from "./project-goals.ts";
@@ -25,6 +26,14 @@ const projectGoalMigration = readFileSync(
     "../../supabase/migrations/20261009000000_project_goal_progress_and_achievements.sql",
     import.meta.url,
   ),
+  "utf8",
+);
+const subprojectMigration = readFileSync(
+  new URL("../../supabase/migrations/20261011120000_project_subprojects.sql", import.meta.url),
+  "utf8",
+);
+const subprojectProgressMigration = readFileSync(
+  new URL("../../supabase/migrations/20261012120000_subproject_goal_progress.sql", import.meta.url),
   "utf8",
 );
 
@@ -138,6 +147,35 @@ test("project filtering keeps only the selected project while preserving standal
   );
 });
 
+test("subproject filtering composes with project filtering and preserves unassigned legacy goals", () => {
+  const assigned = [
+    { id: "g1", status: "active", project_id: "p1", subproject_id: "sp1" },
+    { id: "g2", status: "completed", project_id: "p1", subproject_id: "sp2" },
+    { id: "g3", status: "active", project_id: "p1", subproject_id: null },
+    { id: "g4", status: "active", project_id: null, subproject_id: null },
+  ];
+
+  assert.deepEqual(
+    filterGoalsBySubproject(assigned, "sp1").map((goal) => goal.id),
+    ["g1"],
+  );
+  assert.deepEqual(
+    filterGoalsBySubproject(assigned, null).map((goal) => goal.id),
+    ["g1", "g2", "g3", "g4"],
+  );
+  assert.deepEqual(
+    filterGoalsBySubproject(
+      assigned.filter((goal) => goal.project_id === "p1"),
+      "sp2",
+    ).map((goal) => goal.id),
+    ["g2"],
+  );
+  assert.deepEqual(
+    assigned.filter((goal) => goal.subproject_id === null).map((goal) => goal.id),
+    ["g3", "g4"],
+  );
+});
+
 test("database migration enforces goal ownership and recalculates on goal lifecycle changes", () => {
   assert.match(
     projectGoalMigration,
@@ -176,4 +214,32 @@ test("database migration makes project completion achievements idempotent and re
     /DELETE FROM public\.achievements[\s\S]*AND is_project_completion/,
   );
   assert.match(projectGoalMigration, /projects_remove_completion_achievement_on_reopen/);
+});
+
+test("subproject migration is additive, owner-scoped, and preserves legacy goal assignments", () => {
+  assert.match(subprojectMigration, /CREATE TABLE public\.project_subprojects/);
+  assert.match(
+    subprojectMigration,
+    /ALTER TABLE public\.goals\s+ADD COLUMN subproject_id UUID\s+REFERENCES public\.project_subprojects\(id\) ON DELETE SET NULL/,
+  );
+  assert.match(subprojectMigration, /CREATE POLICY "Users manage own project subprojects select"/);
+  assert.match(subprojectMigration, /auth\.uid\(\) = user_id/);
+  assert.match(subprojectMigration, /NEW\.project_id[\s\S]*AND user_id = NEW\.user_id/);
+  assert.match(
+    subprojectMigration,
+    /id = NEW\.subproject_id\s+AND project_id = NEW\.project_id\s+AND user_id = NEW\.user_id/,
+  );
+  assert.doesNotMatch(subprojectMigration, /UPDATE public\.goals\s+SET subproject_id/);
+  assert.match(
+    subprojectMigration,
+    /goals\.project_id = target_project_id\s+AND goals\.subproject_id IS NOT NULL/,
+  );
+  assert.match(subprojectMigration, /IF subproject_count = 0 THEN/);
+  assert.match(subprojectMigration, /IF total_goals = 0 THEN/);
+  assert.match(
+    subprojectMigration,
+    /AFTER INSERT OR UPDATE OF project_id, subproject_id, status OR DELETE/,
+  );
+  assert.match(subprojectProgressMigration, /AND goals\.subproject_id IS NOT NULL/);
+  assert.doesNotMatch(subprojectProgressMigration, /goals\.id = NEW\.goal_id/);
 });
