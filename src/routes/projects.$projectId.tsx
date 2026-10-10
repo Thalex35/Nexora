@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, Plus, Target, Trash2 } from "lucide-react";
+import { ArrowLeft, FolderKanban, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/app-shell";
@@ -9,6 +9,7 @@ import { GoalDialog } from "@/components/goal-dialog";
 import { PageHeader } from "@/components/page-header";
 import { ProjectBudgetSection } from "@/components/project-budget-section";
 import { ProjectDialog } from "@/components/project-dialog";
+import { ProjectSubprojectDialog } from "@/components/project-subproject-dialog";
 import { TaskRow } from "@/components/task-row";
 import { ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
@@ -30,15 +31,16 @@ import {
   useProjects,
   useProjectBudget,
   useProjectBudgetItems,
+  useProjectSubprojects,
   useTasks,
-  useUpdateGoal,
-  useUpdateProject,
+  useDeleteProjectSubproject,
   type Goal,
   type Project,
+  type ProjectSubproject,
   type TaskPriority,
 } from "@/lib/nexora-data";
 import { downloadProjectReport } from "@/lib/project-pdf";
-import { sortGoalsChronologically } from "@/lib/project-goals";
+import { calculateProjectGoalProgress, sortGoalsChronologically } from "@/lib/project-goals";
 
 export const Route = createFileRoute("/projects/$projectId")({
   head: () => ({
@@ -57,15 +59,19 @@ function ProjectDetailPage() {
   const tasks = useTasks();
   const projectBudget = useProjectBudget(projectId);
   const budgetItems = useProjectBudgetItems(projectBudget.data?.id);
+  const subprojects = useProjectSubprojects(projectId);
   const createTask = useCreateTask();
-  const updateGoal = useUpdateGoal();
   const deleteProject = useDeleteProject();
-  const updateProject = useUpdateProject();
+  const deleteSubproject = useDeleteProjectSubproject();
   const [editing, setEditing] = useState(false);
   const [goalDialogOpen, setGoalDialogOpen] = useState(false);
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
-  const [pendingGoalDelete, setPendingGoalDelete] = useState<Goal | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Project | null>(null);
+  const [subprojectDialogOpen, setSubprojectDialogOpen] = useState(false);
+  const [editingSubproject, setEditingSubproject] = useState<ProjectSubproject | null>(null);
+  const [pendingSubprojectDelete, setPendingSubprojectDelete] = useState<ProjectSubproject | null>(
+    null,
+  );
   const [taskTitle, setTaskTitle] = useState("");
   const [priority, setPriority] = useState<TaskPriority>("medium");
   const [dueDate, setDueDate] = useState("");
@@ -77,10 +83,18 @@ function ProjectDetailPage() {
     ),
   );
   const projectTasks = (tasks.data ?? []).filter((task) => task.project_id === projectId);
+  const projectSubprojects = subprojects.data ?? [];
+  const unassignedGoals = sortGoalsChronologically(
+    (goals.data ?? []).filter(
+      (item) =>
+        (item.project_id === projectId || item.id === project?.goal_id) && !item.subproject_id,
+    ),
+  );
   const loading =
     projects.isLoading ||
     goals.isLoading ||
     tasks.isLoading ||
+    subprojects.isLoading ||
     projectBudget.isLoading ||
     (Boolean(projectBudget.data) && budgetItems.isLoading);
 
@@ -115,6 +129,12 @@ function ProjectDetailPage() {
       projectBudget.data
         ? { budget: projectBudget.data, items: budgetItems.data ?? [] }
         : undefined,
+      projectSubprojects.map((subproject) => ({
+        subproject,
+        goals: sortGoalsChronologically(
+          (goals.data ?? []).filter((item) => item.subproject_id === subproject.id),
+        ),
+      })),
     );
   }
 
@@ -129,6 +149,7 @@ function ProjectDetailPage() {
     projects.isError ||
     goals.isError ||
     tasks.isError ||
+    subprojects.isError ||
     projectBudget.isError ||
     budgetItems.isError
   ) {
@@ -140,6 +161,7 @@ function ProjectDetailPage() {
               projects.refetch(),
               goals.refetch(),
               tasks.refetch(),
+              subprojects.refetch(),
               projectBudget.refetch(),
               budgetItems.refetch(),
             ])
@@ -258,106 +280,171 @@ function ProjectDetailPage() {
         <section className="space-y-4">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <h2 className="text-lg font-semibold text-foreground">Project goals</h2>
+              <h2 className="text-lg font-semibold text-foreground">Subprojects</h2>
               <p className="text-sm text-muted-foreground">
-                {projectGoals.length === 0
-                  ? "Add goals to track this project’s progress."
-                  : `${projectGoals.length} ${projectGoals.length === 1 ? "goal" : "goals"} · progress is calculated from completed goals.`}
+                {projectSubprojects.length}{" "}
+                {projectSubprojects.length === 1 ? "subproject" : "subprojects"} · progress is based
+                on goals assigned to subprojects.
               </p>
             </div>
-            <Button size="sm" onClick={() => openGoalDialog()}>
-              <Target className="mr-1 h-4 w-4" />
-              Add goal
+            <Button
+              size="sm"
+              onClick={() => {
+                setEditingSubproject(null);
+                setSubprojectDialogOpen(true);
+              }}
+            >
+              <Plus className="mr-1 h-4 w-4" />
+              Add subproject
             </Button>
           </div>
-          {projectGoals.length === 0 ? (
-            <p className="nexora-panel p-4 text-sm text-muted-foreground">
-              This project has no linked goals yet. Its status and progress will remain unchanged
-              until you add one.
-            </p>
+          {projectSubprojects.length === 0 ? (
+            <div className="nexora-panel flex flex-wrap items-center justify-between gap-4 p-5">
+              <div className="flex items-center gap-3">
+                <span className="rounded-full bg-primary/10 p-2 text-primary">
+                  <FolderKanban className="h-5 w-5" />
+                </span>
+                <div>
+                  <p className="font-medium text-foreground">No subprojects yet</p>
+                  <p className="text-sm text-muted-foreground">
+                    Break this project into phases and give each phase its own goals.
+                  </p>
+                </div>
+              </div>
+              <Button
+                size="sm"
+                onClick={() => {
+                  setEditingSubproject(null);
+                  setSubprojectDialogOpen(true);
+                }}
+              >
+                Create your first subproject
+              </Button>
+            </div>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
-              {projectGoals.map((projectGoal) => (
-                <article key={projectGoal.id} className="nexora-panel min-w-0 space-y-3 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <Link
-                      to="/goals/$goalId"
-                      params={{ goalId: projectGoal.id }}
-                      className="break-words font-medium text-foreground hover:text-primary"
-                    >
-                      {projectGoal.title}
-                    </Link>
-                    <Badge variant="outline" className="shrink-0 capitalize">
-                      {projectGoal.status}
-                    </Badge>
-                  </div>
-                  <div className="space-y-1.5">
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>Goal progress</span>
-                      <span>{projectGoal.progress}%</span>
+              {projectSubprojects.map((subproject, index) => {
+                const subprojectGoals = sortGoalsChronologically(
+                  (goals.data ?? []).filter((item) => item.subproject_id === subproject.id),
+                );
+                const { progress } = calculateProjectGoalProgress(subprojectGoals);
+                return (
+                  <article
+                    key={subproject.id}
+                    className="nexora-panel min-w-0 space-y-3 p-4 sm:p-5"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex min-w-0 items-start gap-3">
+                        <span className="shrink-0 rounded-md bg-primary/10 px-2 py-1 text-xs font-semibold text-primary">
+                          {String(index + 1).padStart(2, "0")}
+                        </span>
+                        <div className="min-w-0">
+                          <Link
+                            to="/subprojects/$subprojectId"
+                            params={{ subprojectId: subproject.id }}
+                            className="break-words font-semibold text-foreground hover:text-primary"
+                          >
+                            {subproject.title}
+                          </Link>
+                          {subproject.description && (
+                            <p className="mt-1 break-words text-sm text-muted-foreground">
+                              {subproject.description}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <Badge variant="outline" className="shrink-0 capitalize">
+                        {subproject.status === "on_hold" ? "paused" : subproject.status}
+                      </Badge>
                     </div>
-                    <Progress value={projectGoal.progress} />
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={updateGoal.isPending}
-                      onClick={() => openGoalDialog(projectGoal)}
-                    >
-                      Edit
-                    </Button>
-                    {projectGoal.status !== "completed" ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={updateGoal.isPending}
-                        onClick={() =>
-                          updateGoal.mutate(
-                            { id: projectGoal.id, status: "completed", progress: 100 },
-                            {
-                              onSuccess: () => toast.success("Goal completed"),
-                              onError: () => toast.error("Couldn’t complete that goal"),
-                            },
-                          )
-                        }
-                      >
-                        Mark complete
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={updateGoal.isPending}
-                        onClick={() =>
-                          updateGoal.mutate(
-                            { id: projectGoal.id, status: "active", progress: 0 },
-                            {
-                              onSuccess: () => toast.success("Goal reopened"),
-                              onError: () => toast.error("Couldn’t reopen that goal"),
-                            },
-                          )
-                        }
-                      >
-                        Reopen
-                      </Button>
+                    {subproject.objective && (
+                      <p className="break-words text-sm text-muted-foreground">
+                        <span className="font-medium text-foreground">Objective: </span>
+                        {subproject.objective}
+                      </p>
                     )}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-muted-foreground hover:text-destructive"
-                      disabled={updateGoal.isPending || updateProject.isPending}
-                      onClick={() => setPendingGoalDelete(projectGoal)}
-                    >
-                      <Trash2 className="mr-1 h-4 w-4" />
-                      Remove
-                    </Button>
-                  </div>
-                </article>
-              ))}
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>
+                          {subprojectGoals.length} {subprojectGoals.length === 1 ? "goal" : "goals"}
+                        </span>
+                        <span>{progress}%</span>
+                      </div>
+                      <Progress value={progress} aria-label={`${progress}% complete`} />
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
+                      <span className="text-xs text-muted-foreground">
+                        {subproject.deadline
+                          ? `Due ${new Date(`${subproject.deadline}T00:00:00`).toLocaleDateString()}`
+                          : "No deadline"}
+                      </span>
+                      <div className="flex gap-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setEditingSubproject(subproject);
+                            setSubprojectDialogOpen(true);
+                          }}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          aria-label={`Delete ${subproject.title}`}
+                          className="text-muted-foreground hover:text-destructive"
+                          onClick={() => setPendingSubprojectDelete(subproject)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
             </div>
           )}
         </section>
+
+        {unassignedGoals.length > 0 && (
+          <section className="space-y-3">
+            <div>
+              <h2 className="text-lg font-semibold text-foreground">Goals to organize</h2>
+              <p className="text-sm text-muted-foreground">
+                These existing goals remain linked to the project. Edit one to assign it to a
+                subproject; none were moved automatically.
+              </p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {unassignedGoals.map((legacyGoal) => (
+                <article
+                  key={legacyGoal.id}
+                  className="nexora-panel flex min-w-0 items-start justify-between gap-3 p-4"
+                >
+                  <div className="min-w-0">
+                    <Link
+                      to="/goals/$goalId"
+                      params={{ goalId: legacyGoal.id }}
+                      className="break-words font-medium text-foreground hover:text-primary"
+                    >
+                      {legacyGoal.title}
+                    </Link>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {legacyGoal.target_date
+                        ? `Due ${new Date(`${legacyGoal.target_date}T00:00:00`).toLocaleDateString()}`
+                        : "No due date"}{" "}
+                      · {legacyGoal.status}
+                    </p>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={() => openGoalDialog(legacyGoal)}>
+                    Organize
+                  </Button>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
 
         <section className="space-y-4">
           <div className="flex items-end justify-between gap-3">
@@ -437,30 +524,31 @@ function ProjectDetailPage() {
         open={goalDialogOpen}
         onOpenChange={setGoalDialogOpen}
         goal={editingGoal}
-        projectId={editingGoal ? null : projectId}
+        projectId={projectId}
+        subprojects={projectSubprojects}
+      />
+      <ProjectSubprojectDialog
+        open={subprojectDialogOpen}
+        onOpenChange={setSubprojectDialogOpen}
+        projectId={projectId}
+        subproject={editingSubproject}
       />
       <ConfirmDialog
-        open={pendingGoalDelete !== null}
-        onOpenChange={(next) => !next && setPendingGoalDelete(null)}
-        title="Remove this project goal?"
-        description="The goal will remain in Goals but will no longer contribute to this project's progress."
-        confirmLabel="Remove goal"
+        open={pendingSubprojectDelete !== null}
+        onOpenChange={(next) => !next && setPendingSubprojectDelete(null)}
+        title="Delete this subproject?"
+        description="Its goals stay linked to the main project and return to Goals to organize."
+        confirmLabel="Delete subproject"
         onConfirm={() => {
-          if (!pendingGoalDelete) return;
-          const onSuccess = () => toast.success("Goal removed from project");
-          const onError = () => toast.error("Couldn't remove that goal");
-          if (
-            pendingGoalDelete.project_id === projectId ||
-            pendingGoalDelete.id !== project?.goal_id
-          ) {
-            updateGoal.mutate(
-              { id: pendingGoalDelete.id, project_id: null },
-              { onSuccess, onError },
-            );
-          } else {
-            updateProject.mutate({ id: projectId, goal_id: null }, { onSuccess, onError });
-          }
-          setPendingGoalDelete(null);
+          if (!pendingSubprojectDelete) return;
+          deleteSubproject.mutate(
+            { id: pendingSubprojectDelete.id, projectId },
+            {
+              onSuccess: () => toast.success("Subproject deleted; its goals were kept"),
+              onError: () => toast.error("Couldn't delete that subproject"),
+            },
+          );
+          setPendingSubprojectDelete(null);
         }}
       />
       <ProjectDialog open={editing} onOpenChange={setEditing} project={project} />

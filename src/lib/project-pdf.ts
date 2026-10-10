@@ -1,6 +1,12 @@
 import { jsPDF } from "jspdf";
 
-import type { Goal, Project, ProjectBudget, ProjectBudgetItem } from "./nexora-data.ts";
+import type {
+  Goal,
+  Project,
+  ProjectBudget,
+  ProjectBudgetItem,
+  ProjectSubproject,
+} from "./nexora-data.ts";
 import { calculateProjectBudgetSummary, formatBudgetAmount } from "./project-budget.ts";
 import { sortGoalsChronologically } from "./project-goals.ts";
 
@@ -32,10 +38,16 @@ export type ProjectBudgetReport = {
   items: ProjectBudgetItem[];
 };
 
+export type ProjectSubprojectReport = {
+  subproject: ProjectSubproject;
+  goals: Goal[];
+};
+
 export function createProjectReport(
   project: Project,
   goals: Goal[],
   budgetReport?: ProjectBudgetReport,
+  subprojectReports: ProjectSubprojectReport[] = [],
 ) {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -110,15 +122,50 @@ export function createProjectReport(
     `Created: ${formatDate(project.created_at)}`,
   ]);
 
-  addSection("Project Goals", []);
+  addSection("Subprojects", []);
 
-  if (goals.length === 0) {
-    addText("No goals are currently associated with this project.", {
+  if (subprojectReports.length === 0) {
+    addText("No subprojects have been added.", { size: 10, color: [71, 85, 105] });
+  } else {
+    subprojectReports.forEach(({ subproject, goals: subprojectGoals }, index) => {
+      addSection(`${String(index + 1).padStart(2, "0")} — ${subproject.title}`, [
+        `Description: ${subproject.description || "No description provided"}`,
+        `Objective: ${subproject.objective || "Not set"}`,
+        `Status: ${subproject.status === "on_hold" ? "Paused" : subproject.status}`,
+        `Priority: ${subproject.priority}`,
+        `Start date: ${formatDate(subproject.start_date)}`,
+        `Deadline: ${formatDate(subproject.deadline)}`,
+        `Notes: ${subproject.notes || "None"}`,
+      ]);
+      if (subprojectGoals.length === 0) {
+        addText("No goals assigned to this subproject.", { size: 10, color: [71, 85, 105] });
+        y += 8;
+        return;
+      }
+      sortGoalsChronologically(subprojectGoals).forEach((goal) => {
+        if (y + 42 > bottom) {
+          doc.addPage();
+          y = margin;
+        }
+        addText(goal.title || "Untitled goal", { bold: true, size: 12, color: [15, 23, 42] });
+        addText(`Description: ${goal.description || "No description provided"}`);
+        addText(`Due: ${formatDate(goal.target_date)} · Status: ${goal.status}`);
+        addText(`Progress: ${goal.progress ?? 0}%`);
+        y += 8;
+      });
+    });
+  }
+
+  const legacyGoals = goals.filter((goal) => !goal.subproject_id);
+  addSection("Goals to organize", []);
+
+  if (legacyGoals.length === 0) {
+    addText("No legacy or unassigned project goals.", {
       size: 10,
       color: [71, 85, 105],
     });
   } else {
-    const orderedGoals = sortGoalsChronologically(goals);
+    const orderedGoals = sortGoalsChronologically(legacyGoals);
     orderedGoals.forEach((goal, index) => {
       const title = `${String(index + 1).padStart(2, "0")} — ${goal.title || "Untitled goal"}`;
       if (y + 42 > bottom) {
@@ -201,8 +248,9 @@ export function downloadProjectReport(
   project: Project,
   goals: Goal[],
   budgetReport?: ProjectBudgetReport,
+  subprojectReports: ProjectSubprojectReport[] = [],
 ) {
-  const doc = createProjectReport(project, goals, budgetReport);
+  const doc = createProjectReport(project, goals, budgetReport, subprojectReports);
   const filename = `${sanitizeProjectFilename(project.name || "Project")}.pdf`;
   doc.save(filename);
 }

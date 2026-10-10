@@ -25,6 +25,7 @@ export type CardSubscription = Database["public"]["Tables"]["card_subscriptions"
 export type CardPurchase = Database["public"]["Tables"]["card_purchases"]["Row"];
 export type ProjectBudget = Database["public"]["Tables"]["project_budgets"]["Row"];
 export type ProjectBudgetItem = Database["public"]["Tables"]["project_budget_items"]["Row"];
+export type ProjectSubproject = Database["public"]["Tables"]["project_subprojects"]["Row"];
 
 export type TaskStatus = Database["public"]["Enums"]["task_status"];
 export type TaskPriority = Database["public"]["Enums"]["task_priority"];
@@ -342,6 +343,7 @@ export type GoalInput = {
   target_date?: string | null;
   progress?: number;
   project_id?: string | null;
+  subproject_id?: string | null;
 };
 
 export function useCreateGoal() {
@@ -361,6 +363,7 @@ export function useCreateGoal() {
       Promise.all([
         qc.invalidateQueries({ queryKey: ["goals"] }),
         qc.invalidateQueries({ queryKey: ["projects"] }),
+        qc.invalidateQueries({ queryKey: ["project_subprojects"] }),
       ]),
   });
 }
@@ -376,6 +379,7 @@ export function useUpdateGoal() {
       Promise.all([
         qc.invalidateQueries({ queryKey: ["goals"] }),
         qc.invalidateQueries({ queryKey: ["projects"] }),
+        qc.invalidateQueries({ queryKey: ["project_subprojects"] }),
       ]),
   });
 }
@@ -392,6 +396,7 @@ export function useDeleteGoal() {
       Promise.all([
         qc.invalidateQueries({ queryKey: ["goals"] }),
         qc.invalidateQueries({ queryKey: ["projects"] }),
+        qc.invalidateQueries({ queryKey: ["project_subprojects"] }),
       ]),
   });
 }
@@ -472,6 +477,113 @@ export function useDeleteProject() {
         qc.invalidateQueries({ queryKey: ["projects"] }),
         qc.invalidateQueries({ queryKey: ["tasks"] }),
         qc.invalidateQueries({ queryKey: ["goals"] }),
+      ]),
+  });
+}
+
+/* ------------------------------ subprojects ------------------------------- */
+
+export type ProjectSubprojectInput = {
+  project_id: string;
+  title: string;
+  description?: string | null;
+  objective?: string | null;
+  start_date?: string | null;
+  deadline?: string | null;
+  status?: ProjectStatus;
+  priority?: TaskPriority;
+  notes?: string | null;
+};
+
+export function useProjectSubprojects(projectId: string) {
+  const { authorized } = useAuth();
+  return useQuery({
+    queryKey: ["project_subprojects", projectId],
+    enabled: authorized && Boolean(projectId),
+    queryFn: async () => {
+      const userId = await currentUserId();
+      return unwrap(
+        await supabase
+          .from("project_subprojects")
+          .select("*")
+          .eq("project_id", projectId)
+          .eq("user_id", userId)
+          .order("created_at", { ascending: true }),
+      ) as ProjectSubproject[];
+    },
+  });
+}
+
+export function useAllProjectSubprojects() {
+  const { authorized } = useAuth();
+  return useQuery({
+    queryKey: ["project_subprojects"],
+    enabled: authorized,
+    queryFn: async () => {
+      const userId = await currentUserId();
+      return unwrap(
+        await supabase
+          .from("project_subprojects")
+          .select("*")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: true }),
+      ) as ProjectSubproject[];
+    },
+  });
+}
+
+export function useCreateProjectSubproject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: ProjectSubprojectInput) => {
+      const userId = await currentUserId();
+      return unwrap(
+        await supabase
+          .from("project_subprojects")
+          .insert({ ...input, user_id: userId })
+          .select()
+          .single(),
+      ) as ProjectSubproject;
+    },
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: ["project_subprojects"] }),
+        qc.invalidateQueries({ queryKey: ["projects"] }),
+      ]),
+  });
+}
+
+export function useUpdateProjectSubproject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...values }: Partial<ProjectSubprojectInput> & { id: string }) => {
+      await currentUserId();
+      return unwrap(
+        await supabase.from("project_subprojects").update(values).eq("id", id).select().single(),
+      ) as ProjectSubproject;
+    },
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: ["project_subprojects"] }),
+        qc.invalidateQueries({ queryKey: ["projects"] }),
+      ]),
+  });
+}
+
+export function useDeleteProjectSubproject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, projectId }: { id: string; projectId: string }) => {
+      await currentUserId();
+      const { error } = await supabase.from("project_subprojects").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+      return projectId;
+    },
+    onSuccess: (projectId) =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: ["project_subprojects"] }),
+        qc.invalidateQueries({ queryKey: ["goals"] }),
+        qc.invalidateQueries({ queryKey: ["projects"] }),
       ]),
   });
 }

@@ -2,6 +2,7 @@ export type GoalForProject = {
   id: string;
   status: string;
   project_id?: string | null;
+  subproject_id?: string | null;
   target_date?: string | null;
   created_at?: string | null;
   title?: string | null;
@@ -64,8 +65,15 @@ export function filterGoalsByProject<TGoal extends GoalForProject, TProject exte
   if (!projectId) {
     return goals.filter((goal) => goalProjectId(goal, projects) === null);
   }
-
   return goals.filter((goal) => goalProjectId(goal, projects) === projectId);
+}
+
+export function filterGoalsBySubproject<TGoal extends GoalForProject>(
+  goals: TGoal[],
+  subprojectId: string | null,
+) {
+  if (!subprojectId) return goals;
+  return goals.filter((goal) => goal.subproject_id === subprojectId);
 }
 
 export function filterGoalsByProjectState<

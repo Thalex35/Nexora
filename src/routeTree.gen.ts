@@ -30,6 +30,7 @@ import { Route as CardsCardIdRouteImport } from './routes/cards.$cardId'
 import { Route as GoalsGoalIdRouteImport } from './routes/goals.$goalId'
 import { Route as LearningLearningIdRouteImport } from './routes/learning.$learningId'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
+import { Route as SubprojectsSubprojectIdRouteImport } from './routes/subprojects.$subprojectId'
 import { Route as FinanceIncomeIncomeIdRouteImport } from './routes/finance.income.$incomeId'
 
 const IndexRoute = IndexRouteImport.update({
@@ -137,6 +138,11 @@ const ProjectsProjectIdRoute = ProjectsProjectIdRouteImport.update({
   path: '/$projectId',
   getParentRoute: () => ProjectsRoute,
 } as any)
+const SubprojectsSubprojectIdRoute = SubprojectsSubprojectIdRouteImport.update({
+  id: '/subprojects/$subprojectId',
+  path: '/subprojects/$subprojectId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const FinanceIncomeIncomeIdRoute = FinanceIncomeIncomeIdRouteImport.update({
   id: '/income/$incomeId',
   path: '/income/$incomeId',
@@ -165,6 +171,7 @@ export interface FileRoutesByFullPath {
   '/goals/$goalId': typeof GoalsGoalIdRoute
   '/learning/$learningId': typeof LearningLearningIdRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
+  '/subprojects/$subprojectId': typeof SubprojectsSubprojectIdRoute
   '/finance/income/$incomeId': typeof FinanceIncomeIncomeIdRoute
 }
 export interface FileRoutesByTo {
@@ -189,6 +196,7 @@ export interface FileRoutesByTo {
   '/goals/$goalId': typeof GoalsGoalIdRoute
   '/learning/$learningId': typeof LearningLearningIdRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
+  '/subprojects/$subprojectId': typeof SubprojectsSubprojectIdRoute
   '/finance/income/$incomeId': typeof FinanceIncomeIncomeIdRoute
 }
 export interface FileRoutesById {
@@ -214,6 +222,7 @@ export interface FileRoutesById {
   '/goals/$goalId': typeof GoalsGoalIdRoute
   '/learning/$learningId': typeof LearningLearningIdRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
+  '/subprojects/$subprojectId': typeof SubprojectsSubprojectIdRoute
   '/finance/income/$incomeId': typeof FinanceIncomeIncomeIdRoute
 }
 export interface FileRouteTypes {
@@ -240,6 +249,7 @@ export interface FileRouteTypes {
     | '/goals/$goalId'
     | '/learning/$learningId'
     | '/projects/$projectId'
+    | '/subprojects/$subprojectId'
     | '/finance/income/$incomeId'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -264,6 +274,7 @@ export interface FileRouteTypes {
     | '/goals/$goalId'
     | '/learning/$learningId'
     | '/projects/$projectId'
+    | '/subprojects/$subprojectId'
     | '/finance/income/$incomeId'
   id:
     | '__root__'
@@ -288,6 +299,7 @@ export interface FileRouteTypes {
     | '/goals/$goalId'
     | '/learning/$learningId'
     | '/projects/$projectId'
+    | '/subprojects/$subprojectId'
     | '/finance/income/$incomeId'
   fileRoutesById: FileRoutesById
 }
@@ -309,6 +321,7 @@ export interface RootRouteChildren {
   RoutinesRoute: typeof RoutinesRoute
   SettingsRoute: typeof SettingsRoute
   TasksRoute: typeof TasksRoute
+  SubprojectsSubprojectIdRoute: typeof SubprojectsSubprojectIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -460,6 +473,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdRouteImport
       parentRoute: typeof ProjectsRoute
     }
+    '/subprojects/$subprojectId': {
+      id: '/subprojects/$subprojectId'
+      path: '/subprojects/$subprojectId'
+      fullPath: '/subprojects/$subprojectId'
+      preLoaderRoute: typeof SubprojectsSubprojectIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/finance/income/$incomeId': {
       id: '/finance/income/$incomeId'
       path: '/income/$incomeId'
@@ -543,6 +563,7 @@ const rootRouteChildren: RootRouteChildren = {
   RoutinesRoute: RoutinesRoute,
   SettingsRoute: SettingsRoute,
   TasksRoute: TasksRoute,
+  SubprojectsSubprojectIdRoute: SubprojectsSubprojectIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
