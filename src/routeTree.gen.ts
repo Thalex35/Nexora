@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AchievementsRouteImport } from './routes/achievements'
 import { Route as AnalyticsRouteImport } from './routes/analytics'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as BusinessRouteImport } from './routes/business'
 import { Route as CardsRouteImport } from './routes/cards'
 import { Route as FinanceRouteImport } from './routes/finance'
 import { Route as GoalsRouteImport } from './routes/goals'
@@ -51,6 +52,11 @@ const AnalyticsRoute = AnalyticsRouteImport.update({
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BusinessRoute = BusinessRouteImport.update({
+  id: '/business',
+  path: '/business',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CardsRoute = CardsRouteImport.update({
@@ -154,6 +160,7 @@ export interface FileRoutesByFullPath {
   '/achievements': typeof AchievementsRoute
   '/analytics': typeof AnalyticsRoute
   '/auth': typeof AuthRoute
+  '/business': typeof BusinessRoute
   '/cards': typeof CardsRouteWithChildren
   '/finance': typeof FinanceRouteWithChildren
   '/goals': typeof GoalsRouteWithChildren
@@ -179,6 +186,7 @@ export interface FileRoutesByTo {
   '/achievements': typeof AchievementsRoute
   '/analytics': typeof AnalyticsRoute
   '/auth': typeof AuthRoute
+  '/business': typeof BusinessRoute
   '/cards': typeof CardsRouteWithChildren
   '/finance': typeof FinanceRouteWithChildren
   '/goals': typeof GoalsRouteWithChildren
@@ -205,6 +213,7 @@ export interface FileRoutesById {
   '/achievements': typeof AchievementsRoute
   '/analytics': typeof AnalyticsRoute
   '/auth': typeof AuthRoute
+  '/business': typeof BusinessRoute
   '/cards': typeof CardsRouteWithChildren
   '/finance': typeof FinanceRouteWithChildren
   '/goals': typeof GoalsRouteWithChildren
@@ -232,6 +241,7 @@ export interface FileRouteTypes {
     | '/achievements'
     | '/analytics'
     | '/auth'
+    | '/business'
     | '/cards'
     | '/finance'
     | '/goals'
@@ -257,6 +267,7 @@ export interface FileRouteTypes {
     | '/achievements'
     | '/analytics'
     | '/auth'
+    | '/business'
     | '/cards'
     | '/finance'
     | '/goals'
@@ -282,6 +293,7 @@ export interface FileRouteTypes {
     | '/achievements'
     | '/analytics'
     | '/auth'
+    | '/business'
     | '/cards'
     | '/finance'
     | '/goals'
@@ -308,6 +320,7 @@ export interface RootRouteChildren {
   AchievementsRoute: typeof AchievementsRoute
   AnalyticsRoute: typeof AnalyticsRoute
   AuthRoute: typeof AuthRoute
+  BusinessRoute: typeof BusinessRoute
   CardsRoute: typeof CardsRouteWithChildren
   FinanceRoute: typeof FinanceRouteWithChildren
   GoalsRoute: typeof GoalsRouteWithChildren
@@ -352,6 +365,13 @@ declare module '@tanstack/react-router' {
       path: '/auth'
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/business': {
+      id: '/business'
+      path: '/business'
+      fullPath: '/business'
+      preLoaderRoute: typeof BusinessRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/cards': {
@@ -550,6 +570,7 @@ const rootRouteChildren: RootRouteChildren = {
   AchievementsRoute: AchievementsRoute,
   AnalyticsRoute: AnalyticsRoute,
   AuthRoute: AuthRoute,
+  BusinessRoute: BusinessRoute,
   CardsRoute: CardsRouteWithChildren,
   FinanceRoute: FinanceRouteWithChildren,
   GoalsRoute: GoalsRouteWithChildren,
