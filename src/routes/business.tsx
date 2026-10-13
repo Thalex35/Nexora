@@ -221,6 +221,7 @@ function BusinessPage() {
   const [transferAmount, setTransferAmount] = useState("");
   const [transferFee, setTransferFee] = useState("0");
   const [transferHtgDue, setTransferHtgDue] = useState("");
+  const [transferNotes, setTransferNotes] = useState("");
   const [fundingCreditedAmount, setFundingCreditedAmount] = useState("");
   const [fundingFee, setFundingFee] = useState("0");
   const [loanPrincipalAmount, setLoanPrincipalAmount] = useState("");
@@ -249,6 +250,7 @@ function BusinessPage() {
     setTransferAmount("");
     setTransferFee("0");
     setTransferHtgDue("");
+    setTransferNotes("");
     setFundingCreditedAmount("");
     setFundingFee("0");
     setLoanPrincipalAmount("");
@@ -418,6 +420,7 @@ function BusinessPage() {
       });
       clearIdempotencyKey(event.currentTarget);
       event.currentTarget.reset();
+      setTransferNotes("");
       setEntryDialogOpen(false);
       toast.success("Customer operation recorded as pending. Confirm it to post ledger movements.");
     } catch (error) {
@@ -1423,10 +1426,10 @@ function BusinessPage() {
                 </Card>
 
                 <Dialog open={entryDialogOpen} onOpenChange={setEntryDialogOpen}>
-                  <DialogContent className="max-h-[92vh] max-w-5xl overflow-y-auto border-cyan-900/60 bg-background p-0 shadow-2xl sm:rounded-xl">
-                    <div className="grid min-w-0 lg:grid-cols-[minmax(0,1.8fr)_minmax(250px,0.8fr)]">
-                      <section className="min-w-0 p-4 sm:p-6">
-                        <DialogHeader className="mb-5 pr-8 text-left">
+                  <DialogContent className="max-h-[92dvh] w-[calc(100vw-2rem)] max-w-[850px] overflow-y-auto border-cyan-900/60 bg-background p-0 shadow-2xl sm:w-[84vw] sm:rounded-xl">
+                    <div className="grid min-w-0 items-start lg:grid-cols-[minmax(0,1.7fr)_minmax(245px,0.85fr)]">
+                      <section className="min-w-0 p-4 sm:p-5">
+                        <DialogHeader className="mb-4 pr-8 text-left">
                           <DialogTitle className="flex items-center gap-3 text-lg">
                             <span className="grid size-10 place-items-center rounded-xl bg-cyan-100 text-cyan-800 dark:bg-teal-500/20 dark:text-teal-300">
                               <Plus className="size-5" aria-hidden="true" />
@@ -1440,28 +1443,29 @@ function BusinessPage() {
                         </DialogHeader>
                         <Card
                           id="business-entry-form"
-                          className="border-slate-200 bg-white shadow-sm dark:border-[#173451] dark:bg-[#091a2e]"
+                          className="border-cyan-900/50 bg-card shadow-sm"
                         >
-                          <CardContent className="p-4">
-                            <div className="mb-4 grid grid-cols-3 rounded-lg border border-slate-200 p-1 dark:border-[#1a3653]">
+                          <CardContent className="p-4 [&_input]:h-8 [&_input]:text-xs [&_label]:text-[11px] [&_select]:h-8 [&_select]:text-xs [&_textarea]:text-xs">
+                            <div className="mb-4 grid grid-cols-3 rounded-lg border border-slate-200 bg-slate-50/70 p-1 dark:border-[#1a3653] dark:bg-[#061527]">
                               {(
                                 [
-                                  ["transfer", "Transfert"],
-                                  ["deposit", "Dépôt"],
-                                  ["loan", "Prêt"],
+                                  ["transfer", "Transfert", ArrowRight],
+                                  ["deposit", "Dépôt", ArrowDownToLine],
+                                  ["loan", "Prêt", HandCoins],
                                 ] as const
-                              ).map(([type, label]) => (
+                              ).map(([type, label, Icon]) => (
                                 <button
                                   key={type}
                                   type="button"
-                                  className={`rounded-md px-2 py-2 text-xs font-medium transition-colors ${
+                                  className={`flex min-h-8 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                                     entryType === type
-                                      ? "bg-cyan-600 text-white shadow-sm dark:bg-teal-500 dark:text-[#041521]"
+                                      ? "bg-cyan-600 text-white shadow-sm dark:bg-teal-400 dark:text-[#041521]"
                                       : "text-muted-foreground hover:bg-slate-100 dark:hover:bg-[#10243b]"
                                   }`}
                                   aria-pressed={entryType === type}
                                   onClick={() => setEntryType(type)}
                                 >
+                                  <Icon className="size-3.5" aria-hidden="true" />
                                   {label}
                                 </button>
                               ))}
@@ -1471,104 +1475,164 @@ function BusinessPage() {
                               (customers.length === 0 ||
                               htgAccounts.length === 0 ||
                               usdAccounts.length === 0 ? (
-                                <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
-                                  Créez un client et des comptes HTG et USD avant d’enregistrer un
-                                  transfert.
-                                </p>
+                                <div className="space-y-3 rounded-lg border border-amber-500/20 bg-amber-50/80 p-4 text-xs text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">
+                                  <div className="flex items-start gap-2">
+                                    <Info className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                                    <div>
+                                      <p className="font-semibold">Configuration nécessaire</p>
+                                      <p className="mt-1 leading-relaxed">
+                                        Un client et des comptes HTG et USD doivent être configurés
+                                        avant d’enregistrer un transfert.
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <div className="flex flex-wrap gap-2">
+                                    {customers.length === 0 && (
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => {
+                                          setEntryDialogOpen(false);
+                                          setActiveTab("customers");
+                                        }}
+                                      >
+                                        <UsersRound aria-hidden="true" /> Ajouter un client
+                                      </Button>
+                                    )}
+                                    {(htgAccounts.length === 0 || usdAccounts.length === 0) && (
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => {
+                                          setEntryDialogOpen(false);
+                                          setActiveTab("funding");
+                                        }}
+                                      >
+                                        <Wallet aria-hidden="true" /> Configurer les comptes
+                                      </Button>
+                                    )}
+                                  </div>
+                                </div>
                               ) : (
                                 <form
                                   key="quick-transfer"
-                                  className="space-y-3"
+                                  className="space-y-4"
                                   onSubmit={(event) => void onCreateTransaction(event)}
                                 >
-                                  <Field label="Nom de l’utilisateur">
-                                    <select
-                                      name="customerId"
-                                      value={
-                                        selectedTransactionCustomerId || customers[0]?.id || ""
-                                      }
-                                      onChange={(event) =>
-                                        setSelectedTransactionCustomerId(event.target.value)
-                                      }
-                                      className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm dark:border-[#1a3653] dark:bg-[#061527] dark:text-slate-100"
-                                      required
-                                    >
-                                      {customers.map((customer) => (
-                                        <option key={customer.id} value={customer.id}>
-                                          {customer.name}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  </Field>
-                                  <Field label="Compte de réception HTG">
-                                    <select
-                                      name="receiptAccountId"
-                                      className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm dark:border-[#1a3653] dark:bg-[#061527] dark:text-slate-100"
-                                      required
-                                    >
-                                      {htgAccounts.map((account) => (
-                                        <option key={account.id} value={account.id}>
-                                          {account.name}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  </Field>
-                                  <Field label="Compte Meru / sortie USD">
-                                    <select
-                                      name="payoutAccountId"
-                                      className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm dark:border-[#1a3653] dark:bg-[#061527] dark:text-slate-100"
-                                      required
-                                    >
-                                      {usdAccounts.map((account) => (
-                                        <option key={account.id} value={account.id}>
-                                          {account.name}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  </Field>
-                                  <div className="grid grid-cols-2 gap-3">
-                                    <Field label="Montant envoyé (USD)">
-                                      <Input
-                                        name="usdSent"
-                                        type="number"
-                                        min="0.01"
-                                        step="0.01"
-                                        value={transferAmount}
-                                        onChange={(event) => setTransferAmount(event.target.value)}
+                                  <div>
+                                    <p className="mb-2 text-xs font-semibold text-foreground">
+                                      1. Informations du bénéficiaire
+                                    </p>
+                                    <Field label="Client *">
+                                      <select
+                                        name="customerId"
+                                        value={
+                                          selectedTransactionCustomerId || customers[0]?.id || ""
+                                        }
+                                        onChange={(event) =>
+                                          setSelectedTransactionCustomerId(event.target.value)
+                                        }
+                                        className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm dark:border-[#1a3653] dark:bg-[#061527] dark:text-slate-100"
                                         required
-                                        className="dark:border-[#1a3653] dark:bg-[#061527]"
-                                      />
+                                      >
+                                        {customers.map((customer) => (
+                                          <option key={customer.id} value={customer.id}>
+                                            {customer.name}
+                                          </option>
+                                        ))}
+                                      </select>
                                     </Field>
-                                    <Field label="Frais transfert (USD)">
-                                      <Input
-                                        name="transferFee"
-                                        type="number"
-                                        min="0"
-                                        step="0.01"
-                                        value={transferFee}
-                                        onChange={(event) => setTransferFee(event.target.value)}
-                                        required
-                                        className="dark:border-[#1a3653] dark:bg-[#061527]"
-                                      />
-                                    </Field>
+                                    <p className="mt-1.5 text-[10px] text-muted-foreground">
+                                      Sélectionnez le client bénéficiaire du transfert.
+                                    </p>
                                   </div>
-                                  <Field label="Montant dû en gourdes (HTG)">
-                                    <Input
-                                      name="htgReceived"
-                                      type="number"
-                                      min="0"
-                                      step="0.01"
-                                      value={transferHtgDue}
-                                      onChange={(event) => setTransferHtgDue(event.target.value)}
-                                      required
-                                      className="dark:border-[#1a3653] dark:bg-[#061527]"
-                                    />
-                                  </Field>
+                                  <div className="border-t border-slate-200 pt-3 dark:border-[#173451]">
+                                    <p className="mb-2 text-xs font-semibold text-foreground">
+                                      2. Montants
+                                    </p>
+                                    <div className="grid gap-3 sm:grid-cols-3">
+                                      <Field label="Montant envoyé (USD) *">
+                                        <Input
+                                          name="usdSent"
+                                          type="number"
+                                          min="0.01"
+                                          step="0.01"
+                                          placeholder="Ex. 10.00"
+                                          value={transferAmount}
+                                          onChange={(event) =>
+                                            setTransferAmount(event.target.value)
+                                          }
+                                          required
+                                          className="h-9 dark:border-[#1a3653] dark:bg-[#061527]"
+                                        />
+                                      </Field>
+                                      <Field label="Frais (USD) *">
+                                        <Input
+                                          name="transferFee"
+                                          type="number"
+                                          min="0"
+                                          step="0.01"
+                                          placeholder="Ex. 0.50"
+                                          value={transferFee}
+                                          onChange={(event) => setTransferFee(event.target.value)}
+                                          required
+                                          className="h-9 dark:border-[#1a3653] dark:bg-[#061527]"
+                                        />
+                                      </Field>
+                                      <Field label="Montant dû (HTG) *">
+                                        <Input
+                                          name="htgReceived"
+                                          type="number"
+                                          min="0"
+                                          step="0.01"
+                                          placeholder="0.00"
+                                          value={transferHtgDue}
+                                          onChange={(event) =>
+                                            setTransferHtgDue(event.target.value)
+                                          }
+                                          required
+                                          className="h-9 dark:border-[#1a3653] dark:bg-[#061527]"
+                                        />
+                                      </Field>
+                                    </div>
+                                    <p className="mt-1.5 text-[10px] text-muted-foreground">
+                                      Le montant en HTG est saisi séparément ; aucun taux n’est
+                                      supposé automatiquement.
+                                    </p>
+                                  </div>
                                   <details className="rounded-lg border border-slate-200 px-3 py-2 dark:border-[#1a3653]">
                                     <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
-                                      Détails facultatifs
+                                      Comptes et détails facultatifs
                                     </summary>
                                     <div className="mt-3 space-y-3">
+                                      <Field label="Compte de réception HTG *">
+                                        <select
+                                          name="receiptAccountId"
+                                          className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm dark:border-[#1a3653] dark:bg-[#061527] dark:text-slate-100"
+                                          required
+                                        >
+                                          {htgAccounts.map((account) => (
+                                            <option key={account.id} value={account.id}>
+                                              {account.name}
+                                            </option>
+                                          ))}
+                                        </select>
+                                      </Field>
+                                      <Field label="Compte Meru / sortie USD *">
+                                        <select
+                                          name="payoutAccountId"
+                                          className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm dark:border-[#1a3653] dark:bg-[#061527] dark:text-slate-100"
+                                          required
+                                        >
+                                          {usdAccounts.map((account) => (
+                                            <option key={account.id} value={account.id}>
+                                              {account.name}
+                                            </option>
+                                          ))}
+                                        </select>
+                                      </Field>
                                       <Field label="Date et heure">
                                         <Input
                                           name="transactionDate"
@@ -1627,34 +1691,64 @@ function BusinessPage() {
                                           className="dark:border-[#1a3653] dark:bg-[#061527]"
                                         />
                                       </Field>
-                                      <Field label="Notes">
-                                        <Input
-                                          name="notes"
-                                          className="dark:border-[#1a3653] dark:bg-[#061527]"
-                                        />
-                                      </Field>
                                     </div>
                                   </details>
-                                  <p className="text-[11px] leading-relaxed text-muted-foreground">
-                                    Le transfert sera créé en attente. Confirmez-le dans
-                                    Transactions pour comptabiliser le mouvement USD. Les paiements
-                                    HTG se saisissent séparément.
+                                  <div>
+                                    <Field label="Note (facultative)">
+                                      <textarea
+                                        name="notes"
+                                        rows={2}
+                                        maxLength={200}
+                                        value={transferNotes}
+                                        onChange={(event) => setTransferNotes(event.target.value)}
+                                        placeholder="Ajouter une note sur cette transaction…"
+                                        className="w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring dark:border-[#1a3653] dark:bg-[#061527]"
+                                      />
+                                    </Field>
+                                    <p className="mt-1 text-right text-[10px] text-muted-foreground">
+                                      {transferNotes.length}/200
+                                    </p>
+                                  </div>
+                                  <p className="text-[10px] leading-relaxed text-muted-foreground">
+                                    L’opération sera créée en attente. Les paiements HTG se
+                                    saisissent séparément.
                                   </p>
-                                  <Button
-                                    type="submit"
-                                    disabled={isMutating}
-                                    className="w-full bg-teal-600 text-white hover:bg-teal-700 dark:bg-teal-400 dark:text-[#041521] dark:hover:bg-teal-300"
-                                  >
-                                    <Plus className="size-4" aria-hidden="true" /> Enregistrer
-                                  </Button>
+                                  <div className="flex items-center justify-between gap-3 border-t border-slate-200 pt-3 dark:border-[#173451]">
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      onClick={() => setEntryDialogOpen(false)}
+                                    >
+                                      Annuler
+                                    </Button>
+                                    <Button
+                                      type="submit"
+                                      disabled={isMutating}
+                                      className="bg-teal-500 text-[#041521] hover:bg-teal-400"
+                                    >
+                                      <ArrowUpRight className="size-4" aria-hidden="true" />
+                                      Enregistrer la transaction
+                                    </Button>
+                                  </div>
                                 </form>
                               ))}
 
                             {entryType === "deposit" &&
                               (accounts.length === 0 ? (
-                                <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
-                                  Créez un compte avant d’enregistrer un dépôt.
-                                </p>
+                                <div className="space-y-3 rounded-lg border border-amber-500/20 bg-amber-50/80 p-4 text-xs text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">
+                                  <p>Créez un compte avant de pouvoir enregistrer un dépôt.</p>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      setEntryDialogOpen(false);
+                                      setActiveTab("funding");
+                                    }}
+                                  >
+                                    <Wallet aria-hidden="true" /> Configurer les comptes
+                                  </Button>
+                                </div>
                               ) : (
                                 <form
                                   key="quick-deposit"
@@ -1662,7 +1756,10 @@ function BusinessPage() {
                                   onSubmit={(event) => void onCreateFunding(event)}
                                 >
                                   <input type="hidden" name="fundingType" value="replenishment" />
-                                  <Field label="Compte crédité">
+                                  <p className="text-xs font-semibold text-foreground">
+                                    1. Informations du dépôt
+                                  </p>
+                                  <Field label="Compte crédité *">
                                     <select
                                       name="destinationAccountId"
                                       value={selectedFundingAccountId || accounts[0]?.id || ""}
@@ -1693,7 +1790,7 @@ function BusinessPage() {
                                       ))}
                                     </select>
                                   </Field>
-                                  <Field label="Montant réellement crédité">
+                                  <Field label="Montant réellement crédité *">
                                     <Input
                                       name="creditedAmount"
                                       type="number"
@@ -1707,7 +1804,7 @@ function BusinessPage() {
                                       className="dark:border-[#1a3653] dark:bg-[#061527]"
                                     />
                                   </Field>
-                                  <div className="grid grid-cols-2 gap-3">
+                                  <div className="grid gap-3 sm:grid-cols-2">
                                     <Field label="Frais (devise source)">
                                       <Input
                                         name="feeAmount"
@@ -1746,33 +1843,77 @@ function BusinessPage() {
                                       className="dark:border-[#1a3653] dark:bg-[#061527]"
                                     />
                                   </Field>
-                                  <p className="text-[11px] leading-relaxed text-muted-foreground">
+                                  <p className="text-[10px] leading-relaxed text-muted-foreground">
                                     Dépôt enregistré en attente. Confirmez le crédit réel dans
                                     Financement & comptes. Un dépôt n’est pas un revenu.
                                   </p>
-                                  <Button
-                                    type="submit"
-                                    disabled={isMutating}
-                                    className="w-full bg-teal-600 text-white hover:bg-teal-700 dark:bg-teal-400 dark:text-[#041521] dark:hover:bg-teal-300"
-                                  >
-                                    <Plus className="size-4" aria-hidden="true" /> Enregistrer
-                                  </Button>
+                                  <div className="flex items-center justify-between gap-3 border-t border-slate-200 pt-3 dark:border-[#173451]">
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      onClick={() => setEntryDialogOpen(false)}
+                                    >
+                                      Annuler
+                                    </Button>
+                                    <Button
+                                      type="submit"
+                                      disabled={isMutating}
+                                      className="bg-teal-500 text-[#041521] hover:bg-teal-400"
+                                    >
+                                      <ArrowUpRight className="size-4" aria-hidden="true" />
+                                      Enregistrer le dépôt
+                                    </Button>
+                                  </div>
                                 </form>
                               ))}
 
                             {entryType === "loan" &&
                               (customers.length === 0 || accounts.length === 0 ? (
-                                <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
-                                  Créez un client et un compte de décaissement avant d’émettre un
-                                  prêt.
-                                </p>
+                                <div className="space-y-3 rounded-lg border border-amber-500/20 bg-amber-50/80 p-4 text-xs text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">
+                                  <p>
+                                    {customers.length === 0
+                                      ? "Ajoutez un client avant d’émettre un prêt."
+                                      : "Configurez un compte de décaissement avant d’émettre un prêt."}
+                                  </p>
+                                  <div className="flex flex-wrap gap-2">
+                                    {customers.length === 0 && (
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => {
+                                          setEntryDialogOpen(false);
+                                          setActiveTab("customers");
+                                        }}
+                                      >
+                                        <UsersRound aria-hidden="true" /> Ajouter un client
+                                      </Button>
+                                    )}
+                                    {accounts.length === 0 && (
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => {
+                                          setEntryDialogOpen(false);
+                                          setActiveTab("funding");
+                                        }}
+                                      >
+                                        <Wallet aria-hidden="true" /> Configurer les comptes
+                                      </Button>
+                                    )}
+                                  </div>
+                                </div>
                               ) : (
                                 <form
                                   key="quick-loan"
                                   className="space-y-3"
                                   onSubmit={(event) => void onCreateLoan(event)}
                                 >
-                                  <Field label="Nom de l’emprunteur">
+                                  <p className="text-xs font-semibold text-foreground">
+                                    1. Informations du prêt
+                                  </p>
+                                  <Field label="Nom de l’emprunteur *">
                                     <select
                                       name="loanCustomerId"
                                       className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm dark:border-[#1a3653] dark:bg-[#061527] dark:text-slate-100"
@@ -1785,7 +1926,7 @@ function BusinessPage() {
                                       ))}
                                     </select>
                                   </Field>
-                                  <Field label="Compte de décaissement">
+                                  <Field label="Compte de décaissement *">
                                     <select
                                       name="loanAccountId"
                                       value={selectedLoanAccountId || accounts[0]?.id || ""}
@@ -1802,7 +1943,7 @@ function BusinessPage() {
                                       ))}
                                     </select>
                                   </Field>
-                                  <Field label="Principal prêté">
+                                  <Field label="Principal prêté *">
                                     <Input
                                       name="loanPrincipal"
                                       type="number"
@@ -1867,33 +2008,44 @@ function BusinessPage() {
                                       className="dark:border-[#1a3653] dark:bg-[#061527]"
                                     />
                                   </Field>
-                                  <p className="text-[11px] leading-relaxed text-muted-foreground">
+                                  <p className="text-[10px] leading-relaxed text-muted-foreground">
                                     Le principal est un actif et non un revenu. Le décaissement est
                                     comptabilisé dans la devise du compte sélectionné.
                                   </p>
-                                  <Button
-                                    type="submit"
-                                    disabled={isMutating}
-                                    className="w-full bg-teal-600 text-white hover:bg-teal-700 dark:bg-teal-400 dark:text-[#041521] dark:hover:bg-teal-300"
-                                  >
-                                    <Plus className="size-4" aria-hidden="true" /> Enregistrer le
-                                    prêt
-                                  </Button>
+                                  <div className="flex items-center justify-between gap-3 border-t border-slate-200 pt-3 dark:border-[#173451]">
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      onClick={() => setEntryDialogOpen(false)}
+                                    >
+                                      Annuler
+                                    </Button>
+                                    <Button
+                                      type="submit"
+                                      disabled={isMutating}
+                                      className="bg-teal-500 text-[#041521] hover:bg-teal-400"
+                                    >
+                                      <ArrowUpRight className="size-4" aria-hidden="true" />
+                                      Enregistrer le prêt
+                                    </Button>
+                                  </div>
                                 </form>
                               ))}
                           </CardContent>
                         </Card>
                       </section>
 
-                      <aside className="min-w-0 space-y-4 border-t border-slate-200 bg-slate-50/70 p-4 dark:border-[#173451] dark:bg-[#071426] sm:p-6 lg:border-l lg:border-t-0">
+                      <aside className="min-w-0 space-y-3 border-t border-slate-200 bg-slate-50/70 p-4 dark:border-[#173451] dark:bg-[#071426] sm:p-5 lg:border-l lg:border-t-0">
                         <Card className="border-cyan-900/60 bg-white shadow-sm dark:bg-[#091a2e]">
-                          <CardHeader className="pb-3">
+                          <CardHeader className="pb-2">
                             <CardTitle className="flex items-center gap-2 text-sm">
-                              <CircleDollarSign className="size-4 text-cyan-600 dark:text-cyan-300" />
+                              <span className="grid size-7 place-items-center rounded-lg bg-cyan-100 text-cyan-700 dark:bg-teal-500/15 dark:text-teal-300">
+                                <CircleDollarSign className="size-4" aria-hidden="true" />
+                              </span>
                               Aperçu de la transaction
                             </CardTitle>
                           </CardHeader>
-                          <CardContent className="space-y-3 text-xs">
+                          <CardContent className="space-y-2.5 text-xs">
                             {entryType === "transfer" && (
                               <>
                                 <div className="flex justify-between gap-3">
@@ -1948,7 +2100,7 @@ function BusinessPage() {
                             {entryType === "deposit" && (
                               <>
                                 <p className="text-muted-foreground">Crédit réel à confirmer</p>
-                                <p className="text-xl font-semibold text-foreground">
+                                <p className="text-lg font-semibold text-foreground">
                                   {formatBusinessMoney(
                                     Math.max(0, Number(fundingCreditedAmount) || 0),
                                     accounts.find(
@@ -1967,7 +2119,7 @@ function BusinessPage() {
                             {entryType === "loan" && (
                               <>
                                 <p className="text-muted-foreground">Principal décaissé</p>
-                                <p className="text-xl font-semibold text-foreground">
+                                <p className="text-lg font-semibold text-foreground">
                                   {formatBusinessMoney(
                                     Math.max(0, Number(loanPrincipalAmount) || 0),
                                     accounts.find((account) => account.id === selectedLoanAccountId)
@@ -1992,22 +2144,30 @@ function BusinessPage() {
                               Informations importantes
                             </CardTitle>
                           </CardHeader>
-                          <CardContent className="space-y-2 text-xs leading-relaxed text-muted-foreground">
-                            <p>Les opérations sont d’abord enregistrées en attente.</p>
-                            <p>Les paiements HTG sont enregistrés séparément des transferts.</p>
-                            <p>
-                              Les dépôts utilisent le crédit réel, sans assimiler crypto et USD.
-                            </p>
+                          <CardContent className="text-xs leading-relaxed text-muted-foreground">
+                            <ul className="list-disc space-y-1.5 pl-4">
+                              <li>Les opérations sont enregistrées en attente.</li>
+                              <li>Les paiements HTG sont saisis séparément.</li>
+                              <li>Les dépôts utilisent le crédit réel.</li>
+                            </ul>
                           </CardContent>
                         </Card>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="w-full"
-                          onClick={() => setEntryDialogOpen(false)}
-                        >
-                          Annuler
-                        </Button>
+                        <Card className="relative isolate overflow-hidden border-cyan-900/60 bg-gradient-to-br from-slate-50 to-cyan-50 shadow-sm dark:from-[#08182a] dark:to-[#09283a]">
+                          <div
+                            className="pointer-events-none absolute -bottom-10 -right-2 size-24 rounded-full border-[12px] border-cyan-500/10"
+                            aria-hidden="true"
+                          />
+                          <CardContent className="relative p-3.5">
+                            <Quote
+                              className="absolute right-3 top-3 size-6 text-cyan-300 dark:text-cyan-900"
+                              aria-hidden="true"
+                            />
+                            <p className="pr-7 text-xs italic leading-relaxed text-foreground">
+                              « Chaque transaction compte. Gérez votre activité avec discipline. »
+                            </p>
+                            <p className="mt-2 text-[10px] text-muted-foreground">— Nexora</p>
+                          </CardContent>
+                        </Card>
                       </aside>
                     </div>
                   </DialogContent>
