@@ -26,6 +26,7 @@ export type BusinessTransaction = {
   receiptAccountId: string;
   payoutAccountId: string;
   transactionDate: string;
+  dueDate?: string | null;
   htgReceived: number;
   usdSent: number;
   exchangeRate: number | null;
@@ -47,6 +48,55 @@ export type BusinessExpense = {
   date: string;
   status: BusinessTransactionStatus;
   notes?: string;
+};
+
+export type BusinessPaymentStatus = "unpaid" | "partially_paid" | "fully_paid" | "overdue";
+export type BusinessPaymentMethod = "cash" | "moncash" | "natcash" | "other";
+
+export type BusinessPayment = {
+  id: string;
+  customerTransactionId: string;
+  accountId: string;
+  amount: number;
+  currency: string;
+  paymentMethod: BusinessPaymentMethod;
+  paymentDate: string;
+  reference?: string;
+  notes?: string;
+  createdAt: string;
+};
+
+export type BusinessLoanStatus = "active" | "partially_repaid" | "repaid" | "overdue";
+
+export type BusinessLoan = {
+  id: string;
+  customerId: string;
+  customerName: string;
+  accountId: string;
+  principalAmount: number;
+  currency: string;
+  issuedDate: string;
+  dueDate: string | null;
+  interestAmount: number;
+  feeAmount: number;
+  status: BusinessLoanStatus;
+  notes?: string;
+  createdAt: string;
+};
+
+export type BusinessLoanRepayment = {
+  id: string;
+  loanId: string;
+  accountId: string;
+  amount: number;
+  principalPaid: number;
+  interestPaid: number;
+  feePaid: number;
+  currency: string;
+  repaymentDate: string;
+  reference?: string;
+  notes?: string;
+  createdAt: string;
 };
 
 export type BusinessLedgerEntry = {
@@ -72,6 +122,15 @@ export type BusinessMetrics = {
   valuationIncomplete: boolean;
   expensesIncomplete: boolean;
   profitIncomplete: boolean;
+  outstandingCustomerPayments: number;
+  partiallyPaidTransactions: number;
+  overdueCustomerPayments: number;
+  outstandingLoanPrincipal: number | null;
+  outstandingLoanPrincipalByCurrency: Record<string, number>;
+  upcomingLoanRepayments: number;
+  overdueLoans: number;
+  loanInterestAndFeesUsd: number;
+  loanRevenueIncomplete: boolean;
 };
 
 export type TransactionProfitResult = {
@@ -86,6 +145,12 @@ function roundMoney(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
+function normalizeCurrencyCode(value: string | undefined | null): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  const normalized = value.trim().toUpperCase();
+  return normalized || undefined;
+}
+
 function ensureNonNegative(value: number, fieldName: string) {
   if (!Number.isFinite(value) || value < 0) {
     throw new RangeError(`${fieldName} must be finite and non-negative.`);
@@ -98,9 +163,19 @@ export function convertToReportingCurrency(
   reportingCurrency: BusinessCurrency,
   usdPerUnit: Partial<Record<string, number>>,
 ): number | null {
-  if (currency === reportingCurrency) return amount;
-  const valueInUsd = currency === "USD" ? 1 : usdPerUnit[currency];
-  const reportingCurrencyInUsd = reportingCurrency === "USD" ? 1 : usdPerUnit[reportingCurrency];
+  const normalizedCurrency = normalizeCurrencyCode(currency);
+  const normalizedReportingCurrency = normalizeCurrencyCode(reportingCurrency);
+  if (!normalizedCurrency || !normalizedReportingCurrency) return null;
+  if (normalizedCurrency === normalizedReportingCurrency) return amount;
+
+  const normalizedUsdPerUnit = Object.fromEntries(
+    Object.entries(usdPerUnit).map(([code, value]) => [normalizeCurrencyCode(code), value]),
+  ) as Partial<Record<string, number>>;
+
+  const valueInUsd = normalizedCurrency === "USD" ? 1 : normalizedUsdPerUnit[normalizedCurrency];
+  const reportingCurrencyInUsd =
+    normalizedReportingCurrency === "USD" ? 1 : normalizedUsdPerUnit[normalizedReportingCurrency];
+
   if (
     typeof valueInUsd !== "number" ||
     !Number.isFinite(valueInUsd) ||
@@ -165,6 +240,11 @@ export function calculateTransactionProfit(
 ): TransactionProfitResult {
   ensureNonNegative(transaction.htgReceived, "HTG received");
   ensureNonNegative(transaction.usdSent, "USD sent");
+  if (transaction.exchangeRate !== null && transaction.exchangeRate !== undefined) {
+    if (!Number.isFinite(transaction.exchangeRate) || transaction.exchangeRate <= 0) {
+      throw new RangeError("Exchange rate must be a positive finite number.");
+    }
+  }
   if (transaction.cryptoCost !== null) ensureNonNegative(transaction.cryptoCost, "Crypto cost");
   ensureNonNegative(transaction.transferFee, "Transfer fee");
   if (transaction.otherExpenses !== null) {
@@ -172,7 +252,7 @@ export function calculateTransactionProfit(
   }
 
   const customerUsdValue =
-    transaction.exchangeRate && transaction.exchangeRate > 0
+    transaction.exchangeRate !== null && transaction.exchangeRate !== undefined
       ? roundMoney(transaction.htgReceived / transaction.exchangeRate)
       : null;
 
@@ -240,11 +320,91 @@ export function calculateCustomerPerformance(
   };
 }
 
+export function calculateCustomerPaymentSummary(
+  transaction: Pick<BusinessTransaction, "htgReceived" | "dueDate" | "transactionDate">,
+  payments: Pick<BusinessPayment, "amount" | "paymentDate">[] = [],
+): { totalPaid: number; outstanding: number; status: BusinessPaymentStatus } {
+  const totalPaid = payments.reduce((sum, payment) => sum + payment.amount, 0);
+  const outstanding = Math.max(0, transaction.htgReceived - totalPaid);
+  const dueDate = transaction.dueDate ? new Date(transaction.dueDate) : null;
+  const dueDateKey = transaction.dueDate?.slice(0, 10);
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const isOverdue =
+    dueDate !== null &&
+    !Number.isNaN(dueDate.getTime()) &&
+    totalPaid < transaction.htgReceived &&
+    Boolean(dueDateKey && dueDateKey < todayKey);
+
+  let status: BusinessPaymentStatus = "unpaid";
+  if (totalPaid >= transaction.htgReceived) {
+    status = "fully_paid";
+  } else if (totalPaid > 0) {
+    status = isOverdue ? "overdue" : "partially_paid";
+  } else if (isOverdue) {
+    status = "overdue";
+  }
+
+  return {
+    totalPaid: roundMoney(totalPaid),
+    outstanding: roundMoney(outstanding),
+    status,
+  };
+}
+
+export function calculateLoanSummary(
+  loan: Pick<BusinessLoan, "principalAmount" | "currency" | "dueDate" | "status" | "issuedDate"> &
+    Partial<Pick<BusinessLoan, "interestAmount" | "feeAmount">>,
+  repayments: (Pick<BusinessLoanRepayment, "amount" | "currency" | "repaymentDate"> &
+    Partial<Pick<BusinessLoanRepayment, "principalPaid" | "interestPaid" | "feePaid">>)[] = [],
+): {
+  totalRepaid: number;
+  outstandingPrincipal: number;
+  isOverdue: boolean;
+  nextRepayment: number;
+  currency: string;
+} {
+  const currencyRepayments = repayments.filter((repayment) => repayment.currency === loan.currency);
+  const totalRepaid = currencyRepayments.reduce((sum, repayment) => sum + repayment.amount, 0);
+  const principalRepaid = currencyRepayments.reduce(
+    (sum, repayment) => sum + (repayment.principalPaid ?? repayment.amount),
+    0,
+  );
+  const outstandingPrincipal = Math.max(0, loan.principalAmount - principalRepaid);
+  const dueDate = loan.dueDate ? new Date(loan.dueDate) : null;
+  const dueDateKey = loan.dueDate?.slice(0, 10);
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const interestPaid = currencyRepayments.reduce(
+    (sum, repayment) => sum + (repayment.interestPaid ?? 0),
+    0,
+  );
+  const feePaid = currencyRepayments.reduce((sum, repayment) => sum + (repayment.feePaid ?? 0), 0);
+  const totalOutstanding =
+    outstandingPrincipal +
+    Math.max(0, (loan.interestAmount ?? 0) - interestPaid) +
+    Math.max(0, (loan.feeAmount ?? 0) - feePaid);
+  const isOverdue =
+    dueDate !== null &&
+    !Number.isNaN(dueDate.getTime()) &&
+    totalOutstanding > 0 &&
+    Boolean(dueDateKey && dueDateKey < todayKey);
+
+  return {
+    totalRepaid: roundMoney(totalRepaid),
+    outstandingPrincipal: roundMoney(outstandingPrincipal),
+    isOverdue,
+    nextRepayment: roundMoney(totalOutstanding),
+    currency: loan.currency,
+  };
+}
+
 export function calculateBusinessMetrics({
   accounts,
   transactions,
   expenses,
   fundings = [],
+  customerPayments = [],
+  loans = [],
+  loanRepayments = [],
   reportingCurrency = "USD",
   exchangeRates = {},
 }: {
@@ -252,14 +412,40 @@ export function calculateBusinessMetrics({
   transactions: BusinessTransaction[];
   expenses: BusinessExpense[];
   fundings?: { fee_amount: number; fee_usd: number | null; status: string }[];
+  customerPayments?: Pick<
+    BusinessPayment,
+    "customerTransactionId" | "amount" | "currency" | "paymentDate"
+  >[];
+  loans?: Pick<
+    BusinessLoan,
+    | "id"
+    | "customerId"
+    | "customerName"
+    | "principalAmount"
+    | "currency"
+    | "issuedDate"
+    | "dueDate"
+    | "interestAmount"
+    | "feeAmount"
+    | "status"
+  >[];
+  loanRepayments?: (Pick<
+    BusinessLoanRepayment,
+    "loanId" | "amount" | "currency" | "repaymentDate"
+  > &
+    Partial<Pick<BusinessLoanRepayment, "principalPaid" | "interestPaid" | "feePaid">>)[];
   reportingCurrency?: BusinessCurrency;
   exchangeRates?: Partial<Record<string, number>>;
 }): BusinessMetrics {
   const meruBalance = accounts
-    .filter((account) => account.type === "meru" && account.currency === "USD")
+    .filter(
+      (account) => account.type === "meru" && normalizeCurrencyCode(account.currency) === "USD",
+    )
     .reduce((sum, account) => sum + account.balance, 0);
   const cashOnHand = accounts
-    .filter((account) => account.type === "cash" && account.currency === "HTG")
+    .filter(
+      (account) => account.type === "cash" && normalizeCurrencyCode(account.currency) === "HTG",
+    )
     .reduce((sum, account) => sum + account.balance, 0);
 
   let valuationIncomplete = false;
@@ -284,10 +470,7 @@ export function calculateBusinessMetrics({
     transactions.filter((transaction) => transaction.status === "pending").length +
     fundings.filter((funding) => funding.status === "pending").length +
     expenses.filter((expense) => expense.status === "pending").length;
-  const totalCustomerReceipts = completedTransactions.reduce(
-    (sum, transaction) => sum + transaction.htgReceived,
-    0,
-  );
+  const totalCustomerReceipts = customerPayments.reduce((sum, payment) => sum + payment.amount, 0);
   const totalUsdSentToCustomers = completedTransactions.reduce(
     (sum, transaction) => sum + transaction.usdSent,
     0,
@@ -295,7 +478,8 @@ export function calculateBusinessMetrics({
   let expensesIncomplete = false;
   const recordedExpensesUsd = expenses.reduce((sum, expense) => {
     if (expense.status !== "completed") return sum;
-    const usdPerUnit = expense.currency === "USD" ? 1 : expense.usdPerUnit;
+    const normalizedCurrency = normalizeCurrencyCode(expense.currency);
+    const usdPerUnit = normalizedCurrency === "USD" ? 1 : expense.usdPerUnit;
     if (usdPerUnit === null || !Number.isFinite(usdPerUnit) || usdPerUnit <= 0) {
       expensesIncomplete = true;
       return sum;
@@ -329,10 +513,136 @@ export function calculateBusinessMetrics({
     ) -
     recordedExpensesUsd -
     fundingFeesUsd;
+  const customerPaymentSummaries = transactions.map((transaction) => {
+    const payments = customerPayments.filter(
+      (payment) => payment.customerTransactionId === transaction.id,
+    );
+    return {
+      transaction,
+      summary: calculateCustomerPaymentSummary(
+        {
+          htgReceived: transaction.htgReceived,
+          dueDate: transaction.dueDate ?? null,
+          transactionDate: transaction.transactionDate,
+        },
+        payments,
+      ),
+    };
+  });
+
+  const eligiblePaymentSummaries = customerPaymentSummaries.filter(
+    (entry) =>
+      entry.transaction.status !== "failed" &&
+      entry.transaction.status !== "cancelled" &&
+      entry.transaction.status !== "reversed",
+  );
+  const outstandingCustomerPayments = eligiblePaymentSummaries.reduce(
+    (sum, entry) => sum + entry.summary.outstanding,
+    0,
+  );
+  const partiallyPaidTransactions = eligiblePaymentSummaries.filter(
+    (entry) => entry.summary.status === "partially_paid",
+  ).length;
+  const overdueCustomerPayments = eligiblePaymentSummaries.filter(
+    (entry) => entry.summary.status === "overdue",
+  ).length;
+
+  const activeLoans = loans.filter((loan) =>
+    ["active", "partially_repaid", "overdue"].includes(loan.status),
+  );
+  const outstandingLoanPrincipalByCurrency = activeLoans.reduce<Record<string, number>>(
+    (result, loan) => {
+      const repayments = loanRepayments.filter(
+        (repayment) => repayment.loanId === loan.id && repayment.currency === loan.currency,
+      );
+      const principalRepaid = repayments.reduce(
+        (sum, repayment) => sum + (repayment.principalPaid ?? repayment.amount),
+        0,
+      );
+      const outstanding = Math.max(0, loan.principalAmount - principalRepaid);
+      if (outstanding <= 0) return result;
+      const key = normalizeCurrencyCode(loan.currency) ?? loan.currency;
+      result[key] = (result[key] ?? 0) + outstanding;
+      return result;
+    },
+    {},
+  );
+  let outstandingLoanPrincipal: number | null = 0;
+  for (const [currency, amount] of Object.entries(outstandingLoanPrincipalByCurrency)) {
+    const converted = convertToReportingCurrency(
+      amount,
+      currency,
+      reportingCurrency,
+      exchangeRates,
+    );
+    if (converted === null) {
+      outstandingLoanPrincipal = null;
+      break;
+    }
+    outstandingLoanPrincipal += converted;
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  const upcomingLimit = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const upcomingLoanRepayments = activeLoans.filter((loan) => {
+    const repayments = loanRepayments.filter(
+      (repayment) => repayment.loanId === loan.id && repayment.currency === loan.currency,
+    );
+    const principalRepaid = repayments.reduce(
+      (sum, repayment) => sum + (repayment.principalPaid ?? repayment.amount),
+      0,
+    );
+    const interestRepaid = repayments.reduce(
+      (sum, repayment) => sum + (repayment.interestPaid ?? 0),
+      0,
+    );
+    const feesRepaid = repayments.reduce((sum, repayment) => sum + (repayment.feePaid ?? 0), 0);
+    const outstanding =
+      Math.max(0, loan.principalAmount - principalRepaid) +
+      Math.max(0, loan.interestAmount - interestRepaid) +
+      Math.max(0, loan.feeAmount - feesRepaid);
+    if (outstanding <= 0) return false;
+    if (!loan.dueDate) return false;
+    return loan.dueDate >= today && loan.dueDate <= upcomingLimit;
+  }).length;
+  const overdueLoans = activeLoans.filter((loan) => {
+    const repayments = loanRepayments.filter(
+      (repayment) => repayment.loanId === loan.id && repayment.currency === loan.currency,
+    );
+    const principalRepaid = repayments.reduce(
+      (sum, repayment) => sum + (repayment.principalPaid ?? repayment.amount),
+      0,
+    );
+    const interestRepaid = repayments.reduce(
+      (sum, repayment) => sum + (repayment.interestPaid ?? 0),
+      0,
+    );
+    const feesRepaid = repayments.reduce((sum, repayment) => sum + (repayment.feePaid ?? 0), 0);
+    const outstanding =
+      Math.max(0, loan.principalAmount - principalRepaid) +
+      Math.max(0, loan.interestAmount - interestRepaid) +
+      Math.max(0, loan.feeAmount - feesRepaid);
+    if (outstanding <= 0 || !loan.dueDate) return false;
+    return loan.dueDate < today;
+  }).length;
+  let loanInterestAndFeesUsd = 0;
+  let loanRevenueIncomplete = false;
+  for (const repayment of loanRepayments) {
+    const income = (repayment.interestPaid ?? 0) + (repayment.feePaid ?? 0);
+    if (income === 0) continue;
+    const converted = convertToReportingCurrency(income, repayment.currency, "USD", exchangeRates);
+    if (converted === null) {
+      loanRevenueIncomplete = true;
+    } else {
+      loanInterestAndFeesUsd += converted;
+    }
+  }
+  const completeNetProfit = roundMoney(netProfit + loanInterestAndFeesUsd);
   const profitIncomplete =
     completedTransactions.some(
       (transaction) => calculateTransactionProfit(transaction).incomplete,
-    ) || expensesIncomplete;
+    ) ||
+    expensesIncomplete ||
+    loanRevenueIncomplete;
 
   return {
     meruWalletBalance: roundMoney(meruBalance),
@@ -342,13 +652,28 @@ export function calculateBusinessMetrics({
     totalCustomerReceipts: roundMoney(totalCustomerReceipts),
     totalUsdSentToCustomers: roundMoney(totalUsdSentToCustomers),
     totalBusinessExpenses: roundMoney(totalBusinessExpenses),
-    netProfit: roundMoney(netProfit),
+    netProfit: completeNetProfit,
     pendingTransactions,
     completedTransactions: completedTransactions.length,
     totalAccounts: accounts.length,
     valuationIncomplete,
     expensesIncomplete,
     profitIncomplete,
+    outstandingCustomerPayments: roundMoney(outstandingCustomerPayments),
+    partiallyPaidTransactions,
+    overdueCustomerPayments,
+    outstandingLoanPrincipal:
+      outstandingLoanPrincipal === null ? null : roundMoney(outstandingLoanPrincipal),
+    outstandingLoanPrincipalByCurrency: Object.fromEntries(
+      Object.entries(outstandingLoanPrincipalByCurrency).map(([currency, value]) => [
+        currency,
+        roundMoney(value),
+      ]),
+    ),
+    upcomingLoanRepayments,
+    overdueLoans,
+    loanInterestAndFeesUsd: roundMoney(loanInterestAndFeesUsd),
+    loanRevenueIncomplete,
   };
 }
 

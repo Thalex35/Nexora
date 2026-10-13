@@ -23,7 +23,9 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   calculateBusinessMetrics,
+  calculateCustomerPaymentSummary,
   calculateCustomerPerformance,
+  calculateLoanSummary,
   calculateTransactionProfit,
   formatBusinessMoney,
   type BusinessCurrency,
@@ -37,8 +39,11 @@ import {
   useCreateBusinessAdjustment,
   useCreateBusinessAccount,
   useCreateBusinessCustomer,
+  useCreateBusinessCustomerPayment,
   useCreateBusinessExpense,
   useCreateBusinessFunding,
+  useCreateBusinessLoan,
+  useCreateBusinessLoanRepayment,
   useCreateBusinessTransaction,
   useReverseBusinessOperation,
   useSaveBusinessExchangeRate,
@@ -67,6 +72,9 @@ export const Route = createFileRoute("/business")({
 const today = () => new Date().toISOString().slice(0, 10);
 const firstOfMonth = () => `${today().slice(0, 7)}-01`;
 const EMPTY_TRANSACTIONS: BusinessRecords["transactions"] = [];
+const EMPTY_PAYMENTS: BusinessRecords["payments"] = [];
+const EMPTY_LOANS: BusinessRecords["loans"] = [];
+const EMPTY_LOAN_REPAYMENTS: BusinessRecords["loanRepayments"] = [];
 const EMPTY_FUNDINGS: BusinessRecords["fundings"] = [];
 const EMPTY_EXPENSES: BusinessRecords["expenses"] = [];
 
@@ -120,11 +128,35 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+function loanAmountsDue(
+  loan: BusinessRecords["loans"][number],
+  repayments: BusinessRecords["loanRepayments"],
+) {
+  const entries = repayments.filter((repayment) => repayment.loanId === loan.id);
+  return {
+    principal: Math.max(
+      0,
+      loan.principalAmount - entries.reduce((sum, repayment) => sum + repayment.principalPaid, 0),
+    ),
+    interest: Math.max(
+      0,
+      loan.interestAmount - entries.reduce((sum, repayment) => sum + repayment.interestPaid, 0),
+    ),
+    fee: Math.max(
+      0,
+      loan.feeAmount - entries.reduce((sum, repayment) => sum + repayment.feePaid, 0),
+    ),
+  };
+}
+
 function BusinessPage() {
   const recordsQuery = useBusinessRecords();
   const createCustomer = useCreateBusinessCustomer();
   const createAccount = useCreateBusinessAccount();
   const createTransaction = useCreateBusinessTransaction();
+  const createPayment = useCreateBusinessCustomerPayment();
+  const createLoan = useCreateBusinessLoan();
+  const createLoanRepayment = useCreateBusinessLoanRepayment();
   const createFunding = useCreateBusinessFunding();
   const createExpense = useCreateBusinessExpense();
   const createAdjustment = useCreateBusinessAdjustment();
@@ -160,6 +192,9 @@ function BusinessPage() {
   const accounts = records?.accounts ?? [];
   const customers = records?.customers ?? [];
   const transactions = records?.transactions ?? EMPTY_TRANSACTIONS;
+  const payments = records?.payments ?? EMPTY_PAYMENTS;
+  const loans = records?.loans ?? EMPTY_LOANS;
+  const loanRepayments = records?.loanRepayments ?? EMPTY_LOAN_REPAYMENTS;
   const fundings = records?.fundings ?? EMPTY_FUNDINGS;
   const expenses = records?.expenses ?? EMPTY_EXPENSES;
   const ledger = records?.ledger ?? [];
@@ -192,11 +227,38 @@ function BusinessPage() {
       }),
     [endDate, fundings, startDate],
   );
+  const periodPayments = useMemo(
+    () =>
+      payments.filter(
+        (payment) => payment.paymentDate >= startDate && payment.paymentDate <= endDate,
+      ),
+    [endDate, payments, startDate],
+  );
+  const periodLoanRepayments = useMemo(
+    () =>
+      loanRepayments.filter(
+        (repayment) => repayment.repaymentDate >= startDate && repayment.repaymentDate <= endDate,
+      ),
+    [endDate, loanRepayments, startDate],
+  );
   const metrics = calculateBusinessMetrics({
     accounts,
     transactions: periodTransactions,
     expenses: periodExpenses,
     fundings: periodFundings,
+    customerPayments: periodPayments,
+    loans,
+    loanRepayments: periodLoanRepayments,
+    reportingCurrency,
+    exchangeRates: rates,
+  });
+  const paymentLoanMetrics = calculateBusinessMetrics({
+    accounts,
+    transactions,
+    expenses: [],
+    customerPayments: payments,
+    loans,
+    loanRepayments,
     reportingCurrency,
     exchangeRates: rates,
   });
@@ -271,6 +333,7 @@ function BusinessPage() {
         receiptAccountId: readText(form, "receiptAccountId"),
         payoutAccountId: readText(form, "payoutAccountId"),
         date: dateTimeValue(readText(form, "transactionDate")),
+        dueDate: readText(form, "dueDate") || null,
         htgReceived: readNumber(form, "htgReceived") ?? 0,
         usdSent: readNumber(form, "usdSent") ?? 0,
         exchangeRate: readNumber(form, "exchangeRate", true),
@@ -288,6 +351,84 @@ function BusinessPage() {
       toast.error(
         error instanceof Error ? error.message : "Couldn't record the customer operation.",
       );
+    }
+  }
+
+  async function onCreatePayment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = new FormData(form);
+    try {
+      await createPayment.mutateAsync({
+        idempotencyKey: idempotencyKey(form),
+        transactionId: readText(values, "paymentTransactionId"),
+        accountId: readText(values, "paymentAccountId"),
+        amount: readNumber(values, "paymentAmount") ?? 0,
+        currency: "HTG",
+        paymentMethod: readText(values, "paymentMethod"),
+        date: readText(values, "paymentDate"),
+        reference: readText(values, "paymentReference"),
+        notes: readText(values, "paymentNotes"),
+      });
+      clearIdempotencyKey(form);
+      form.reset();
+      toast.success("Customer payment recorded and added to the selected HTG account.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Couldn't record the customer payment.");
+    }
+  }
+
+  async function onCreateLoan(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = new FormData(form);
+    const accountId = readText(values, "loanAccountId");
+    const account = accounts.find((item) => item.id === accountId);
+    try {
+      if (!account) throw new Error("Choose a valid disbursement account.");
+      await createLoan.mutateAsync({
+        idempotencyKey: idempotencyKey(form),
+        customerId: readText(values, "loanCustomerId"),
+        accountId,
+        principalAmount: readNumber(values, "loanPrincipal") ?? 0,
+        currency: account.currency,
+        issuedDate: readText(values, "loanIssuedDate"),
+        dueDate: readText(values, "loanDueDate") || null,
+        interestAmount: readNumber(values, "loanInterest") ?? 0,
+        feeAmount: readNumber(values, "loanFee") ?? 0,
+        notes: readText(values, "loanNotes"),
+      });
+      clearIdempotencyKey(form);
+      form.reset();
+      toast.success("Loan issued; the principal disbursement was posted to the selected account.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Couldn't issue the loan.");
+    }
+  }
+
+  async function onCreateLoanRepayment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = new FormData(form);
+    const loanId = readText(values, "repaymentLoanId");
+    const loan = loans.find((item) => item.id === loanId);
+    try {
+      if (!loan) throw new Error("Choose a valid outstanding loan.");
+      await createLoanRepayment.mutateAsync({
+        idempotencyKey: idempotencyKey(form),
+        loanId,
+        accountId: readText(values, "repaymentAccountId"),
+        amount: readNumber(values, "repaymentAmount") ?? 0,
+        currency: loan.currency,
+        date: readText(values, "repaymentDate"),
+        reference: readText(values, "repaymentReference"),
+        notes: readText(values, "repaymentNotes"),
+      });
+      clearIdempotencyKey(form);
+      form.reset();
+      toast.success("Loan repayment recorded; principal and interest/fees were posted separately.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Couldn't record the loan repayment.");
     }
   }
 
@@ -418,6 +559,41 @@ function BusinessPage() {
         String(transaction.usdSent),
         transaction.reference ?? "",
       ]),
+      ...periodPayments.map((payment) => {
+        const transaction = transactions.find((item) => item.id === payment.customerTransactionId);
+        return [
+          "Customer payment",
+          payment.paymentDate,
+          `${transaction?.customerName ?? "Unknown customer"} · ${payment.paymentMethod}`,
+          "received",
+          payment.currency === "HTG" ? String(payment.amount) : "",
+          payment.currency === "USD" ? String(payment.amount) : "",
+          payment.reference ?? "",
+        ];
+      }),
+      ...loans
+        .filter((loan) => loan.issuedDate >= startDate && loan.issuedDate <= endDate)
+        .map((loan) => [
+          "Loan issued",
+          loan.issuedDate,
+          `${loan.customerName} · ${loan.currency} principal`,
+          loan.status,
+          loan.currency === "HTG" ? String(loan.principalAmount) : "",
+          loan.currency === "USD" ? String(loan.principalAmount) : "",
+          "",
+        ]),
+      ...periodLoanRepayments.map((repayment) => {
+        const loan = loans.find((item) => item.id === repayment.loanId);
+        return [
+          "Loan repayment",
+          repayment.repaymentDate,
+          `${loan?.customerName ?? "Unknown borrower"} · principal ${repayment.principalPaid}, interest ${repayment.interestPaid}, fee ${repayment.feePaid} ${repayment.currency}`,
+          "received",
+          repayment.currency === "HTG" ? String(repayment.amount) : "",
+          repayment.currency === "USD" ? String(repayment.amount) : "",
+          repayment.reference ?? "",
+        ];
+      }),
       ...periodFundings.map((funding) => [
         `Funding: ${funding.funding_type}`,
         funding.funding_date,
@@ -480,6 +656,15 @@ function BusinessPage() {
   );
   const htgAccounts = accounts.filter((account) => account.currency === "HTG");
   const usdAccounts = accounts.filter((account) => account.currency === "USD");
+  const activeLoans = loans.filter((loan) => loan.status !== "repaid");
+  const repaymentLoans = activeLoans.filter((loan) => {
+    const due = loanAmountsDue(loan, loanRepayments);
+    return due.principal + due.interest + due.fee > 0;
+  });
+  const dueSoonLimit = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const loansDueSoon = repaymentLoans
+    .filter((loan) => loan.dueDate !== null && loan.dueDate <= dueSoonLimit)
+    .sort((left, right) => (left.dueDate ?? "").localeCompare(right.dueDate ?? ""));
   const allOperations = [
     ...transactions.map((item) => ({
       id: item.id,
@@ -494,6 +679,9 @@ function BusinessPage() {
     updateCustomer.isPending ||
     createAccount.isPending ||
     createTransaction.isPending ||
+    createPayment.isPending ||
+    createLoan.isPending ||
+    createLoanRepayment.isPending ||
     createFunding.isPending ||
     createExpense.isPending ||
     createAdjustment.isPending ||
@@ -555,6 +743,7 @@ function BusinessPage() {
           <TabsList className="flex h-auto flex-wrap">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="transactions">Transactions</TabsTrigger>
+            <TabsTrigger value="payments-loans">Payments & loans</TabsTrigger>
             <TabsTrigger value="customers">Customers</TabsTrigger>
             <TabsTrigger value="funding">Funding & accounts</TabsTrigger>
             <TabsTrigger value="expenses">Expenses</TabsTrigger>
@@ -609,6 +798,31 @@ function BusinessPage() {
                   value: String(metrics.pendingTransactions),
                   icon: Landmark,
                 },
+                {
+                  label: "Outstanding Customer Payments (HTG)",
+                  value: formatBusinessMoney(paymentLoanMetrics.outstandingCustomerPayments, "HTG"),
+                  icon: CircleDollarSign,
+                },
+                {
+                  label: "Partially Paid Transactions",
+                  value: String(paymentLoanMetrics.partiallyPaidTransactions),
+                  icon: HandCoins,
+                },
+                {
+                  label: "Overdue Customer Payments",
+                  value: String(paymentLoanMetrics.overdueCustomerPayments),
+                  icon: Landmark,
+                },
+                {
+                  label: "Upcoming Loan Repayments (30 days)",
+                  value: String(paymentLoanMetrics.upcomingLoanRepayments),
+                  icon: PiggyBank,
+                },
+                {
+                  label: "Overdue Loans",
+                  value: String(paymentLoanMetrics.overdueLoans),
+                  icon: Landmark,
+                },
               ].map(({ label, value, icon: Icon }) => (
                 <Card key={label}>
                   <CardHeader className="pb-3">
@@ -625,6 +839,30 @@ function BusinessPage() {
                 </Card>
               ))}
             </div>
+            <Card>
+              <CardHeader>
+                <CardTitle>Outstanding loan principal by currency</CardTitle>
+                <CardDescription>
+                  Principal is not revenue. Currency totals stay separate unless recorded rates
+                  support a reporting-currency conversion.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-wrap gap-3">
+                {Object.entries(paymentLoanMetrics.outstandingLoanPrincipalByCurrency).length ===
+                0 ? (
+                  <p className="text-sm text-muted-foreground">No outstanding loan principal.</p>
+                ) : (
+                  Object.entries(paymentLoanMetrics.outstandingLoanPrincipalByCurrency).map(
+                    ([currency, amount]) => (
+                      <div key={currency} className="rounded-md border px-3 py-2">
+                        <p className="text-xs text-muted-foreground">{currency}</p>
+                        <p className="font-semibold">{formatBusinessMoney(amount, currency)}</p>
+                      </div>
+                    ),
+                  )
+                )}
+              </CardContent>
+            </Card>
             {(metrics.valuationIncomplete ||
               metrics.expensesIncomplete ||
               metrics.profitIncomplete) && (
@@ -712,8 +950,9 @@ function BusinessPage() {
               <CardHeader>
                 <CardTitle>Record customer operation</CardTitle>
                 <CardDescription>
-                  HTG received and USD sent are separate. The operation starts pending and must be
-                  explicitly confirmed before ledger balances change.
+                  HTG amount due and USD sent are separate. Confirming a transfer only posts the USD
+                  movement; actual customer collections are recorded separately under Payments &
+                  loans.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -774,7 +1013,10 @@ function BusinessPage() {
                         required
                       />
                     </Field>
-                    <Field label="HTG received">
+                    <Field label="Payment due date (optional)">
+                      <Input name="dueDate" type="date" />
+                    </Field>
+                    <Field label="HTG amount due">
                       <Input name="htgReceived" type="number" min="0" step="0.01" required />
                     </Field>
                     <Field label="USD sent">
@@ -882,7 +1124,7 @@ function BusinessPage() {
                         <tr className="border-b">
                           <th className="py-2 pr-4">Customer / reference</th>
                           <th className="py-2 pr-4">Date</th>
-                          <th className="py-2 pr-4">HTG received</th>
+                          <th className="py-2 pr-4">HTG amount due</th>
                           <th className="py-2 pr-4">USD sent</th>
                           <th className="py-2 pr-4">Status</th>
                           <th className="py-2 pr-4">Profit estimate</th>
@@ -928,6 +1170,506 @@ function BusinessPage() {
                     </table>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="payments-loans" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Collect customer payment</CardTitle>
+                <CardDescription>
+                  Record each real installment separately. Collections credit the chosen HTG
+                  account, independently of whether the related USD transfer is complete.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {transactions.filter(
+                  (transaction) =>
+                    !["failed", "cancelled", "reversed"].includes(transaction.status),
+                ).length === 0 || htgAccounts.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    Create a customer transaction and an HTG account before recording collections.
+                  </p>
+                ) : (
+                  <form
+                    className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
+                    onSubmit={(event) => void onCreatePayment(event)}
+                  >
+                    <Field label="Customer transaction">
+                      <select
+                        name="paymentTransactionId"
+                        className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                        required
+                      >
+                        {transactions
+                          .filter(
+                            (transaction) =>
+                              !["failed", "cancelled", "reversed"].includes(transaction.status),
+                          )
+                          .map((transaction) => (
+                            <option key={transaction.id} value={transaction.id}>
+                              {transaction.customerName} ·{" "}
+                              {formatBusinessMoney(transaction.htgReceived, "HTG")} ·{" "}
+                              {transaction.status}
+                            </option>
+                          ))}
+                      </select>
+                    </Field>
+                    <Field label="Collection account">
+                      <select
+                        name="paymentAccountId"
+                        className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                        required
+                      >
+                        {htgAccounts.map((account) => (
+                          <option key={account.id} value={account.id}>
+                            {account.name} · HTG
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Amount collected (HTG)">
+                      <Input name="paymentAmount" type="number" min="0.01" step="0.01" required />
+                    </Field>
+                    <Field label="Payment method">
+                      <select
+                        name="paymentMethod"
+                        className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                        defaultValue="cash"
+                        required
+                      >
+                        <option value="cash">Cash</option>
+                        <option value="moncash">MonCash</option>
+                        <option value="natcash">NatCash</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </Field>
+                    <Field label="Payment date">
+                      <Input name="paymentDate" type="date" defaultValue={today()} required />
+                    </Field>
+                    <Field label="Reference (optional)">
+                      <Input name="paymentReference" maxLength={200} />
+                    </Field>
+                    <Field label="Notes (optional)">
+                      <Input name="paymentNotes" maxLength={1000} />
+                    </Field>
+                    <div className="flex items-end">
+                      <Button type="submit" disabled={isMutating}>
+                        Record payment
+                      </Button>
+                    </div>
+                  </form>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Customer payment balances</CardTitle>
+                <CardDescription>
+                  Paid and outstanding amounts are calculated from persisted payment records.
+                  Overpayments are rejected atomically.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {transactions.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No customer transactions yet.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[780px] text-sm">
+                      <thead className="text-left text-muted-foreground">
+                        <tr className="border-b">
+                          <th className="py-2 pr-3">Customer</th>
+                          <th className="py-2 pr-3">Due date</th>
+                          <th className="py-2 pr-3">Amount due (HTG)</th>
+                          <th className="py-2 pr-3">Paid (HTG)</th>
+                          <th className="py-2 pr-3">Outstanding (HTG)</th>
+                          <th className="py-2 pr-3">Payment status</th>
+                          <th className="py-2 pr-3">Transfer status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {transactions.map((transaction) => {
+                          const paymentSummary = calculateCustomerPaymentSummary(
+                            transaction,
+                            payments.filter(
+                              (payment) => payment.customerTransactionId === transaction.id,
+                            ),
+                          );
+                          return (
+                            <tr key={transaction.id} className="border-b align-top">
+                              <td className="py-3 pr-3">{transaction.customerName}</td>
+                              <td className="py-3 pr-3">{transaction.dueDate ?? "—"}</td>
+                              <td className="py-3 pr-3">
+                                {formatBusinessMoney(transaction.htgReceived, "HTG")}
+                              </td>
+                              <td className="py-3 pr-3">
+                                {formatBusinessMoney(paymentSummary.totalPaid, "HTG")}
+                              </td>
+                              <td className="py-3 pr-3">
+                                {formatBusinessMoney(paymentSummary.outstanding, "HTG")}
+                              </td>
+                              <td className="py-3 pr-3">
+                                <StatusBadge status={paymentSummary.status} />
+                              </td>
+                              <td className="py-3 pr-3">
+                                <StatusBadge status={transaction.status} />
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                <div className="overflow-x-auto">
+                  <h3 className="mb-2 font-medium">Payment history</h3>
+                  {payments.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No payments recorded.</p>
+                  ) : (
+                    <table className="w-full min-w-[700px] text-sm">
+                      <thead className="text-left text-muted-foreground">
+                        <tr className="border-b">
+                          <th className="py-2 pr-3">Date</th>
+                          <th className="py-2 pr-3">Customer</th>
+                          <th className="py-2 pr-3">Amount</th>
+                          <th className="py-2 pr-3">Method</th>
+                          <th className="py-2 pr-3">Account</th>
+                          <th className="py-2 pr-3">Reference / notes</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {payments.map((payment) => {
+                          const transaction = transactions.find(
+                            (item) => item.id === payment.customerTransactionId,
+                          );
+                          const account = accounts.find((item) => item.id === payment.accountId);
+                          return (
+                            <tr key={payment.id} className="border-b">
+                              <td className="py-2 pr-3">{payment.paymentDate}</td>
+                              <td className="py-2 pr-3">
+                                {transaction?.customerName ?? "Unknown customer"}
+                              </td>
+                              <td className="py-2 pr-3">
+                                {formatBusinessMoney(payment.amount, payment.currency)}
+                              </td>
+                              <td className="py-2 pr-3 capitalize">{payment.paymentMethod}</td>
+                              <td className="py-2 pr-3">{account?.name ?? "Unknown account"}</td>
+                              <td className="py-2 pr-3">
+                                {payment.reference ?? payment.notes ?? "—"}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Issue loan</CardTitle>
+                <CardDescription>
+                  Issuance immediately disburses principal from the selected account. Principal is
+                  an asset, not revenue; agreed interest and fees are recognized only when
+                  collected.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {customers.length === 0 || accounts.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    Create a customer and account before issuing a loan.
+                  </p>
+                ) : (
+                  <form
+                    className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
+                    onSubmit={(event) => void onCreateLoan(event)}
+                  >
+                    <Field label="Borrower">
+                      <select
+                        name="loanCustomerId"
+                        className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                        required
+                      >
+                        {customers.map((customer) => (
+                          <option key={customer.id} value={customer.id}>
+                            {customer.name}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Disbursement account">
+                      <select
+                        name="loanAccountId"
+                        className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                        required
+                      >
+                        {accounts.map((account) => (
+                          <option key={account.id} value={account.id}>
+                            {account.name} · {account.currency}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Principal amount">
+                      <Input name="loanPrincipal" type="number" min="0.01" step="0.01" required />
+                    </Field>
+                    <Field label="Date issued">
+                      <Input name="loanIssuedDate" type="date" defaultValue={today()} required />
+                    </Field>
+                    <Field label="Due date (optional)">
+                      <Input name="loanDueDate" type="date" />
+                    </Field>
+                    <Field label="Agreed interest (optional)">
+                      <Input
+                        name="loanInterest"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        defaultValue="0"
+                      />
+                    </Field>
+                    <Field label="Agreed fee (optional)">
+                      <Input name="loanFee" type="number" min="0" step="0.01" defaultValue="0" />
+                    </Field>
+                    <Field label="Notes (optional)">
+                      <Input name="loanNotes" maxLength={1000} />
+                    </Field>
+                    <div className="flex items-end">
+                      <Button type="submit" disabled={isMutating}>
+                        Issue loan
+                      </Button>
+                    </div>
+                  </form>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Record loan repayment</CardTitle>
+                <CardDescription>
+                  Repayments apply first to agreed interest, then fees, then principal. The ledger
+                  records principal and income components separately and prevents overpayment.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {repaymentLoans.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No outstanding loans are available for repayment.
+                  </p>
+                ) : (
+                  <form
+                    className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
+                    onSubmit={(event) => void onCreateLoanRepayment(event)}
+                  >
+                    <Field label="Loan">
+                      <select
+                        name="repaymentLoanId"
+                        className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                        required
+                      >
+                        {repaymentLoans.map((loan) => {
+                          const due = loanAmountsDue(loan, loanRepayments);
+                          return (
+                            <option key={loan.id} value={loan.id}>
+                              {loan.customerName} ·{" "}
+                              {formatBusinessMoney(
+                                due.principal + due.interest + due.fee,
+                                loan.currency,
+                              )}{" "}
+                              due
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </Field>
+                    <Field label="Receiving account">
+                      <select
+                        name="repaymentAccountId"
+                        className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                        required
+                      >
+                        {accounts.map((account) => (
+                          <option key={account.id} value={account.id}>
+                            {account.name} · {account.currency}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Amount received">
+                      <Input name="repaymentAmount" type="number" min="0.01" step="0.01" required />
+                    </Field>
+                    <Field label="Repayment date">
+                      <Input name="repaymentDate" type="date" defaultValue={today()} required />
+                    </Field>
+                    <Field label="Reference (optional)">
+                      <Input name="repaymentReference" maxLength={200} />
+                    </Field>
+                    <Field label="Notes (optional)">
+                      <Input name="repaymentNotes" maxLength={1000} />
+                    </Field>
+                    <div className="flex items-end">
+                      <Button type="submit" disabled={isMutating}>
+                        Record repayment
+                      </Button>
+                    </div>
+                  </form>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Loan balances and repayment history</CardTitle>
+                <CardDescription>
+                  Loan balances remain grouped by currency. Due dates and status update from the
+                  persisted loan and repayment records.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {loans.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No loans recorded.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[850px] text-sm">
+                      <thead className="text-left text-muted-foreground">
+                        <tr className="border-b">
+                          <th className="py-2 pr-3">Borrower</th>
+                          <th className="py-2 pr-3">Issued / due</th>
+                          <th className="py-2 pr-3">Principal outstanding</th>
+                          <th className="py-2 pr-3">Interest / fees outstanding</th>
+                          <th className="py-2 pr-3">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {loans.map((loan) => {
+                          const due = loanAmountsDue(loan, loanRepayments);
+                          const isPastDue =
+                            loan.dueDate !== null &&
+                            loan.dueDate < today() &&
+                            due.principal + due.interest + due.fee > 0;
+                          return (
+                            <tr key={loan.id} className="border-b">
+                              <td className="py-3 pr-3">{loan.customerName}</td>
+                              <td className="py-3 pr-3">
+                                {loan.issuedDate} / {loan.dueDate ?? "No due date"}
+                              </td>
+                              <td className="py-3 pr-3">
+                                {formatBusinessMoney(due.principal, loan.currency)}
+                              </td>
+                              <td className="py-3 pr-3">
+                                {formatBusinessMoney(due.interest + due.fee, loan.currency)}
+                              </td>
+                              <td className="py-3 pr-3">
+                                <StatusBadge
+                                  status={
+                                    due.principal + due.interest + due.fee <= 0
+                                      ? "repaid"
+                                      : isPastDue
+                                        ? "overdue"
+                                        : loan.status
+                                  }
+                                />
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                <section className="rounded-md border p-3">
+                  <h3 className="mb-2 font-medium">Upcoming and overdue loan due dates</h3>
+                  {loansDueSoon.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No outstanding loans are due within the next 30 days or overdue.
+                    </p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[500px] text-sm">
+                        <thead className="text-left text-muted-foreground">
+                          <tr className="border-b">
+                            <th className="py-2 pr-3">Borrower</th>
+                            <th className="py-2 pr-3">Due date</th>
+                            <th className="py-2 pr-3">Amount remaining</th>
+                            <th className="py-2 pr-3">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {loansDueSoon.map((loan) => {
+                            const due = loanAmountsDue(loan, loanRepayments);
+                            const isPastDue = (loan.dueDate ?? "") < today();
+                            return (
+                              <tr key={loan.id} className="border-b">
+                                <td className="py-2 pr-3">{loan.customerName}</td>
+                                <td className="py-2 pr-3">{loan.dueDate}</td>
+                                <td className="py-2 pr-3">
+                                  {formatBusinessMoney(
+                                    due.principal + due.interest + due.fee,
+                                    loan.currency,
+                                  )}
+                                </td>
+                                <td className="py-2 pr-3">
+                                  <StatusBadge status={isPastDue ? "overdue" : "upcoming"} />
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </section>
+                <div className="overflow-x-auto">
+                  <h3 className="mb-2 font-medium">Repayment history</h3>
+                  {loanRepayments.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No loan repayments recorded.</p>
+                  ) : (
+                    <table className="w-full min-w-[750px] text-sm">
+                      <thead className="text-left text-muted-foreground">
+                        <tr className="border-b">
+                          <th className="py-2 pr-3">Date</th>
+                          <th className="py-2 pr-3">Borrower</th>
+                          <th className="py-2 pr-3">Principal</th>
+                          <th className="py-2 pr-3">Interest</th>
+                          <th className="py-2 pr-3">Fee</th>
+                          <th className="py-2 pr-3">Total received</th>
+                          <th className="py-2 pr-3">Reference</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {loanRepayments.map((repayment) => {
+                          const loan = loans.find((item) => item.id === repayment.loanId);
+                          return (
+                            <tr key={repayment.id} className="border-b">
+                              <td className="py-2 pr-3">{repayment.repaymentDate}</td>
+                              <td className="py-2 pr-3">
+                                {loan?.customerName ?? "Unknown borrower"}
+                              </td>
+                              <td className="py-2 pr-3">
+                                {formatBusinessMoney(repayment.principalPaid, repayment.currency)}
+                              </td>
+                              <td className="py-2 pr-3">
+                                {formatBusinessMoney(repayment.interestPaid, repayment.currency)}
+                              </td>
+                              <td className="py-2 pr-3">
+                                {formatBusinessMoney(repayment.feePaid, repayment.currency)}
+                              </td>
+                              <td className="py-2 pr-3">
+                                {formatBusinessMoney(repayment.amount, repayment.currency)}
+                              </td>
+                              <td className="py-2 pr-3">{repayment.reference ?? "—"}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

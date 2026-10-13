@@ -8,6 +8,9 @@ import type {
   BusinessAccount,
   BusinessCustomer,
   BusinessExpense,
+  BusinessLoan,
+  BusinessLoanRepayment,
+  BusinessPayment,
   BusinessTransaction,
 } from "@/lib/business";
 
@@ -17,6 +20,9 @@ type FundingRow = Database["public"]["Tables"]["business_fundings"]["Row"];
 type ExpenseRow = Database["public"]["Tables"]["business_expenses"]["Row"];
 type LedgerRow = Database["public"]["Tables"]["business_account_ledger"]["Row"];
 type ExchangeRateRow = Database["public"]["Tables"]["business_exchange_rates"]["Row"];
+type PaymentRow = Database["public"]["Tables"]["business_customer_payments"]["Row"];
+type LoanRow = Database["public"]["Tables"]["business_loans"]["Row"];
+type LoanRepaymentRow = Database["public"]["Tables"]["business_loan_repayments"]["Row"];
 
 export type BusinessFunding = FundingRow;
 export type BusinessLedgerEntry = LedgerRow;
@@ -26,6 +32,9 @@ export type BusinessRecords = {
   customers: BusinessCustomer[];
   accounts: BusinessAccount[];
   transactions: BusinessTransaction[];
+  payments: BusinessPayment[];
+  loans: BusinessLoan[];
+  loanRepayments: BusinessLoanRepayment[];
   fundings: BusinessFunding[];
   expenses: BusinessExpense[];
   ledger: BusinessLedgerEntry[];
@@ -75,6 +84,7 @@ function mapTransaction(
     receiptAccountId: row.receipt_account_id,
     payoutAccountId: row.payout_account_id,
     transactionDate: row.transaction_date,
+    dueDate: row.due_date,
     htgReceived: Number(row.htg_received),
     usdSent: Number(row.usd_sent),
     exchangeRate: row.exchange_rate === null ? null : Number(row.exchange_rate),
@@ -85,6 +95,56 @@ function mapTransaction(
     status: row.status as BusinessTransaction["status"],
     ...(row.reference_code === null ? {} : { reference: row.reference_code }),
     ...(row.notes === null ? {} : { notes: row.notes }),
+  };
+}
+
+function mapPayment(row: PaymentRow): BusinessPayment {
+  return {
+    id: row.id,
+    customerTransactionId: row.customer_transaction_id,
+    accountId: row.account_id,
+    amount: Number(row.amount),
+    currency: row.currency,
+    paymentMethod: row.payment_method as BusinessPayment["paymentMethod"],
+    paymentDate: row.payment_date,
+    ...(row.reference === null ? {} : { reference: row.reference }),
+    ...(row.notes === null ? {} : { notes: row.notes }),
+    createdAt: row.created_at,
+  };
+}
+
+function mapLoan(row: LoanRow, customersById: Map<string, string>): BusinessLoan {
+  return {
+    id: row.id,
+    customerId: row.customer_id,
+    customerName: customersById.get(row.customer_id) ?? "Unknown customer",
+    accountId: row.account_id,
+    principalAmount: Number(row.principal_amount),
+    currency: row.currency,
+    issuedDate: row.issued_date,
+    dueDate: row.due_date,
+    interestAmount: Number(row.interest_amount),
+    feeAmount: Number(row.fee_amount),
+    status: row.status as BusinessLoan["status"],
+    ...(row.notes === null ? {} : { notes: row.notes }),
+    createdAt: row.created_at,
+  };
+}
+
+function mapLoanRepayment(row: LoanRepaymentRow): BusinessLoanRepayment {
+  return {
+    id: row.id,
+    loanId: row.loan_id,
+    accountId: row.account_id,
+    amount: Number(row.amount),
+    principalPaid: Number(row.principal_paid),
+    interestPaid: Number(row.interest_paid),
+    feePaid: Number(row.fee_paid),
+    currency: row.currency,
+    repaymentDate: row.repayment_date,
+    ...(row.reference === null ? {} : { reference: row.reference }),
+    ...(row.notes === null ? {} : { notes: row.notes }),
+    createdAt: row.created_at,
   };
 }
 
@@ -104,6 +164,9 @@ export function useBusinessRecords() {
         expensesResult,
         ledgerResult,
         ratesResult,
+        paymentsResult,
+        loansResult,
+        repaymentsResult,
       ] = await Promise.all([
         supabase.from("business_customers").select("*").order("display_name"),
         supabase.from("business_accounts").select("*").order("name"),
@@ -123,6 +186,15 @@ export function useBusinessRecords() {
           .select("*")
           .lte("effective_date", new Date().toISOString().slice(0, 10))
           .order("effective_date", { ascending: false }),
+        supabase
+          .from("business_customer_payments")
+          .select("*")
+          .order("payment_date", { ascending: false }),
+        supabase.from("business_loans").select("*").order("issued_date", { ascending: false }),
+        supabase
+          .from("business_loan_repayments")
+          .select("*")
+          .order("repayment_date", { ascending: false }),
       ]);
 
       const customers = unwrap(customersResult).map(mapCustomer);
@@ -137,6 +209,9 @@ export function useBusinessRecords() {
       const expenseRows = unwrap(expensesResult);
       const ledger = unwrap(ledgerResult);
       const exchangeRates = unwrap(ratesResult);
+      const payments = unwrap(paymentsResult).map(mapPayment);
+      const loans = unwrap(loansResult).map((row) => mapLoan(row, customerById));
+      const loanRepayments = unwrap(repaymentsResult).map(mapLoanRepayment);
       const latestRates = new Map<string, number>();
       for (const rate of exchangeRates) {
         if (!latestRates.has(rate.currency)) {
@@ -154,6 +229,9 @@ export function useBusinessRecords() {
           balance: Number(accountBalances.get(account.id) ?? account.opening_balance),
         })),
         transactions,
+        payments,
+        loans,
+        loanRepayments,
         fundings: fundingRows,
         expenses: expenseRows.map((expense: ExpenseRow) => ({
           id: expense.id,
@@ -282,6 +360,7 @@ export function useCreateBusinessTransaction() {
       receiptAccountId: string;
       payoutAccountId: string;
       date: string;
+      dueDate: string | null;
       htgReceived: number;
       usdSent: number;
       exchangeRate: number | null;
@@ -293,7 +372,7 @@ export function useCreateBusinessTransaction() {
       notes?: string;
     }) => {
       const result = unwrap(
-        await supabase.rpc("create_business_customer_transaction", {
+        await supabase.rpc("create_business_customer_transaction_with_due_date", {
           p_idempotency_key: values.idempotencyKey,
           p_customer_id: values.customerId,
           p_receipt_account_id: values.receiptAccountId,
@@ -308,10 +387,104 @@ export function useCreateBusinessTransaction() {
           p_other_expenses_usd: values.otherExpenses,
           p_reference_code: values.reference?.trim() || null,
           p_notes: values.notes?.trim() || null,
+          p_due_date: values.dueDate,
         }),
       );
       return result;
     },
+    onSuccess: invalidate,
+  });
+}
+
+export function useCreateBusinessCustomerPayment() {
+  const invalidate = useBusinessInvalidation();
+  return useMutation({
+    mutationFn: async (values: {
+      idempotencyKey: string;
+      transactionId: string;
+      accountId: string;
+      amount: number;
+      currency: string;
+      paymentMethod: string;
+      date: string;
+      reference?: string;
+      notes?: string;
+    }) =>
+      unwrap(
+        await supabase.rpc("create_business_customer_payment", {
+          p_idempotency_key: values.idempotencyKey,
+          p_customer_transaction_id: values.transactionId,
+          p_account_id: values.accountId,
+          p_amount: values.amount,
+          p_currency: values.currency,
+          p_payment_method: values.paymentMethod,
+          p_payment_date: values.date,
+          p_reference: values.reference?.trim() || null,
+          p_notes: values.notes?.trim() || null,
+        }),
+      ),
+    onSuccess: invalidate,
+  });
+}
+
+export function useCreateBusinessLoan() {
+  const invalidate = useBusinessInvalidation();
+  return useMutation({
+    mutationFn: async (values: {
+      idempotencyKey: string;
+      customerId: string;
+      accountId: string;
+      principalAmount: number;
+      currency: string;
+      issuedDate: string;
+      dueDate: string | null;
+      interestAmount: number;
+      feeAmount: number;
+      notes?: string;
+    }) =>
+      unwrap(
+        await supabase.rpc("create_business_loan", {
+          p_idempotency_key: values.idempotencyKey,
+          p_customer_id: values.customerId,
+          p_account_id: values.accountId,
+          p_principal_amount: values.principalAmount,
+          p_currency: values.currency,
+          p_issued_date: values.issuedDate,
+          p_due_date: values.dueDate,
+          p_interest_amount: values.interestAmount,
+          p_fee_amount: values.feeAmount,
+          p_notes: values.notes?.trim() || null,
+        }),
+      ),
+    onSuccess: invalidate,
+  });
+}
+
+export function useCreateBusinessLoanRepayment() {
+  const invalidate = useBusinessInvalidation();
+  return useMutation({
+    mutationFn: async (values: {
+      idempotencyKey: string;
+      loanId: string;
+      accountId: string;
+      amount: number;
+      currency: string;
+      date: string;
+      reference?: string;
+      notes?: string;
+    }) =>
+      unwrap(
+        await supabase.rpc("create_business_loan_repayment", {
+          p_idempotency_key: values.idempotencyKey,
+          p_loan_id: values.loanId,
+          p_account_id: values.accountId,
+          p_amount: values.amount,
+          p_currency: values.currency,
+          p_repayment_date: values.date,
+          p_reference: values.reference?.trim() || null,
+          p_notes: values.notes?.trim() || null,
+        }),
+      ),
     onSuccess: invalidate,
   });
 }
@@ -410,12 +583,16 @@ export function useCompleteBusinessOperation() {
   return useMutation({
     mutationFn: async ({ type, id }: { type: string; id: string }) => {
       await currentUserId();
-      throwIfError(
-        await supabase.rpc("complete_business_operation", {
-          p_operation_type: type,
-          p_operation_id: id,
-        }),
-      );
+      if (type === "customer_transaction") {
+        throwIfError(await supabase.rpc("complete_business_transfer", { p_operation_id: id }));
+      } else {
+        throwIfError(
+          await supabase.rpc("complete_business_non_transfer_operation", {
+            p_operation_type: type,
+            p_operation_id: id,
+          }),
+        );
+      }
     },
     onSuccess: invalidate,
   });
