@@ -229,6 +229,7 @@ function BusinessPage() {
   const [accountFilter, setAccountFilter] = useState("all");
   const [reportingCurrency, setReportingCurrency] = useState<BusinessCurrency>("USD");
   const [activeTab, setActiveTab] = useState("overview");
+  const [accountDialogOpen, setAccountDialogOpen] = useState(false);
   const [meruBalanceVisible, setMeruBalanceVisible] = useState(true);
   const [entryType, setEntryType] = useState<"transfer" | "deposit" | "loan">("transfer");
   const [entryDialogOpen, setEntryDialogOpen] = useState(false);
@@ -590,6 +591,7 @@ function BusinessPage() {
         openingBalance: readNumber(form, "openingBalance") ?? 0,
       });
       event.currentTarget.reset();
+      setAccountDialogOpen(false);
       toast.success("Account saved with its opening balance.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Couldn't save the account.");
@@ -731,7 +733,6 @@ function BusinessPage() {
       });
       clearIdempotencyKey(event.currentTarget);
       event.currentTarget.reset();
-      setEntryDialogOpen(false);
       toast.success("Funding recorded as pending. Confirm it after the credit is verified.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Couldn't record funding.");
@@ -4445,8 +4446,11 @@ function BusinessPage() {
             </div>
           </TabsContent>
 
-          <TabsContent value="funding" className="space-y-4">
-            <Card className="relative overflow-hidden border-0 bg-gradient-to-r from-[#071b35] via-[#0b3150] to-[#0b655f] text-white shadow-lg">
+          <TabsContent
+            value="funding"
+            className="grid items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(320px,0.95fr)]"
+          >
+            <Card className="relative overflow-hidden border-0 bg-gradient-to-r from-[#071b35] via-[#0b3150] to-[#0b655f] text-white shadow-lg xl:col-start-1 xl:row-start-1">
               <div
                 className="pointer-events-none absolute -right-10 -top-14 size-56 rounded-full border-[32px] border-white/5"
                 aria-hidden="true"
@@ -4463,36 +4467,10 @@ function BusinessPage() {
                     Solde actuel basé sur les écritures confirmées des comptes Meru
                   </p>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="bg-white/10 text-white hover:bg-white/20"
-                    onClick={() =>
-                      document
-                        .getElementById("business-funding-form")
-                        ?.scrollIntoView({ behavior: "smooth" })
-                    }
-                  >
-                    <Plus className="size-4" aria-hidden="true" /> Ajouter des fonds
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="bg-white/10 text-white hover:bg-white/20"
-                    onClick={() =>
-                      document
-                        .getElementById("business-account-form")
-                        ?.scrollIntoView({ behavior: "smooth" })
-                    }
-                  >
-                    Créer un compte
-                  </Button>
-                </div>
               </CardContent>
             </Card>
 
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-2 xl:col-start-1 xl:row-start-2 xl:grid-cols-2">
               {[
                 {
                   label: "Fonds disponibles",
@@ -4545,12 +4523,78 @@ function BusinessPage() {
               ))}
             </div>
 
-            <Card className="border-cyan-900/20 shadow-sm dark:border-[#173451]">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Mes comptes</CardTitle>
-                <CardDescription>
-                  Soldes d’ouverture, soldes actuels confirmés et apports crédités par compte.
-                </CardDescription>
+            <Card className="border-cyan-900/20 shadow-sm dark:border-[#173451] xl:col-start-1 xl:row-start-3">
+              <CardHeader className="flex flex-row items-center justify-between gap-3 pb-3">
+                <div>
+                  <CardTitle className="text-base">Mes comptes</CardTitle>
+                  <CardDescription>Suivez vos comptes et leurs soldes.</CardDescription>
+                </div>
+                <Dialog open={accountDialogOpen} onOpenChange={setAccountDialogOpen}>
+                  <Button
+                    type="button"
+                    size="sm"
+                    aria-label="Ajouter un compte"
+                    className="shrink-0 bg-teal-500 text-[#041521] hover:bg-teal-400"
+                    onClick={() => setAccountDialogOpen(true)}
+                  >
+                    <Plus className="size-4" aria-hidden="true" />
+                    <span className="hidden sm:inline">Ajouter un compte</span>
+                  </Button>
+                  <DialogContent className="max-h-[90dvh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle>Ajouter un compte</DialogTitle>
+                      <DialogDescription>
+                        Enregistrez un nouveau compte et son solde d’ouverture.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <form
+                      id="business-account-form"
+                      className="space-y-4"
+                      onSubmit={(event) => void onCreateAccount(event)}
+                    >
+                      <Field label="Nom du compte">
+                        <Input name="name" required maxLength={100} />
+                      </Field>
+                      <Field label="Type de compte">
+                        <select
+                          name="type"
+                          className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                        >
+                          <option value="meru">Portefeuille Meru</option>
+                          <option value="cash">Espèces</option>
+                          <option value="crypto">Cryptomonnaie</option>
+                          <option value="other">Autre</option>
+                        </select>
+                      </Field>
+                      <Field
+                        label="Devise / code de l’actif"
+                        hint="Exemple : USD, HTG, EUR ou BTC."
+                      >
+                        <Input
+                          name="currency"
+                          defaultValue="USD"
+                          required
+                          minLength={3}
+                          maxLength={8}
+                          pattern="[A-Za-z0-9]{3,8}"
+                        />
+                      </Field>
+                      <Field label="Solde d’ouverture">
+                        <Input
+                          name="openingBalance"
+                          type="number"
+                          min="0"
+                          step="0.00000001"
+                          defaultValue="0"
+                          required
+                        />
+                      </Field>
+                      <Button type="submit" className="w-full" disabled={isMutating}>
+                        Créer le compte
+                      </Button>
+                    </form>
+                  </DialogContent>
+                </Dialog>
               </CardHeader>
               <CardContent>
                 {accounts.length === 0 ? (
@@ -4597,91 +4641,36 @@ function BusinessPage() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="border-cyan-900/20 shadow-sm dark:border-[#173451] xl:col-start-2 xl:row-span-4 xl:row-start-1">
               <CardHeader>
-                <CardTitle>Créer un compte</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <span className="grid size-8 place-items-center rounded-lg bg-teal-500/15 text-teal-600 dark:text-teal-300">
+                    <Plus className="size-4" aria-hidden="true" />
+                  </span>
+                  Ajouter un financement
+                </CardTitle>
                 <CardDescription>
-                  Le solde d’ouverture est enregistré une seule fois. Créez des comptes en HTG, USD
-                  ou unités crypto selon vos besoins.
+                  Ajoutez des fonds sur votre portefeuille ou un autre compte. Le solde est mis à
+                  jour après confirmation.
                 </CardDescription>
               </CardHeader>
-              <CardContent>
-                <form
-                  id="business-account-form"
-                  className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
-                  onSubmit={(event) => void onCreateAccount(event)}
-                >
-                  <Field label="Nom du compte">
-                    <Input name="name" required maxLength={100} />
-                  </Field>
-                  <Field label="Type de compte">
-                    <select
-                      name="type"
-                      className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-                    >
-                      <option value="meru">Portefeuille Meru</option>
-                      <option value="cash">Espèces</option>
-                      <option value="crypto">Cryptomonnaie</option>
-                      <option value="other">Autre</option>
-                    </select>
-                  </Field>
-                  <Field
-                    label="Devise / code de l’actif"
-                    hint="Utilisez un code explicite, par exemple USD, HTG, EUR ou BTC."
-                  >
-                    <Input
-                      name="currency"
-                      defaultValue="USD"
-                      required
-                      minLength={3}
-                      maxLength={8}
-                      pattern="[A-Za-z0-9]{3,8}"
-                    />
-                  </Field>
-                  <Field label="Solde d’ouverture">
-                    <Input
-                      name="openingBalance"
-                      type="number"
-                      min="0"
-                      step="0.00000001"
-                      defaultValue="0"
-                      required
-                    />
-                  </Field>
-                  <Button
-                    type="submit"
-                    className="sm:col-span-2 xl:col-span-4"
-                    disabled={isMutating}
-                  >
-                    Créer le compte
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle>Enregistrer un financement ou un transfert d’actif</CardTitle>
-                <CardDescription>
-                  Seul le montant effectivement crédité modifie le solde de destination. Les apports
-                  externes ne sont pas des revenus; les transferts entre comptes déplacent des
-                  actifs sans créer de revenu.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-5 [&_input]:h-9 [&_input]:text-xs [&_label]:text-xs">
                 {accounts.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    Créez un compte avant d’enregistrer un financement.
-                  </p>
+                  <div className="rounded-lg border border-dashed p-4 text-center">
+                    <p className="text-sm text-muted-foreground">
+                      Ajoutez d’abord un compte depuis la section « Mes comptes ».
+                    </p>
+                  </div>
                 ) : (
                   <form
                     id="business-funding-form"
-                    className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
+                    className="space-y-3"
                     onSubmit={(event) => void onCreateFunding(event)}
                   >
                     <Field label="Type d’opération">
                       <select
                         name="fundingType"
-                        className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
                       >
                         <option value="replenishment">Apport externe Meru</option>
                         <option value="crypto_purchase">Achat de cryptomonnaie</option>
@@ -4695,7 +4684,7 @@ function BusinessPage() {
                     >
                       <select
                         name="sourceAccountId"
-                        className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
                       >
                         <option value="">Externe / non suivi</option>
                         {accounts.map((account) => (
@@ -4708,7 +4697,7 @@ function BusinessPage() {
                     <Field label="Compte de destination">
                       <select
                         name="destinationAccountId"
-                        className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
                         required
                       >
                         {accounts.map((account) => (
@@ -4775,16 +4764,81 @@ function BusinessPage() {
                     </Field>
                     <Button
                       type="submit"
-                      className="sm:col-span-2 xl:col-span-4"
+                      className="w-full bg-teal-500 text-[#041521] hover:bg-teal-400"
                       disabled={isMutating}
                     >
-                      Enregistrer le financement en attente
+                      <Receipt className="size-4" aria-hidden="true" />
+                      Enregistrer le financement
                     </Button>
                   </form>
                 )}
+                <div className="border-t pt-4">
+                  <div className="mb-3 flex items-center justify-between gap-2">
+                    <h3 className="text-sm font-semibold">Financements récents</h3>
+                    <Button
+                      type="button"
+                      variant="link"
+                      size="sm"
+                      className="h-auto p-0 text-xs"
+                      onClick={() =>
+                        document
+                          .getElementById("business-funding-history")
+                          ?.scrollIntoView({ behavior: "smooth" })
+                      }
+                    >
+                      Voir tout <ChevronRight className="size-3" aria-hidden="true" />
+                    </Button>
+                  </div>
+                  {fundings.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">Aucun financement enregistré.</p>
+                  ) : (
+                    <ul className="space-y-3">
+                      {[...fundings]
+                        .sort(
+                          (left, right) =>
+                            new Date(right.funding_date).getTime() -
+                            new Date(left.funding_date).getTime(),
+                        )
+                        .slice(0, 3)
+                        .map((item) => {
+                          const destination = accounts.find(
+                            (account) => account.id === item.destination_account_id,
+                          );
+                          return (
+                            <li key={item.id} className="flex items-center gap-3 text-xs">
+                              <span className="grid size-8 shrink-0 place-items-center rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-300">
+                                <ArrowDownToLine className="size-4" aria-hidden="true" />
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate font-medium">
+                                  {item.funding_type.replaceAll("_", " ")}
+                                  {destination ? ` · ${destination.name}` : ""}
+                                </span>
+                                <span className="text-[10px] text-muted-foreground">
+                                  {new Date(item.funding_date).toLocaleDateString()}
+                                </span>
+                              </span>
+                              <span className="text-right">
+                                <span className="block font-semibold">
+                                  {formatBusinessMoney(
+                                    Number(item.credited_amount),
+                                    destination?.currency ?? "",
+                                  )}
+                                </span>
+                                <StatusBadge status={item.status} />
+                              </span>
+                            </li>
+                          );
+                        })}
+                    </ul>
+                  )}
+                </div>
               </CardContent>
             </Card>
-            <Card>
+            <Card
+              id="business-funding-history"
+              className="border-cyan-900/20 shadow-sm dark:border-[#173451] xl:col-start-1 xl:row-start-4"
+            >
               <CardHeader>
                 <CardTitle>Historique des financements et grand livre</CardTitle>
                 <CardDescription>
