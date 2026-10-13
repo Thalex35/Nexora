@@ -67,6 +67,7 @@ export type Database = {
           receipt_account_id: string;
           payout_account_id: string;
           transaction_date: string;
+          due_date: string | null;
           htg_received: number;
           usd_sent: number;
           exchange_rate: number | null;
@@ -88,6 +89,7 @@ export type Database = {
           receipt_account_id: string;
           payout_account_id: string;
           transaction_date?: string;
+          due_date?: string | null;
           htg_received?: number;
           usd_sent?: number;
           exchange_rate?: number | null;
@@ -101,6 +103,104 @@ export type Database = {
           notes?: string | null;
           created_at?: string;
           updated_at?: string;
+        }
+      >;
+      business_customer_payments: BusinessTable<
+        {
+          id: string;
+          user_id: string;
+          customer_transaction_id: string;
+          account_id: string;
+          amount: number;
+          currency: string;
+          payment_method: string;
+          payment_date: string;
+          reference: string | null;
+          notes: string | null;
+          idempotency_key: string;
+          created_at: string;
+        },
+        {
+          id?: string;
+          user_id: string;
+          customer_transaction_id: string;
+          account_id: string;
+          amount: number;
+          currency: string;
+          payment_method: string;
+          payment_date?: string;
+          reference?: string | null;
+          notes?: string | null;
+          idempotency_key: string;
+          created_at?: string;
+        }
+      >;
+      business_loans: BusinessTable<
+        {
+          id: string;
+          user_id: string;
+          customer_id: string;
+          account_id: string;
+          principal_amount: number;
+          currency: string;
+          issued_date: string;
+          due_date: string | null;
+          interest_amount: number;
+          fee_amount: number;
+          status: string;
+          notes: string | null;
+          idempotency_key: string;
+          created_at: string;
+        },
+        {
+          id?: string;
+          user_id: string;
+          customer_id: string;
+          account_id: string;
+          principal_amount: number;
+          currency: string;
+          issued_date?: string;
+          due_date?: string | null;
+          interest_amount?: number;
+          fee_amount?: number;
+          status: string;
+          notes?: string | null;
+          idempotency_key: string;
+          created_at?: string;
+        }
+      >;
+      business_loan_repayments: BusinessTable<
+        {
+          id: string;
+          user_id: string;
+          loan_id: string;
+          account_id: string;
+          amount: number;
+          principal_paid: number;
+          interest_paid: number;
+          fee_paid: number;
+          currency: string;
+          repayment_date: string;
+          reference: string | null;
+          notes: string | null;
+          idempotency_key: string;
+          created_at: string;
+        },
+        {
+          id?: string;
+          user_id: string;
+          loan_id: string;
+          account_id: string;
+          amount: number;
+          principal_paid: number;
+          interest_paid: number;
+          fee_paid: number;
+          currency: string;
+          repayment_date?: string;
+          reference?: string | null;
+          notes?: string | null;
+          idempotency_key: string;
+          created_at?: string;
         }
       >;
       business_fundings: BusinessTable<
@@ -1369,6 +1469,68 @@ export type Database = {
         };
         Returns: string;
       };
+      create_business_customer_transaction_with_due_date: {
+        Args: {
+          p_idempotency_key: string;
+          p_customer_id: string;
+          p_receipt_account_id: string;
+          p_payout_account_id: string;
+          p_transaction_date: string;
+          p_htg_received: number;
+          p_usd_sent: number;
+          p_exchange_rate: number | null;
+          p_service_fee_usd: number | null;
+          p_crypto_cost_usd: number | null;
+          p_transfer_fee_usd: number;
+          p_other_expenses_usd: number | null;
+          p_reference_code: string | null;
+          p_notes: string | null;
+          p_due_date: string | null;
+        };
+        Returns: string;
+      };
+      create_business_customer_payment: {
+        Args: {
+          p_idempotency_key: string;
+          p_customer_transaction_id: string;
+          p_account_id: string;
+          p_amount: number;
+          p_currency: string;
+          p_payment_method: string;
+          p_payment_date: string;
+          p_reference: string | null;
+          p_notes: string | null;
+        };
+        Returns: string;
+      };
+      create_business_loan: {
+        Args: {
+          p_idempotency_key: string;
+          p_customer_id: string;
+          p_account_id: string;
+          p_principal_amount: number;
+          p_currency: string;
+          p_issued_date: string;
+          p_due_date: string | null;
+          p_interest_amount: number;
+          p_fee_amount: number;
+          p_notes: string | null;
+        };
+        Returns: string;
+      };
+      create_business_loan_repayment: {
+        Args: {
+          p_idempotency_key: string;
+          p_loan_id: string;
+          p_account_id: string;
+          p_amount: number;
+          p_currency: string;
+          p_repayment_date: string;
+          p_reference: string | null;
+          p_notes: string | null;
+        };
+        Returns: string;
+      };
       create_business_funding: {
         Args: {
           p_idempotency_key: string;
@@ -1410,6 +1572,14 @@ export type Database = {
         Returns: string;
       };
       complete_business_operation: {
+        Args: { p_operation_type: string; p_operation_id: string };
+        Returns: undefined;
+      };
+      complete_business_transfer: {
+        Args: { p_operation_id: string };
+        Returns: undefined;
+      };
+      complete_business_non_transfer_operation: {
         Args: { p_operation_type: string; p_operation_id: string };
         Returns: undefined;
       };
