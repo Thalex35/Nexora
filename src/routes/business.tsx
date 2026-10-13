@@ -24,6 +24,18 @@ import {
   Wallet,
   Zap,
 } from "lucide-react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/app-shell";
@@ -45,6 +57,7 @@ import {
   calculateBusinessMetrics,
   calculateCustomerPaymentSummary,
   calculateCustomerPerformance,
+  convertToReportingCurrency,
   calculateLoanSummary,
   calculateTransactionProfit,
   formatBusinessMoney,
@@ -97,6 +110,7 @@ const EMPTY_LOANS: BusinessRecords["loans"] = [];
 const EMPTY_LOAN_REPAYMENTS: BusinessRecords["loanRepayments"] = [];
 const EMPTY_FUNDINGS: BusinessRecords["fundings"] = [];
 const EMPTY_EXPENSES: BusinessRecords["expenses"] = [];
+const REPORT_CHART_COLORS = ["#10c6bd", "#398df7", "#9361f4", "#f29f3d", "#8ca7c7", "#ed5267"];
 
 type DashboardActivity = {
   id: string;
@@ -339,6 +353,188 @@ function BusinessPage() {
     reportingCurrency,
     exchangeRates: rates,
   });
+  const completedPeriodTransactions = periodTransactions.filter(
+    (transaction) => transaction.status === "completed",
+  );
+  const reportIncomeUsd = completedPeriodTransactions.reduce(
+    (total, transaction) => total + calculateTransactionProfit(transaction).revenue,
+    0,
+  );
+  const completedPeriodFundings = periodFundings.filter(
+    (funding) => funding.status === "completed",
+  );
+  const fundingCreditSummary = completedPeriodFundings.reduce(
+    (summary, funding) => {
+      const account = accounts.find((item) => item.id === funding.destination_account_id);
+      const amountUsd = account
+        ? convertToReportingCurrency(
+            Number(funding.credited_amount),
+            account.currency,
+            "USD",
+            rates,
+          )
+        : null;
+      if (amountUsd === null) {
+        summary.incomplete = true;
+      } else {
+        summary.usd += amountUsd;
+      }
+      if (Number(funding.fee_amount) > 0) {
+        if (funding.fee_usd === null) {
+          summary.feesIncomplete = true;
+        } else {
+          summary.feesUsd += Number(funding.fee_usd);
+        }
+      }
+      return summary;
+    },
+    { usd: 0, feesUsd: 0, incomplete: false, feesIncomplete: false },
+  );
+  const accountValueUsdSummary = accounts.reduce(
+    (summary, account) => {
+      const valueUsd = convertToReportingCurrency(account.balance, account.currency, "USD", rates);
+      if (valueUsd === null) {
+        summary.incomplete = true;
+      } else {
+        summary.usd += valueUsd;
+      }
+      return summary;
+    },
+    { usd: 0, incomplete: false },
+  );
+  const fundingCreditedByAccount = completedPeriodFundings.reduce<Record<string, number>>(
+    (totals, funding) => {
+      totals[funding.destination_account_id] =
+        (totals[funding.destination_account_id] ?? 0) + Number(funding.credited_amount);
+      return totals;
+    },
+    {},
+  );
+  const reportMonthRows = (() => {
+    const start = new Date(`${startDate}T00:00:00Z`);
+    const end = new Date(`${endDate}T00:00:00Z`);
+    const monthCount = Math.max(
+      0,
+      (end.getUTCFullYear() - start.getUTCFullYear()) * 12 +
+        end.getUTCMonth() -
+        start.getUTCMonth() +
+        1,
+    );
+    return Array.from({ length: monthCount }, (_, index) => {
+      const month = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + index, 1));
+      const key = month.toISOString().slice(0, 7);
+      const monthStartDate = `${key}-01`;
+      const monthEndDate = new Date(Date.UTC(month.getUTCFullYear(), month.getUTCMonth() + 1, 0))
+        .toISOString()
+        .slice(0, 10);
+      const isInRange = monthEndDate >= startDate && monthStartDate <= endDate;
+      const transactionsInMonth = isInRange
+        ? completedPeriodTransactions.filter((transaction) => {
+            const date = transaction.transactionDate.slice(0, 10);
+            return date.startsWith(key) && date >= startDate && date <= endDate;
+          })
+        : [];
+      const expensesInMonth = isInRange
+        ? periodExpenses.filter(
+            (expense) =>
+              expense.status === "completed" &&
+              expense.date.startsWith(key) &&
+              expense.date >= startDate &&
+              expense.date <= endDate,
+          )
+        : [];
+      const fundingsInMonth = isInRange
+        ? completedPeriodFundings.filter((funding) => {
+            const date = funding.funding_date.slice(0, 10);
+            return date.startsWith(key) && date >= startDate && date <= endDate;
+          })
+        : [];
+      const income = transactionsInMonth.reduce(
+        (sum, transaction) => sum + calculateTransactionProfit(transaction).revenue,
+        0,
+      );
+      const transactionCosts = transactionsInMonth.reduce(
+        (sum, transaction) => sum + calculateTransactionProfit(transaction).costs,
+        0,
+      );
+      const expensesUsd = expensesInMonth.reduce(
+        (sum, expense) =>
+          expense.usdPerUnit === null ? sum : sum + expense.amount * expense.usdPerUnit,
+        0,
+      );
+      const fundingFees = fundingsInMonth.reduce(
+        (sum, funding) => sum + (funding.fee_usd === null ? 0 : Number(funding.fee_usd)),
+        0,
+      );
+      return {
+        month: key,
+        label: month.toLocaleDateString(undefined, {
+          month: "short",
+          year: "2-digit",
+          timeZone: "UTC",
+        }),
+        income,
+        expenses: transactionCosts + expensesUsd + fundingFees,
+      };
+    }).filter((row) => {
+      const monthEnd = `${row.month}-${new Date(
+        Date.UTC(Number(row.month.slice(0, 4)), Number(row.month.slice(5, 7)), 0),
+      )
+        .toISOString()
+        .slice(8, 10)}`;
+      return monthEnd >= startDate && `${row.month}-01` <= endDate;
+    });
+  })();
+  const reportExpenseGroups = (() => {
+    const groups = new Map<string, number>();
+    for (const expense of periodExpenses) {
+      if (expense.status !== "completed" || expense.usdPerUnit === null) continue;
+      groups.set(
+        expense.category,
+        (groups.get(expense.category) ?? 0) + expense.amount * expense.usdPerUnit,
+      );
+    }
+    const transactionCosts = completedPeriodTransactions.reduce(
+      (total, transaction) => total + calculateTransactionProfit(transaction).costs,
+      0,
+    );
+    const fundingFees = completedPeriodFundings.reduce(
+      (total, funding) => total + (funding.fee_usd === null ? 0 : Number(funding.fee_usd)),
+      0,
+    );
+    if (transactionCosts > 0) groups.set("Coûts de transfert", transactionCosts);
+    if (fundingFees > 0) groups.set("Frais de financement", fundingFees);
+    return [...groups.entries()]
+      .map(([name, amount]) => ({ name, amount }))
+      .sort((left, right) => right.amount - left.amount)
+      .slice(0, 5);
+  })();
+  const reportCustomerRows = (() => {
+    const totals = new Map<string, { name: string; count: number; amount: number }>();
+    for (const transaction of completedPeriodTransactions) {
+      const current = totals.get(transaction.customerId) ?? {
+        name: transaction.customerName,
+        count: 0,
+        amount: 0,
+      };
+      current.count += 1;
+      current.amount += transaction.usdSent;
+      totals.set(transaction.customerId, current);
+    }
+    return [...totals.entries()]
+      .map(([id, values]) => ({ id, ...values }))
+      .sort((left, right) => right.amount - left.amount)
+      .slice(0, 5);
+  })();
+  const reportOperationMix = [
+    { name: "Transferts", value: periodTransactions.length },
+    { name: "Financements", value: periodFundings.length },
+    {
+      name: "Prêts",
+      value: loans.filter((loan) => loan.issuedDate >= startDate && loan.issuedDate <= endDate)
+        .length,
+    },
+  ].filter((item) => item.value > 0);
 
   const visibleTransactions = periodTransactions.filter(
     (transaction) =>
@@ -4250,36 +4446,188 @@ function BusinessPage() {
           </TabsContent>
 
           <TabsContent value="funding" className="space-y-4">
+            <Card className="relative overflow-hidden border-0 bg-gradient-to-r from-[#071b35] via-[#0b3150] to-[#0b655f] text-white shadow-lg">
+              <div
+                className="pointer-events-none absolute -right-10 -top-14 size-56 rounded-full border-[32px] border-white/5"
+                aria-hidden="true"
+              />
+              <CardContent className="relative flex flex-wrap items-end justify-between gap-5 p-6">
+                <div>
+                  <p className="flex items-center gap-2 text-sm text-cyan-100">
+                    <Wallet className="size-4" aria-hidden="true" /> Solde du portefeuille Meru
+                  </p>
+                  <p className="mt-2 text-3xl font-semibold tracking-tight">
+                    {formatBusinessMoney(metrics.meruWalletBalance, "USD")}
+                  </p>
+                  <p className="mt-2 text-xs text-cyan-100/80">
+                    Solde actuel basé sur les écritures confirmées des comptes Meru
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="bg-white/10 text-white hover:bg-white/20"
+                    onClick={() =>
+                      document
+                        .getElementById("business-funding-form")
+                        ?.scrollIntoView({ behavior: "smooth" })
+                    }
+                  >
+                    <Plus className="size-4" aria-hidden="true" /> Ajouter des fonds
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="bg-white/10 text-white hover:bg-white/20"
+                    onClick={() =>
+                      document
+                        .getElementById("business-account-form")
+                        ?.scrollIntoView({ behavior: "smooth" })
+                    }
+                  >
+                    Créer un compte
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {[
+                {
+                  label: "Fonds disponibles",
+                  value: formatBusinessMoney(accountValueUsdSummary.usd, "USD"),
+                  detail: accountValueUsdSummary.incomplete
+                    ? "Conversion incomplète pour certains comptes"
+                    : `${accounts.length} compte${accounts.length === 1 ? "" : "s"} enregistré${accounts.length === 1 ? "" : "s"}`,
+                  icon: Wallet,
+                  color: "text-teal-600",
+                },
+                {
+                  label: "Fonds crédités",
+                  value: formatBusinessMoney(fundingCreditSummary.usd, "USD"),
+                  detail: fundingCreditSummary.incomplete
+                    ? "Taux de conversion manquant"
+                    : "Crédits confirmés sur la période",
+                  icon: ArrowDownToLine,
+                  color: "text-emerald-600",
+                },
+                {
+                  label: "Frais enregistrés",
+                  value: formatBusinessMoney(fundingCreditSummary.feesUsd, "USD"),
+                  detail: fundingCreditSummary.feesIncomplete
+                    ? "Certaines conversions de frais sont manquantes"
+                    : "Frais de financement confirmés",
+                  icon: Receipt,
+                  color: "text-amber-600",
+                },
+                {
+                  label: "Opérations en attente",
+                  value: String(periodFundings.filter((item) => item.status === "pending").length),
+                  detail: "Non incluses dans les soldes",
+                  icon: CircleDollarSign,
+                  color: "text-blue-600",
+                },
+              ].map((item) => (
+                <Card
+                  key={item.label}
+                  className="border-cyan-900/10 shadow-sm dark:border-[#173451]"
+                >
+                  <CardContent className="flex items-start justify-between gap-3 p-4">
+                    <div>
+                      <p className="text-xs text-muted-foreground">{item.label}</p>
+                      <p className="mt-1 text-xl font-semibold">{item.value}</p>
+                      <p className="mt-1 text-[10px] text-muted-foreground">{item.detail}</p>
+                    </div>
+                    <item.icon className={`size-5 shrink-0 ${item.color}`} aria-hidden="true" />
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            <Card className="border-cyan-900/20 shadow-sm dark:border-[#173451]">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Mes comptes</CardTitle>
+                <CardDescription>
+                  Soldes d’ouverture, soldes actuels confirmés et apports crédités par compte.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {accounts.length === 0 ? (
+                  <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+                    Aucun compte pour le moment. Créez un compte pour enregistrer un financement.
+                  </p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[680px] text-sm">
+                      <thead>
+                        <tr className="border-b text-left text-xs text-muted-foreground">
+                          <th className="py-2 pr-4">Compte</th>
+                          <th className="py-2 pr-4">Type</th>
+                          <th className="py-2 pr-4">Solde d’ouverture</th>
+                          <th className="py-2 pr-4">Solde actuel</th>
+                          <th className="py-2 pr-3">Crédits confirmés</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {accounts.map((account) => (
+                          <tr key={account.id} className="border-b last:border-0">
+                            <td className="py-3 pr-4 font-medium">{account.name}</td>
+                            <td className="py-3 pr-4 capitalize">
+                              {account.type.replaceAll("_", " ")}
+                            </td>
+                            <td className="py-3 pr-4">
+                              {formatBusinessMoney(account.openingBalance ?? 0, account.currency)}
+                            </td>
+                            <td className="py-3 pr-4 font-semibold">
+                              {formatBusinessMoney(account.balance, account.currency)}
+                            </td>
+                            <td className="py-3 pr-3">
+                              {formatBusinessMoney(
+                                fundingCreditedByAccount[account.id] ?? 0,
+                                account.currency,
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
             <Card>
               <CardHeader>
-                <CardTitle>Create account</CardTitle>
+                <CardTitle>Créer un compte</CardTitle>
                 <CardDescription>
-                  Opening balances are entered once and become immutable. Create HTG, USD, or
-                  crypto-quantity accounts as needed.
+                  Le solde d’ouverture est enregistré une seule fois. Créez des comptes en HTG, USD
+                  ou unités crypto selon vos besoins.
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <form
+                  id="business-account-form"
                   className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
                   onSubmit={(event) => void onCreateAccount(event)}
                 >
-                  <Field label="Account name">
+                  <Field label="Nom du compte">
                     <Input name="name" required maxLength={100} />
                   </Field>
-                  <Field label="Account type">
+                  <Field label="Type de compte">
                     <select
                       name="type"
                       className="h-9 rounded-md border border-input bg-background px-3 text-sm"
                     >
-                      <option value="meru">Meru wallet</option>
-                      <option value="cash">Cash</option>
-                      <option value="crypto">Cryptocurrency</option>
-                      <option value="other">Other</option>
+                      <option value="meru">Portefeuille Meru</option>
+                      <option value="cash">Espèces</option>
+                      <option value="crypto">Cryptomonnaie</option>
+                      <option value="other">Autre</option>
                     </select>
                   </Field>
                   <Field
-                    label="Currency / asset code"
-                    hint="Use an explicit code such as USD, HTG, EUR, BTC."
+                    label="Devise / code de l’actif"
+                    hint="Utilisez un code explicite, par exemple USD, HTG, EUR ou BTC."
                   >
                     <Input
                       name="currency"
@@ -4290,7 +4638,7 @@ function BusinessPage() {
                       pattern="[A-Za-z0-9]{3,8}"
                     />
                   </Field>
-                  <Field label="Opening balance">
+                  <Field label="Solde d’ouverture">
                     <Input
                       name="openingBalance"
                       type="number"
@@ -4305,47 +4653,51 @@ function BusinessPage() {
                     className="sm:col-span-2 xl:col-span-4"
                     disabled={isMutating}
                   >
-                    Create account
+                    Créer le compte
                   </Button>
                 </form>
               </CardContent>
             </Card>
             <Card>
               <CardHeader>
-                <CardTitle>Record funding or asset movement</CardTitle>
+                <CardTitle>Enregistrer un financement ou un transfert d’actif</CardTitle>
                 <CardDescription>
-                  Only the actual amount credited changes the destination balance. External top-ups
-                  do not count as revenue. Account-to-account transfers move value rather than
-                  create revenue.
+                  Seul le montant effectivement crédité modifie le solde de destination. Les apports
+                  externes ne sont pas des revenus; les transferts entre comptes déplacent des
+                  actifs sans créer de revenu.
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 {accounts.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
-                    Create accounts before recording funding.
+                    Créez un compte avant d’enregistrer un financement.
                   </p>
                 ) : (
                   <form
+                    id="business-funding-form"
                     className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
                     onSubmit={(event) => void onCreateFunding(event)}
                   >
-                    <Field label="Operation type">
+                    <Field label="Type d’opération">
                       <select
                         name="fundingType"
                         className="h-9 rounded-md border border-input bg-background px-3 text-sm"
                       >
-                        <option value="replenishment">External Meru replenishment</option>
-                        <option value="crypto_purchase">Crypto purchase</option>
-                        <option value="crypto_transfer">Crypto-funded wallet credit</option>
-                        <option value="asset_transfer">Internal asset transfer</option>
+                        <option value="replenishment">Apport externe Meru</option>
+                        <option value="crypto_purchase">Achat de cryptomonnaie</option>
+                        <option value="crypto_transfer">Crédit du portefeuille via crypto</option>
+                        <option value="asset_transfer">Transfert interne d’actif</option>
                       </select>
                     </Field>
-                    <Field label="Source account" hint="Leave blank only for external funds.">
+                    <Field
+                      label="Compte source"
+                      hint="Laissez vide uniquement pour un apport externe."
+                    >
                       <select
                         name="sourceAccountId"
                         className="h-9 rounded-md border border-input bg-background px-3 text-sm"
                       >
-                        <option value="">External / not tracked</option>
+                        <option value="">Externe / non suivi</option>
                         {accounts.map((account) => (
                           <option key={account.id} value={account.id}>
                             {account.name} · {account.currency}
@@ -4353,7 +4705,7 @@ function BusinessPage() {
                         ))}
                       </select>
                     </Field>
-                    <Field label="Destination account">
+                    <Field label="Compte de destination">
                       <select
                         name="destinationAccountId"
                         className="h-9 rounded-md border border-input bg-background px-3 text-sm"
@@ -4366,10 +4718,10 @@ function BusinessPage() {
                         ))}
                       </select>
                     </Field>
-                    <Field label="Amount used from source">
+                    <Field label="Montant prélevé sur la source">
                       <Input name="sourceAmount" type="number" min="0" step="0.00000001" />
                     </Field>
-                    <Field label="Actual amount credited">
+                    <Field label="Montant effectivement crédité">
                       <Input
                         name="creditedAmount"
                         type="number"
@@ -4378,7 +4730,7 @@ function BusinessPage() {
                         required
                       />
                     </Field>
-                    <Field label="Fee in source currency">
+                    <Field label="Frais dans la devise source">
                       <Input
                         name="feeAmount"
                         type="number"
@@ -4388,10 +4740,10 @@ function BusinessPage() {
                         required
                       />
                     </Field>
-                    <Field label="Fee (USD, for expense reporting)">
+                    <Field label="Frais en USD (pour les rapports de dépenses)">
                       <Input name="feeUsd" type="number" min="0" step="0.01" />
                     </Field>
-                    <Field label="Crypto quantity, if applicable">
+                    <Field label="Quantité crypto, si applicable">
                       <Input
                         name="cryptoQuantity"
                         type="number"
@@ -4399,7 +4751,7 @@ function BusinessPage() {
                         step="0.00000001"
                       />
                     </Field>
-                    <Field label="Crypto unit price (USD)">
+                    <Field label="Prix unitaire crypto (USD)">
                       <Input
                         name="cryptoUnitPriceUsd"
                         type="number"
@@ -4415,7 +4767,7 @@ function BusinessPage() {
                         required
                       />
                     </Field>
-                    <Field label="Reference">
+                    <Field label="Référence">
                       <Input name="reference" />
                     </Field>
                     <Field label="Notes">
@@ -4426,7 +4778,7 @@ function BusinessPage() {
                       className="sm:col-span-2 xl:col-span-4"
                       disabled={isMutating}
                     >
-                      Record pending funding
+                      Enregistrer le financement en attente
                     </Button>
                   </form>
                 )}
@@ -4434,25 +4786,27 @@ function BusinessPage() {
             </Card>
             <Card>
               <CardHeader>
-                <CardTitle>Funding history and ledger</CardTitle>
+                <CardTitle>Historique des financements et grand livre</CardTitle>
                 <CardDescription>
-                  Balances are computed by PostgreSQL from opening balances and append-only
-                  confirmed entries.
+                  Les soldes sont calculés à partir des soldes d’ouverture et des écritures
+                  confirmées.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 {fundings.length === 0 && ledger.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No funding or ledger entries yet.</p>
+                  <p className="text-sm text-muted-foreground">
+                    Aucun financement ni écriture comptable pour le moment.
+                  </p>
                 ) : (
                   <>
                     <div className="overflow-x-auto">
                       <table className="w-full min-w-[700px] text-sm">
                         <thead>
                           <tr className="border-b text-left text-muted-foreground">
-                            <th className="py-2 pr-3">Funding</th>
+                            <th className="py-2 pr-3">Financement</th>
                             <th className="py-2 pr-3">Date</th>
-                            <th className="py-2 pr-3">Credited</th>
-                            <th className="py-2 pr-3">Status</th>
+                            <th className="py-2 pr-3">Crédité</th>
+                            <th className="py-2 pr-3">Statut</th>
                             <th className="py-2 pr-3">Actions</th>
                           </tr>
                         </thead>
@@ -4628,23 +4982,337 @@ function BusinessPage() {
           </TabsContent>
 
           <TabsContent value="reports" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Manual exchange rates</CardTitle>
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-600">
+                  Rapports d’activité
+                </p>
+                <h2 className="mt-1 text-xl font-semibold">Vue d’ensemble de l’entreprise</h2>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Données enregistrées du {startDate} au {endDate}. Les financements ne sont pas des
+                  revenus.
+                </p>
+              </div>
+              <Button variant="outline" onClick={exportReport}>
+                <ArrowDownToLine className="size-4" aria-hidden="true" /> Exporter le rapport CSV
+              </Button>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {[
+                {
+                  label: "Revenus des opérations",
+                  value: formatBusinessMoney(reportIncomeUsd, "USD"),
+                  caption: `${completedPeriodTransactions.length} opération${completedPeriodTransactions.length === 1 ? "" : "s"} terminée${completedPeriodTransactions.length === 1 ? "" : "s"}`,
+                  icon: TrendingUp,
+                  color: "text-teal-600",
+                },
+                {
+                  label: "Dépenses enregistrées",
+                  value: formatBusinessMoney(metrics.totalBusinessExpenses, "USD"),
+                  caption: metrics.expensesIncomplete
+                    ? "Conversion incomplète pour certaines lignes"
+                    : "Frais d’opération, dépenses et frais de financement",
+                  icon: Receipt,
+                  color: "text-rose-600",
+                },
+                {
+                  label: "Montant remis aux clients",
+                  value: formatBusinessMoney(metrics.totalUsdSentToCustomers, "USD"),
+                  caption: "Montant USD enregistré sur les opérations",
+                  icon: ArrowUpRight,
+                  color: "text-blue-600",
+                },
+                {
+                  label: "Reçus clients",
+                  value: formatBusinessMoney(metrics.totalCustomerReceipts, "HTG"),
+                  caption: `${periodPayments.length} paiement${periodPayments.length === 1 ? "" : "s"} client enregistré${periodPayments.length === 1 ? "" : "s"}`,
+                  icon: Banknote,
+                  color: "text-violet-600",
+                },
+              ].map((item) => (
+                <Card
+                  key={item.label}
+                  className="border-cyan-900/10 shadow-sm dark:border-[#173451]"
+                >
+                  <CardContent className="flex items-start justify-between gap-3 p-4">
+                    <div>
+                      <p className="text-xs text-muted-foreground">{item.label}</p>
+                      <p className="mt-1 text-xl font-semibold">{item.value}</p>
+                      <p className="mt-1 text-[10px] text-muted-foreground">{item.caption}</p>
+                    </div>
+                    <item.icon className={`size-5 shrink-0 ${item.color}`} aria-hidden="true" />
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(300px,0.9fr)]">
+              <Card className="border-cyan-900/20 shadow-sm dark:border-[#173451]">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Revenus et dépenses</CardTitle>
+                  <CardDescription>
+                    Revenus des opérations terminées et coûts réels documentés, regroupés par mois
+                    (USD).
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {reportMonthRows.length === 0 ? (
+                    <p className="py-12 text-center text-sm text-muted-foreground">
+                      Aucune activité sur cette période.
+                    </p>
+                  ) : (
+                    <div className="h-[280px] w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart
+                          data={reportMonthRows}
+                          margin={{ top: 12, right: 8, left: 0, bottom: 0 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                          <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} />
+                          <YAxis
+                            tickLine={false}
+                            axisLine={false}
+                            fontSize={10}
+                            tickFormatter={(value: number) => `$${value}`}
+                          />
+                          <Tooltip
+                            formatter={(value) => formatBusinessMoney(Number(value), "USD")}
+                            contentStyle={{ borderRadius: 10, border: "1px solid #dbe5ef" }}
+                          />
+                          <Bar
+                            dataKey="income"
+                            name="Revenus"
+                            fill="#10c6bd"
+                            radius={[4, 4, 0, 0]}
+                          />
+                          <Bar
+                            dataKey="expenses"
+                            name="Dépenses"
+                            fill="#398df7"
+                            radius={[4, 4, 0, 0]}
+                          />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+                  {metrics.expensesIncomplete && (
+                    <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+                      Certaines dépenses n’ont pas de taux USD enregistré et ne peuvent pas être
+                      converties dans ce graphique.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="border-cyan-900/20 shadow-sm dark:border-[#173451]">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Répartition des dépenses</CardTitle>
+                  <CardDescription>Coûts et frais enregistrés · USD.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {reportExpenseGroups.length === 0 ? (
+                    <p className="py-12 text-center text-sm text-muted-foreground">
+                      Aucune dépense confirmée sur cette période.
+                    </p>
+                  ) : (
+                    <>
+                      <div className="h-[190px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={reportExpenseGroups}
+                              dataKey="amount"
+                              nameKey="name"
+                              innerRadius={52}
+                              outerRadius={78}
+                              paddingAngle={3}
+                            >
+                              {reportExpenseGroups.map((entry, index) => (
+                                <Cell
+                                  key={entry.name}
+                                  fill={REPORT_CHART_COLORS[index % REPORT_CHART_COLORS.length]}
+                                />
+                              ))}
+                            </Pie>
+                            <Tooltip
+                              formatter={(value) => formatBusinessMoney(Number(value), "USD")}
+                            />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <ul className="space-y-2">
+                        {reportExpenseGroups.map((entry, index) => (
+                          <li
+                            key={entry.name}
+                            className="flex items-center justify-between gap-3 text-xs"
+                          >
+                            <span className="flex min-w-0 items-center gap-2">
+                              <span
+                                className="size-2 shrink-0 rounded-full"
+                                style={{
+                                  backgroundColor:
+                                    REPORT_CHART_COLORS[index % REPORT_CHART_COLORS.length],
+                                }}
+                              />
+                              <span className="truncate">{entry.name}</span>
+                            </span>
+                            <strong>{formatBusinessMoney(entry.amount, "USD")}</strong>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="grid gap-4 xl:grid-cols-2">
+              <Card className="border-cyan-900/20 shadow-sm dark:border-[#173451]">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Clients les plus actifs</CardTitle>
+                  <CardDescription>
+                    Classés selon les montants USD remis pendant la période.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {reportCustomerRows.length === 0 ? (
+                    <p className="py-8 text-center text-sm text-muted-foreground">
+                      Aucun client avec une opération terminée sur cette période.
+                    </p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[420px] text-sm">
+                        <thead>
+                          <tr className="border-b text-left text-xs text-muted-foreground">
+                            <th className="py-2 pr-3">Client</th>
+                            <th className="py-2 pr-3">Opérations</th>
+                            <th className="py-2 pr-3">Montant remis</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {reportCustomerRows.map((customer) => (
+                            <tr key={customer.id} className="border-b last:border-0">
+                              <td className="py-3 pr-3 font-medium">{customer.name}</td>
+                              <td className="py-3 pr-3">{customer.count}</td>
+                              <td className="py-3 pr-3">
+                                {formatBusinessMoney(customer.amount, "USD")}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="border-cyan-900/20 shadow-sm dark:border-[#173451]">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Opérations par type</CardTitle>
+                  <CardDescription>
+                    Nombre d’enregistrements créés durant la période.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-4 sm:grid-cols-[180px_1fr] sm:items-center">
+                  {reportOperationMix.length === 0 ? (
+                    <p className="py-8 text-center text-sm text-muted-foreground">
+                      Aucune opération sur cette période.
+                    </p>
+                  ) : (
+                    <>
+                      <div className="h-[170px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={reportOperationMix}
+                              dataKey="value"
+                              nameKey="name"
+                              innerRadius={42}
+                              outerRadius={68}
+                            >
+                              {reportOperationMix.map((entry, index) => (
+                                <Cell
+                                  key={entry.name}
+                                  fill={REPORT_CHART_COLORS[index % REPORT_CHART_COLORS.length]}
+                                />
+                              ))}
+                            </Pie>
+                            <Tooltip />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <ul className="space-y-3">
+                        {reportOperationMix.map((entry, index) => (
+                          <li
+                            key={entry.name}
+                            className="flex items-center justify-between text-sm"
+                          >
+                            <span className="flex items-center gap-2">
+                              <span
+                                className="size-2 rounded-full"
+                                style={{
+                                  backgroundColor:
+                                    REPORT_CHART_COLORS[index % REPORT_CHART_COLORS.length],
+                                }}
+                              />
+                              {entry.name}
+                            </span>
+                            <strong>{entry.value}</strong>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card className="border-cyan-900/20 shadow-sm dark:border-[#173451]">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Accès rapide aux rapports</CardTitle>
                 <CardDescription>
-                  Each value is USD per one unit of the named currency. Rates are used for account
-                  valuation, not to rewrite transaction-specific rates.
+                  Consultez les enregistrements détaillés ou exportez les données de la période.
                 </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                {[
+                  { label: "Opérations clients", tab: "transactions", icon: ArrowUpRight },
+                  { label: "Paiements et prêts", tab: "payments-loans", icon: HandCoins },
+                  { label: "Financements", tab: "funding", icon: Wallet },
+                  { label: "Dépenses", tab: "expenses", icon: Receipt },
+                ].map((report) => (
+                  <Button
+                    key={report.tab}
+                    type="button"
+                    variant="outline"
+                    className="justify-start"
+                    onClick={() => setActiveTab(report.tab)}
+                  >
+                    <report.icon className="size-4" aria-hidden="true" /> {report.label}
+                    <ChevronRight className="ml-auto size-4" aria-hidden="true" />
+                  </Button>
+                ))}
+              </CardContent>
+            </Card>
+
+            <details className="rounded-lg border border-cyan-900/20 bg-card shadow-sm dark:border-[#173451]">
+              <summary className="cursor-pointer px-4 py-3 text-sm font-semibold">
+                Gérer les taux de change manuels
+              </summary>
+              <div className="border-t p-4">
+                <p className="mb-3 text-xs text-muted-foreground">
+                  Chaque taux correspond aux USD par unité de devise. Il sert à valoriser les
+                  comptes, sans modifier les taux propres aux transactions.
+                </p>
                 <form
                   className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
                   onSubmit={(event) => void onSaveRate(event)}
                 >
-                  <Field label="Currency">
+                  <Field label="Devise">
                     <Input name="currency" placeholder="HTG" minLength={3} maxLength={8} required />
                   </Field>
-                  <Field label="USD per unit">
+                  <Field label="USD par unité">
                     <Input
                       name="usdPerUnit"
                       type="number"
@@ -4653,7 +5321,7 @@ function BusinessPage() {
                       required
                     />
                   </Field>
-                  <Field label="Effective date">
+                  <Field label="Date d’effet">
                     <Input name="effectiveDate" type="date" defaultValue={today()} required />
                   </Field>
                   <Field label="Notes">
@@ -4664,68 +5332,11 @@ function BusinessPage() {
                     className="sm:col-span-2 xl:col-span-4"
                     disabled={isMutating}
                   >
-                    Save rate
+                    Enregistrer le taux
                   </Button>
                 </form>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle>Activity report</CardTitle>
-                <CardDescription>
-                  Generated from saved records for {startDate} through {endDate}. CSV includes
-                  customer operations, funding, and expenses.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <p>
-                    Completed customer operations:{" "}
-                    <strong>
-                      {periodTransactions.filter((item) => item.status === "completed").length}
-                    </strong>
-                  </p>
-                  <p>
-                    Receipts:{" "}
-                    <strong>{formatBusinessMoney(metrics.totalCustomerReceipts, "HTG")}</strong>
-                  </p>
-                  <p>
-                    USD delivered:{" "}
-                    <strong>{formatBusinessMoney(metrics.totalUsdSentToCustomers, "USD")}</strong>
-                  </p>
-                  <p>
-                    Funding operations: <strong>{periodFundings.length}</strong>
-                  </p>
-                  <p>
-                    Recorded ledger entries:{" "}
-                    <strong>
-                      {
-                        ledger.filter(
-                          (item) =>
-                            item.created_at.slice(0, 10) >= startDate &&
-                            item.created_at.slice(0, 10) <= endDate,
-                        ).length
-                      }
-                    </strong>
-                  </p>
-                  <p>
-                    Net profit estimate:{" "}
-                    <strong>{formatBusinessMoney(metrics.netProfit, "USD")}</strong>
-                  </p>
-                  <p>
-                    Data status:{" "}
-                    <strong>
-                      {metrics.profitIncomplete
-                        ? "Incomplete estimate"
-                        : "Based on recorded inputs"}
-                    </strong>
-                  </p>
-                </div>
-                <Button variant="outline" onClick={exportReport}>
-                  <ArrowDownToLine /> Download selected period CSV
-                </Button>
-              </CardContent>
-            </Card>
+              </div>
+            </details>
           </TabsContent>
         </Tabs>
       </div>

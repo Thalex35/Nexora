@@ -8,6 +8,7 @@ export type BusinessAccount = {
   type: "meru" | "cash" | "crypto" | "other";
   balance: number;
   currency: string;
+  openingBalance?: number;
 };
 
 export type BusinessCustomer = {
