@@ -6,6 +6,8 @@ import {
   ArrowUpRight,
   CalendarDays,
   CircleDollarSign,
+  Eye,
+  EyeOff,
   HandCoins,
   PiggyBank,
   Plus,
@@ -187,6 +189,7 @@ function BusinessPage() {
   const [accountFilter, setAccountFilter] = useState("all");
   const [reportingCurrency, setReportingCurrency] = useState<BusinessCurrency>("USD");
   const [activeTab, setActiveTab] = useState("overview");
+  const [meruBalanceVisible, setMeruBalanceVisible] = useState(true);
   const idempotencyKeys = useRef(new WeakMap<HTMLFormElement, string>());
 
   function idempotencyKey(form: HTMLFormElement) {
@@ -266,6 +269,9 @@ function BusinessPage() {
     reportingCurrency,
     exchangeRates: rates,
   });
+  const completedHtgTransactionTotal = periodTransactions
+    .filter((transaction) => transaction.status === "completed")
+    .reduce((total, transaction) => total + transaction.htgReceived, 0);
   const paymentLoanMetrics = calculateBusinessMetrics({
     accounts,
     transactions,
@@ -760,6 +766,31 @@ function BusinessPage() {
   ]
     .sort((left, right) => right.date.localeCompare(left.date))
     .slice(0, 5);
+  const outstandingPaymentRows = openTransactions
+    .map((transaction) => ({
+      transaction,
+      summary: calculateCustomerPaymentSummary(
+        transaction,
+        payments.filter((payment) => payment.customerTransactionId === transaction.id),
+      ),
+    }))
+    .filter(({ summary }) => summary.outstanding > 0)
+    .sort((left, right) => {
+      const leftDate = left.transaction.dueDate ?? left.transaction.transactionDate;
+      const rightDate = right.transaction.dueDate ?? right.transaction.transactionDate;
+      return leftDate.localeCompare(rightDate);
+    })
+    .slice(0, 5);
+  const upcomingLoanRows = repaymentLoans
+    .filter(
+      (loan) => loan.dueDate !== null && loan.dueDate >= today() && loan.dueDate <= dueSoonLimit,
+    )
+    .sort((left, right) => (left.dueDate ?? "").localeCompare(right.dueDate ?? ""))
+    .slice(0, 5);
+  const overdueLoanRows = repaymentLoans
+    .filter((loan) => loan.dueDate !== null && loan.dueDate < today())
+    .sort((left, right) => (left.dueDate ?? "").localeCompare(right.dueDate ?? ""))
+    .slice(0, 5);
   const collectionTotalsByCurrency = periodPayments.reduce<Record<string, number>>(
     (totals, payment) => {
       totals[payment.currency] = (totals[payment.currency] ?? 0) + payment.amount;
@@ -805,39 +836,44 @@ function BusinessPage() {
           }
         />
 
-        <section className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-3 shadow-sm sm:gap-4 sm:px-4">
-          <div className="mr-auto flex items-center gap-2 text-sm font-medium text-foreground">
+        <details className="group rounded-xl border bg-card px-4 py-3 shadow-sm">
+          <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-medium text-foreground [&::-webkit-details-marker]:hidden">
             <CalendarDays className="size-4 text-primary" aria-hidden="true" />
-            Reporting period
-          </div>
-          <Field label="From">
-            <Input
-              type="date"
-              value={startDate}
-              max={endDate}
-              onChange={(event) => setStartDate(event.target.value)}
-            />
-          </Field>
-          <Field label="To">
-            <Input
-              type="date"
-              value={endDate}
-              min={startDate}
-              onChange={(event) => setEndDate(event.target.value)}
-            />
-          </Field>
-          <Field label="Reporting currency">
-            <select
-              className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-              value={reportingCurrency}
-              onChange={(event) => setReportingCurrency(event.target.value as BusinessCurrency)}
-            >
-              <option value="USD">USD</option>
-              <option value="HTG">HTG</option>
-              <option value="EUR">EUR</option>
-            </select>
-          </Field>
-        </section>
+            Reporting period and currency
+            <span className="ml-auto text-xs text-muted-foreground">
+              {startDate} — {endDate} · {reportingCurrency}
+            </span>
+          </summary>
+          <section className="flex flex-wrap items-end gap-3 pt-4 sm:gap-4">
+            <Field label="From">
+              <Input
+                type="date"
+                value={startDate}
+                max={endDate}
+                onChange={(event) => setStartDate(event.target.value)}
+              />
+            </Field>
+            <Field label="To">
+              <Input
+                type="date"
+                value={endDate}
+                min={startDate}
+                onChange={(event) => setEndDate(event.target.value)}
+              />
+            </Field>
+            <Field label="Reporting currency">
+              <select
+                className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                value={reportingCurrency}
+                onChange={(event) => setReportingCurrency(event.target.value as BusinessCurrency)}
+              >
+                <option value="USD">USD</option>
+                <option value="HTG">HTG</option>
+                <option value="EUR">EUR</option>
+              </select>
+            </Field>
+          </section>
+        </details>
 
         {isMutating && (
           <p className="text-sm text-muted-foreground" role="status">
@@ -857,193 +893,148 @@ function BusinessPage() {
           </TabsList>
 
           <TabsContent value="overview" className="space-y-5">
+            <div className="grid gap-4 xl:grid-cols-[1.45fr_0.85fr]">
+              <Card className="overflow-hidden border-emerald-200 bg-gradient-to-br from-emerald-700 via-emerald-700 to-teal-700 text-white shadow-lg dark:border-emerald-900 dark:from-[#07110e] dark:via-[#101b17] dark:to-[#101c1a]">
+                <CardContent className="flex min-h-52 flex-col justify-between gap-8 p-6 sm:p-8">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-sm font-medium text-emerald-50/80">
+                        Available Meru balance
+                      </p>
+                      <p className="mt-1 text-xs text-emerald-50/70">
+                        Confirmed USD funds · ledger balance
+                      </p>
+                    </div>
+                    <span className="grid size-11 place-items-center rounded-xl border border-white/15 bg-white/10 text-emerald-50">
+                      <Wallet className="size-5" aria-hidden="true" />
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-end justify-between gap-4">
+                    <div>
+                      <p className="text-3xl font-bold tracking-tight sm:text-4xl">
+                        {!hasMeruAccount
+                          ? "Not set up"
+                          : meruBalanceVisible
+                            ? formatBusinessMoney(metrics.meruWalletBalance, "USD")
+                            : "••••••"}
+                      </p>
+                      <p className="mt-2 text-sm text-emerald-50/75">
+                        {hasMeruAccount
+                          ? "Pending operations are not included"
+                          : "Add a Meru USD account to show its balance"}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      aria-label={meruBalanceVisible ? "Hide balance" : "Show balance"}
+                      className="border-white/25 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+                      onClick={() => setMeruBalanceVisible((visible) => !visible)}
+                    >
+                      {meruBalanceVisible ? (
+                        <Eye className="size-4" aria-hidden="true" />
+                      ) : (
+                        <EyeOff className="size-4" aria-hidden="true" />
+                      )}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-border bg-card">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Quick actions</CardTitle>
+                  <CardDescription>Go directly to an existing workflow</CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
+                  <Button
+                    className="justify-start bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-500 dark:text-[#07110e] dark:hover:bg-emerald-400"
+                    onClick={() => setActiveTab("transactions")}
+                  >
+                    <Plus className="size-4" /> Record customer transfer
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="justify-start"
+                    onClick={() => setActiveTab("payments-loans")}
+                  >
+                    <Plus className="size-4" /> Collect payment or manage loan
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="justify-start"
+                    onClick={() => setActiveTab("funding")}
+                  >
+                    <Plus className="size-4" /> Add funding or account
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="justify-start"
+                    onClick={() => setActiveTab("expenses")}
+                  >
+                    <Plus className="size-4" /> Record expense
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
+
             <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
               {[
                 {
-                  label: "Available Meru balance",
-                  value: hasMeruAccount
-                    ? formatBusinessMoney(metrics.meruWalletBalance, "USD")
-                    : "Not set up",
-                  currency: "USD",
-                  icon: Wallet,
-                  cardClass:
-                    "border-emerald-200/80 bg-emerald-50/70 dark:border-emerald-900/70 dark:bg-emerald-950/35",
-                  iconClass:
-                    "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/70 dark:text-emerald-200",
+                  label: "Customer transfers",
+                  value: formatBusinessMoney(completedHtgTransactionTotal, "HTG"),
+                  note: `${metrics.completedTransactions} completed this period`,
+                  icon: ArrowUpRight,
                 },
                 {
-                  label: "Available cash balance",
-                  value: formatBusinessMoney(metrics.cashOnHand, "HTG"),
-                  currency: "HTG",
-                  icon: PiggyBank,
-                  cardClass:
-                    "border-violet-200/80 bg-violet-50/70 dark:border-violet-900/70 dark:bg-violet-950/35",
-                  iconClass:
-                    "bg-violet-100 text-violet-700 dark:bg-violet-900/70 dark:text-violet-200",
-                },
-                {
-                  label: "Customer payments received",
-                  value: formatBusinessMoney(metrics.totalCustomerReceipts, "HTG"),
-                  currency: "HTG",
+                  label: "USD sent to customers",
+                  value: formatBusinessMoney(metrics.totalUsdSentToCustomers, "USD"),
+                  note: "Confirmed transfers this period",
                   icon: CircleDollarSign,
-                  cardClass:
-                    "border-blue-200/80 bg-blue-50/70 dark:border-blue-900/70 dark:bg-blue-950/35",
-                  iconClass: "bg-blue-100 text-blue-700 dark:bg-blue-900/70 dark:text-blue-200",
                 },
                 {
-                  label: "Operating costs",
-                  value: formatBusinessMoney(metrics.totalBusinessExpenses, "USD"),
-                  currency: "USD estimate",
-                  icon: HandCoins,
-                  cardClass:
-                    "border-rose-200/80 bg-rose-50/70 dark:border-rose-900/70 dark:bg-rose-950/35",
-                  iconClass: "bg-rose-100 text-rose-700 dark:bg-rose-900/70 dark:text-rose-200",
+                  label: "Realized net profit",
+                  value: formatBusinessMoney(metrics.netProfit, "USD"),
+                  note: metrics.profitIncomplete
+                    ? "Incomplete: missing recorded inputs"
+                    : "USD estimate",
+                  icon: TrendingUp,
                 },
-              ].map(({ label, value, currency, icon: Icon, cardClass, iconClass }) => (
-                <Card key={label} className={`overflow-hidden ${cardClass}`}>
+                {
+                  label: "Customer payments outstanding",
+                  value: formatBusinessMoney(paymentLoanMetrics.outstandingCustomerPayments, "HTG"),
+                  note: `${paymentLoanMetrics.overdueCustomerPayments} overdue · HTG`,
+                  icon: HandCoins,
+                },
+              ].map(({ label, value, note, icon: Icon }) => (
+                <Card key={label} className="border-border bg-card">
                   <CardContent className="flex items-start justify-between gap-3 p-4 sm:p-5">
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
-                        {label}
-                      </p>
-                      <p className="mt-2 truncate text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+                      <p className="text-sm font-medium text-muted-foreground">{label}</p>
+                      <p className="mt-2 truncate text-2xl font-bold tracking-tight text-foreground">
                         {value}
                       </p>
-                      <span className="mt-2 inline-flex rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-300">
-                        {currency}
-                      </span>
+                      <p className="mt-1 text-xs text-muted-foreground">{note}</p>
                     </div>
-                    <span
-                      className={`grid size-10 shrink-0 place-items-center rounded-full ${iconClass}`}
-                    >
+                    <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
                       <Icon className="size-5" aria-hidden="true" />
                     </span>
                   </CardContent>
                 </Card>
               ))}
             </div>
-            <div className="grid gap-4 xl:grid-cols-[1fr_0.85fr_1.1fr]">
-              <Card>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <CardTitle className="text-base">Profit &amp; loss</CardTitle>
-                      <CardDescription className="mt-1">
-                        Current reporting period · USD estimate
-                      </CardDescription>
-                    </div>
-                    <span className="grid size-9 place-items-center rounded-lg bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-300">
-                      <TrendingUp className="size-4" aria-hidden="true" />
-                    </span>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold tracking-tight text-emerald-700 dark:text-emerald-300">
-                    {formatBusinessMoney(metrics.netProfit, "USD")}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Net profit</p>
-                  <div className="mt-5 space-y-4">
-                    {[
-                      {
-                        label: "Net profit",
-                        value: Math.abs(metrics.netProfit),
-                        display: formatBusinessMoney(metrics.netProfit, "USD"),
-                        color: "bg-emerald-500",
-                      },
-                      {
-                        label: "Operating costs",
-                        value: metrics.totalBusinessExpenses,
-                        display: formatBusinessMoney(metrics.totalBusinessExpenses, "USD"),
-                        color: "bg-blue-500",
-                      },
-                    ].map((item) => {
-                      const maxValue = Math.max(
-                        Math.abs(metrics.netProfit),
-                        metrics.totalBusinessExpenses,
-                        1,
-                      );
-                      return (
-                        <div key={item.label}>
-                          <div className="mb-1.5 flex items-center justify-between gap-3 text-xs">
-                            <span className="text-muted-foreground">{item.label}</span>
-                            <span className="font-semibold text-foreground">{item.display}</span>
-                          </div>
-                          <div className="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                            <div
-                              className={`h-full rounded-full ${item.color}`}
-                              style={{
-                                width: `${Math.min(100, (item.value / maxValue) * 100)}%`,
-                              }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {metrics.profitIncomplete && (
-                    <p className="mt-4 rounded-lg bg-amber-50 p-2.5 text-xs text-amber-800 dark:bg-amber-950/50 dark:text-amber-200">
-                      Some costs or income lack a recorded exchange rate, so profit is incomplete.
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
 
-              <Card>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <CardTitle className="text-base">Collections by currency</CardTitle>
-                      <CardDescription className="mt-1">
-                        Persisted customer payments in this period
-                      </CardDescription>
-                    </div>
-                    <span className="grid size-9 place-items-center rounded-lg bg-violet-50 text-violet-600 dark:bg-violet-950 dark:text-violet-300">
-                      <Receipt className="size-4" aria-hidden="true" />
-                    </span>
+            <div className="grid gap-4 xl:grid-cols-[1.5fr_0.8fr]">
+              <Card className="min-w-0 border-border bg-card">
+                <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
+                  <div>
+                    <CardTitle className="text-base">Recent transactions</CardTitle>
+                    <CardDescription>Latest saved business activity</CardDescription>
                   </div>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  {Object.keys(collectionTotalsByCurrency).length === 0 ? (
-                    <p className="rounded-lg bg-muted/60 p-4 text-sm text-muted-foreground">
-                      No customer payments recorded in this period.
-                    </p>
-                  ) : (
-                    Object.entries(collectionTotalsByCurrency)
-                      .sort(([left], [right]) => left.localeCompare(right))
-                      .map(([currency, amount]) => (
-                        <div
-                          key={currency}
-                          className="flex items-center justify-between gap-3 rounded-lg bg-muted/60 p-3"
-                        >
-                          <span className="flex items-center gap-2 text-sm font-medium">
-                            <span className="size-2 rounded-full bg-violet-500 dark:bg-violet-300" />
-                            {currency} collected
-                          </span>
-                          <span className="font-semibold">
-                            {formatBusinessMoney(amount, currency)}
-                          </span>
-                        </div>
-                      ))
-                  )}
-                  <p className="pt-2 text-xs text-muted-foreground">
-                    Amounts in different currencies are kept separate.
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <CardTitle className="text-base">Recent activity</CardTitle>
-                      <CardDescription className="mt-1">
-                        Latest saved business records
-                      </CardDescription>
-                    </div>
-                    <Button variant="ghost" size="sm" onClick={() => setActiveTab("transactions")}>
-                      View all <ArrowRight className="ml-1 size-3.5" />
-                    </Button>
-                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => setActiveTab("transactions")}>
+                    View all <ArrowRight className="ml-1 size-3.5" aria-hidden="true" />
+                  </Button>
                 </CardHeader>
                 <CardContent>
                   {recentActivity.length === 0 ? (
@@ -1051,95 +1042,53 @@ function BusinessPage() {
                       Your saved business activity will appear here.
                     </p>
                   ) : (
-                    <ul className="divide-y divide-border">
-                      {recentActivity.map((activity) => (
-                        <li
-                          key={activity.id}
-                          className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
-                        >
-                          <div className="flex min-w-0 items-center gap-3">
-                            <span
-                              className={`grid size-8 shrink-0 place-items-center rounded-full ${
-                                activity.direction === "in"
-                                  ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
-                                  : "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
-                              }`}
-                            >
-                              {activity.direction === "in" ? (
-                                <ArrowDownToLine className="size-4" aria-hidden="true" />
-                              ) : (
-                                <ArrowUpRight className="size-4" aria-hidden="true" />
-                              )}
-                            </span>
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-medium">{activity.title}</p>
-                              <p className="truncate text-xs text-muted-foreground">
-                                {activity.detail} · {activity.date.slice(0, 10)}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="shrink-0 text-right">
-                            <p
-                              className={`text-sm font-semibold ${
-                                activity.direction === "in"
-                                  ? "text-emerald-700 dark:text-emerald-300"
-                                  : "text-foreground"
-                              }`}
-                            >
-                              {activity.direction === "in" ? "+" : "−"}
-                              {formatBusinessMoney(activity.amount, activity.currency)}
-                            </p>
-                            <p className="text-[10px] capitalize text-muted-foreground">
-                              {activity.status.replaceAll("_", " ")}
-                            </p>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-
-            <div className="grid gap-4 xl:grid-cols-3">
-              <Card>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <CardTitle className="text-base">Top customers</CardTitle>
-                      <CardDescription className="mt-1">Recorded payments · HTG</CardDescription>
-                    </div>
-                    <Button variant="ghost" size="sm" onClick={() => setActiveTab("customers")}>
-                      View all <ArrowRight className="ml-1 size-3.5" />
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {topCustomerRows.length === 0 ? (
-                    <p className="rounded-lg bg-muted/60 p-4 text-sm text-muted-foreground">
-                      Customer activity will appear when records are saved.
-                    </p>
-                  ) : (
                     <div className="overflow-x-auto">
-                      <table className="w-full text-left text-xs">
-                        <thead className="text-muted-foreground">
+                      <table className="w-full min-w-[540px] text-left text-sm">
+                        <thead className="border-b text-xs uppercase tracking-wide text-muted-foreground">
                           <tr>
-                            <th className="pb-2 font-medium">Customer</th>
-                            <th className="pb-2 text-right font-medium">Payments</th>
-                            <th className="pb-2 text-right font-medium">Operations</th>
+                            <th className="pb-3 font-medium">Date</th>
+                            <th className="pb-3 font-medium">Activity</th>
+                            <th className="pb-3 font-medium">Customer / detail</th>
+                            <th className="pb-3 text-right font-medium">Amount</th>
+                            <th className="pb-3 text-right font-medium">Status</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
-                          {topCustomerRows.map((customer) => (
-                            <tr key={customer.id}>
-                              <td className="max-w-32 truncate py-2.5 font-medium">
-                                {customer.name}
+                          {recentActivity.map((activity) => (
+                            <tr key={activity.id}>
+                              <td className="whitespace-nowrap py-3 text-xs text-muted-foreground">
+                                {activity.date.slice(0, 10)}
                               </td>
-                              <td className="py-2.5 text-right font-semibold">
-                                {formatBusinessMoney(customer.paid, "HTG")}
+                              <td className="whitespace-nowrap py-3 font-medium">
+                                {activity.title}
                               </td>
-                              <td className="py-2.5 text-right text-muted-foreground">
-                                {customer.transactions}
+                              <td className="max-w-40 truncate py-3 text-muted-foreground">
+                                {activity.detail}
+                              </td>
+                              <td
+                                className={`whitespace-nowrap py-3 text-right font-semibold ${
+                                  activity.direction === "in"
+                                    ? "text-emerald-700 dark:text-emerald-300"
+                                    : "text-foreground"
+                                }`}
+                              >
+                                {activity.direction === "in" ? "+" : "−"}
+                                {formatBusinessMoney(activity.amount, activity.currency)}
+                              </td>
+                              <td className="py-3 text-right">
+                                <Badge
+                                  variant={
+                                    activity.status === "completed"
+                                      ? "default"
+                                      : activity.status === "failed" ||
+                                          activity.status === "cancelled"
+                                        ? "destructive"
+                                        : "secondary"
+                                  }
+                                  className="capitalize"
+                                >
+                                  {activity.status.replaceAll("_", " ")}
+                                </Badge>
                               </td>
                             </tr>
                           ))}
@@ -1150,176 +1099,631 @@ function BusinessPage() {
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Outstanding balances</CardTitle>
-                  <CardDescription className="mt-1">By currency · no mixed totals</CardDescription>
+              <Card className="border-border bg-card">
+                <CardHeader>
+                  <CardTitle className="text-base">Loan principal outstanding</CardTitle>
+                  <CardDescription>
+                    Principal is not revenue; balances stay grouped by currency.
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-2">
-                  <div className="flex items-center justify-between gap-3 rounded-lg bg-muted/60 p-3">
-                    <span className="text-sm">Customer payments · HTG</span>
-                    <span className="font-semibold">
-                      {formatBusinessMoney(paymentLoanMetrics.outstandingCustomerPayments, "HTG")}
-                    </span>
-                  </div>
-                  {Object.entries(paymentLoanMetrics.outstandingLoanPrincipalByCurrency).map(
-                    ([currency, amount]) => (
-                      <div
-                        key={currency}
-                        className="flex items-center justify-between gap-3 rounded-lg bg-muted/60 p-3"
-                      >
-                        <span className="text-sm">Loan principal · {currency}</span>
-                        <span className="font-semibold">
-                          {formatBusinessMoney(amount, currency)}
-                        </span>
-                      </div>
-                    ),
+                  {Object.entries(paymentLoanMetrics.outstandingLoanPrincipalByCurrency).length ===
+                  0 ? (
+                    <p className="rounded-lg bg-muted/60 p-4 text-sm text-muted-foreground">
+                      No outstanding loan principal.
+                    </p>
+                  ) : (
+                    Object.entries(paymentLoanMetrics.outstandingLoanPrincipalByCurrency)
+                      .sort(([left], [right]) => left.localeCompare(right))
+                      .map(([currency, amount]) => (
+                        <div
+                          key={currency}
+                          className="flex items-center justify-between rounded-lg bg-muted/60 p-3"
+                        >
+                          <span className="text-sm font-medium">{currency}</span>
+                          <span className="font-semibold">
+                            {formatBusinessMoney(amount, currency)}
+                          </span>
+                        </div>
+                      ))
                   )}
-                  <p className="text-xs text-muted-foreground">
-                    {paymentLoanMetrics.partiallyPaidTransactions} partially paid ·{" "}
-                    {paymentLoanMetrics.overdueCustomerPayments} overdue payments ·{" "}
-                    {paymentLoanMetrics.overdueLoans} overdue loans
+                  <p className="pt-2 text-xs text-muted-foreground">
+                    {paymentLoanMetrics.overdueLoans} overdue loan
+                    {paymentLoanMetrics.overdueLoans === 1 ? "" : "s"} · principal repayments do not
+                    count as profit
                   </p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Quick actions</CardTitle>
-                  <CardDescription className="mt-1">Jump to an existing workflow</CardDescription>
-                </CardHeader>
-                <CardContent className="grid gap-2">
-                  <Button
-                    className="justify-start bg-emerald-600 text-white hover:bg-emerald-700"
-                    onClick={() => setActiveTab("payments-loans")}
-                  >
-                    <Plus className="size-4" /> Record customer payment
-                  </Button>
-                  <Button className="justify-start" onClick={() => setActiveTab("payments-loans")}>
-                    <Plus className="size-4" /> Issue a loan or record repayment
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="justify-start"
-                    onClick={() => setActiveTab("expenses")}
-                  >
-                    <Plus className="size-4" /> Add expense
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="justify-start"
-                    onClick={() => setActiveTab("funding")}
-                  >
-                    <Plus className="size-4" /> Add funding
-                  </Button>
                 </CardContent>
               </Card>
             </div>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Outstanding loan principal by currency</CardTitle>
-                <CardDescription>
-                  Principal is not revenue. Currency totals stay separate unless recorded rates
-                  support a reporting-currency conversion.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-wrap gap-3">
-                {Object.entries(paymentLoanMetrics.outstandingLoanPrincipalByCurrency).length ===
-                0 ? (
-                  <p className="text-sm text-muted-foreground">No outstanding loan principal.</p>
-                ) : (
-                  Object.entries(paymentLoanMetrics.outstandingLoanPrincipalByCurrency).map(
-                    ([currency, amount]) => (
-                      <div key={currency} className="rounded-md border px-3 py-2">
-                        <p className="text-xs text-muted-foreground">{currency}</p>
-                        <p className="font-semibold">{formatBusinessMoney(amount, currency)}</p>
-                      </div>
-                    ),
-                  )
-                )}
-              </CardContent>
-            </Card>
-            {(metrics.valuationIncomplete ||
-              metrics.expensesIncomplete ||
-              metrics.profitIncomplete) && (
-              <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-                One or more totals are incomplete estimates because a required operation cost or
-                recorded exchange rate is missing.
-              </p>
-            )}
-            <Card>
-              <CardHeader>
-                <CardTitle>Business accounts</CardTitle>
-                <CardDescription>
-                  Balances come from immutable ledger entries plus each account’s opening balance.
-                  Pending operations do not affect available balances. Internal transfers move value
-                  between accounts and are not revenue.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {accounts.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    No accounts yet. Create the accounts you actually use in Funding & accounts.
-                  </p>
-                ) : (
-                  accounts.map((account) => (
-                    <div key={account.id} className="rounded-md border p-3">
-                      <p className="font-medium">{account.name}</p>
-                      <p className="text-xs capitalize text-muted-foreground">
-                        {account.type} · {account.currency}
-                      </p>
-                      <p className="mt-2 text-lg font-semibold">
-                        {formatBusinessMoney(account.balance, account.currency)}
-                      </p>
-                    </div>
-                  ))
-                )}
-              </CardContent>
-            </Card>
-            {accounts.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Record balance adjustment</CardTitle>
-                  <CardDescription>
-                    Corrections are append-only, require a reason, and cannot reduce an account
-                    below zero.
-                  </CardDescription>
+            <div className="grid gap-4 xl:grid-cols-2">
+              <Card className="border-border bg-card">
+                <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
+                  <div>
+                    <CardTitle className="text-base">Customer payment status</CardTitle>
+                    <CardDescription>
+                      {paymentLoanMetrics.partiallyPaidTransactions} partially paid ·{" "}
+                      {paymentLoanMetrics.overdueCustomerPayments} overdue
+                    </CardDescription>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => setActiveTab("payments-loans")}>
+                    Manage <ArrowRight className="ml-1 size-3.5" aria-hidden="true" />
+                  </Button>
                 </CardHeader>
-                <CardContent>
-                  <form
-                    className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
-                    onSubmit={(event) => void onCreateAdjustment(event)}
-                  >
-                    <Field label="Account">
-                      <select
-                        name="accountId"
-                        className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-                        required
+                <CardContent className="space-y-2">
+                  {outstandingPaymentRows.length === 0 ? (
+                    <p className="rounded-lg bg-muted/60 p-4 text-sm text-muted-foreground">
+                      No customer payments are outstanding.
+                    </p>
+                  ) : (
+                    outstandingPaymentRows.map(({ transaction, summary }) => (
+                      <div
+                        key={transaction.id}
+                        className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3"
                       >
-                        {accounts.map((account) => (
-                          <option key={account.id} value={account.id}>
-                            {account.name} · {account.currency}
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
-                    <Field
-                      label="Signed amount"
-                      hint="Positive adds to balance; negative reduces it."
-                    >
-                      <Input name="amount" type="number" step="0.00000001" required />
-                    </Field>
-                    <Field label="Reason">
-                      <Input name="reason" required maxLength={500} />
-                    </Field>
-                    <Button type="submit" disabled={isMutating}>
-                      Record adjustment
-                    </Button>
-                  </form>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">{transaction.customerName}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {summary.status.replaceAll("_", " ")}
+                            {transaction.dueDate ? ` · Due ${transaction.dueDate}` : ""}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-semibold">
+                            {formatBusinessMoney(summary.outstanding, "HTG")}
+                          </p>
+                          <p className="text-xs text-muted-foreground">remaining</p>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </CardContent>
               </Card>
-            )}
+
+              <Card className="border-border bg-card">
+                <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
+                  <div>
+                    <CardTitle className="text-base">Upcoming loan repayments</CardTitle>
+                    <CardDescription>Due in the next 30 days · overdue shown first</CardDescription>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => setActiveTab("payments-loans")}>
+                    Manage <ArrowRight className="ml-1 size-3.5" aria-hidden="true" />
+                  </Button>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {[...overdueLoanRows, ...upcomingLoanRows].length === 0 ? (
+                    <p className="rounded-lg bg-muted/60 p-4 text-sm text-muted-foreground">
+                      No loan repayments are due soon.
+                    </p>
+                  ) : (
+                    [...overdueLoanRows, ...upcomingLoanRows].slice(0, 5).map((loan) => {
+                      const summary = calculateLoanSummary(
+                        loan,
+                        loanRepayments.filter((repayment) => repayment.loanId === loan.id),
+                      );
+                      const isOverdue = loan.dueDate !== null && loan.dueDate < today();
+                      return (
+                        <div
+                          key={loan.id}
+                          className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium">{loan.customerName}</p>
+                            <p
+                              className={`text-xs ${
+                                isOverdue
+                                  ? "font-medium text-rose-700 dark:text-rose-300"
+                                  : "text-muted-foreground"
+                              }`}
+                            >
+                              {isOverdue ? "Overdue" : "Due"} · {loan.dueDate}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-semibold">
+                              {formatBusinessMoney(summary.nextRepayment, loan.currency)}
+                            </p>
+                            <p className="text-xs text-muted-foreground">principal + charges</p>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            <details className="group rounded-xl border bg-card p-4 shadow-sm">
+              <summary className="cursor-pointer text-sm font-semibold text-foreground">
+                Detailed accounting overview and balances
+              </summary>
+              <div className="space-y-5 pt-5">
+                <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
+                  {[
+                    {
+                      label: "Available Meru balance",
+                      value: hasMeruAccount
+                        ? formatBusinessMoney(metrics.meruWalletBalance, "USD")
+                        : "Not set up",
+                      currency: "USD",
+                      icon: Wallet,
+                      cardClass:
+                        "border-emerald-200/80 bg-emerald-50/70 dark:border-emerald-900/70 dark:bg-emerald-950/35",
+                      iconClass:
+                        "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/70 dark:text-emerald-200",
+                    },
+                    {
+                      label: "Available cash balance",
+                      value: formatBusinessMoney(metrics.cashOnHand, "HTG"),
+                      currency: "HTG",
+                      icon: PiggyBank,
+                      cardClass:
+                        "border-violet-200/80 bg-violet-50/70 dark:border-violet-900/70 dark:bg-violet-950/35",
+                      iconClass:
+                        "bg-violet-100 text-violet-700 dark:bg-violet-900/70 dark:text-violet-200",
+                    },
+                    {
+                      label: "Customer payments received",
+                      value: formatBusinessMoney(metrics.totalCustomerReceipts, "HTG"),
+                      currency: "HTG",
+                      icon: CircleDollarSign,
+                      cardClass:
+                        "border-blue-200/80 bg-blue-50/70 dark:border-blue-900/70 dark:bg-blue-950/35",
+                      iconClass: "bg-blue-100 text-blue-700 dark:bg-blue-900/70 dark:text-blue-200",
+                    },
+                    {
+                      label: "Operating costs",
+                      value: formatBusinessMoney(metrics.totalBusinessExpenses, "USD"),
+                      currency: "USD estimate",
+                      icon: HandCoins,
+                      cardClass:
+                        "border-rose-200/80 bg-rose-50/70 dark:border-rose-900/70 dark:bg-rose-950/35",
+                      iconClass: "bg-rose-100 text-rose-700 dark:bg-rose-900/70 dark:text-rose-200",
+                    },
+                  ].map(({ label, value, currency, icon: Icon, cardClass, iconClass }) => (
+                    <Card key={label} className={`overflow-hidden ${cardClass}`}>
+                      <CardContent className="flex items-start justify-between gap-3 p-4 sm:p-5">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                            {label}
+                          </p>
+                          <p className="mt-2 truncate text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+                            {value}
+                          </p>
+                          <span className="mt-2 inline-flex rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-300">
+                            {currency}
+                          </span>
+                        </div>
+                        <span
+                          className={`grid size-10 shrink-0 place-items-center rounded-full ${iconClass}`}
+                        >
+                          <Icon className="size-5" aria-hidden="true" />
+                        </span>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+                <div className="grid gap-4 xl:grid-cols-[1fr_0.85fr_1.1fr]">
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <CardTitle className="text-base">Profit &amp; loss</CardTitle>
+                          <CardDescription className="mt-1">
+                            Current reporting period · USD estimate
+                          </CardDescription>
+                        </div>
+                        <span className="grid size-9 place-items-center rounded-lg bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-300">
+                          <TrendingUp className="size-4" aria-hidden="true" />
+                        </span>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-3xl font-bold tracking-tight text-emerald-700 dark:text-emerald-300">
+                        {formatBusinessMoney(metrics.netProfit, "USD")}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Net profit</p>
+                      <div className="mt-5 space-y-4">
+                        {[
+                          {
+                            label: "Net profit",
+                            value: Math.abs(metrics.netProfit),
+                            display: formatBusinessMoney(metrics.netProfit, "USD"),
+                            color: "bg-emerald-500",
+                          },
+                          {
+                            label: "Operating costs",
+                            value: metrics.totalBusinessExpenses,
+                            display: formatBusinessMoney(metrics.totalBusinessExpenses, "USD"),
+                            color: "bg-blue-500",
+                          },
+                        ].map((item) => {
+                          const maxValue = Math.max(
+                            Math.abs(metrics.netProfit),
+                            metrics.totalBusinessExpenses,
+                            1,
+                          );
+                          return (
+                            <div key={item.label}>
+                              <div className="mb-1.5 flex items-center justify-between gap-3 text-xs">
+                                <span className="text-muted-foreground">{item.label}</span>
+                                <span className="font-semibold text-foreground">
+                                  {item.display}
+                                </span>
+                              </div>
+                              <div className="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                                <div
+                                  className={`h-full rounded-full ${item.color}`}
+                                  style={{
+                                    width: `${Math.min(100, (item.value / maxValue) * 100)}%`,
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {metrics.profitIncomplete && (
+                        <p className="mt-4 rounded-lg bg-amber-50 p-2.5 text-xs text-amber-800 dark:bg-amber-950/50 dark:text-amber-200">
+                          Some costs or income lack a recorded exchange rate, so profit is
+                          incomplete.
+                        </p>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <CardTitle className="text-base">Collections by currency</CardTitle>
+                          <CardDescription className="mt-1">
+                            Persisted customer payments in this period
+                          </CardDescription>
+                        </div>
+                        <span className="grid size-9 place-items-center rounded-lg bg-violet-50 text-violet-600 dark:bg-violet-950 dark:text-violet-300">
+                          <Receipt className="size-4" aria-hidden="true" />
+                        </span>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      {Object.keys(collectionTotalsByCurrency).length === 0 ? (
+                        <p className="rounded-lg bg-muted/60 p-4 text-sm text-muted-foreground">
+                          No customer payments recorded in this period.
+                        </p>
+                      ) : (
+                        Object.entries(collectionTotalsByCurrency)
+                          .sort(([left], [right]) => left.localeCompare(right))
+                          .map(([currency, amount]) => (
+                            <div
+                              key={currency}
+                              className="flex items-center justify-between gap-3 rounded-lg bg-muted/60 p-3"
+                            >
+                              <span className="flex items-center gap-2 text-sm font-medium">
+                                <span className="size-2 rounded-full bg-violet-500 dark:bg-violet-300" />
+                                {currency} collected
+                              </span>
+                              <span className="font-semibold">
+                                {formatBusinessMoney(amount, currency)}
+                              </span>
+                            </div>
+                          ))
+                      )}
+                      <p className="pt-2 text-xs text-muted-foreground">
+                        Amounts in different currencies are kept separate.
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <CardTitle className="text-base">Recent activity</CardTitle>
+                          <CardDescription className="mt-1">
+                            Latest saved business records
+                          </CardDescription>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setActiveTab("transactions")}
+                        >
+                          View all <ArrowRight className="ml-1 size-3.5" />
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      {recentActivity.length === 0 ? (
+                        <p className="rounded-lg bg-muted/60 p-4 text-sm text-muted-foreground">
+                          Your saved business activity will appear here.
+                        </p>
+                      ) : (
+                        <ul className="divide-y divide-border">
+                          {recentActivity.map((activity) => (
+                            <li
+                              key={activity.id}
+                              className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+                            >
+                              <div className="flex min-w-0 items-center gap-3">
+                                <span
+                                  className={`grid size-8 shrink-0 place-items-center rounded-full ${
+                                    activity.direction === "in"
+                                      ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+                                      : "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
+                                  }`}
+                                >
+                                  {activity.direction === "in" ? (
+                                    <ArrowDownToLine className="size-4" aria-hidden="true" />
+                                  ) : (
+                                    <ArrowUpRight className="size-4" aria-hidden="true" />
+                                  )}
+                                </span>
+                                <div className="min-w-0">
+                                  <p className="truncate text-sm font-medium">{activity.title}</p>
+                                  <p className="truncate text-xs text-muted-foreground">
+                                    {activity.detail} · {activity.date.slice(0, 10)}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="shrink-0 text-right">
+                                <p
+                                  className={`text-sm font-semibold ${
+                                    activity.direction === "in"
+                                      ? "text-emerald-700 dark:text-emerald-300"
+                                      : "text-foreground"
+                                  }`}
+                                >
+                                  {activity.direction === "in" ? "+" : "−"}
+                                  {formatBusinessMoney(activity.amount, activity.currency)}
+                                </p>
+                                <p className="text-[10px] capitalize text-muted-foreground">
+                                  {activity.status.replaceAll("_", " ")}
+                                </p>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <div className="grid gap-4 xl:grid-cols-3">
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <CardTitle className="text-base">Top customers</CardTitle>
+                          <CardDescription className="mt-1">
+                            Recorded payments · HTG
+                          </CardDescription>
+                        </div>
+                        <Button variant="ghost" size="sm" onClick={() => setActiveTab("customers")}>
+                          View all <ArrowRight className="ml-1 size-3.5" />
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      {topCustomerRows.length === 0 ? (
+                        <p className="rounded-lg bg-muted/60 p-4 text-sm text-muted-foreground">
+                          Customer activity will appear when records are saved.
+                        </p>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-xs">
+                            <thead className="text-muted-foreground">
+                              <tr>
+                                <th className="pb-2 font-medium">Customer</th>
+                                <th className="pb-2 text-right font-medium">Payments</th>
+                                <th className="pb-2 text-right font-medium">Operations</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-border">
+                              {topCustomerRows.map((customer) => (
+                                <tr key={customer.id}>
+                                  <td className="max-w-32 truncate py-2.5 font-medium">
+                                    {customer.name}
+                                  </td>
+                                  <td className="py-2.5 text-right font-semibold">
+                                    {formatBusinessMoney(customer.paid, "HTG")}
+                                  </td>
+                                  <td className="py-2.5 text-right text-muted-foreground">
+                                    {customer.transactions}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base">Outstanding balances</CardTitle>
+                      <CardDescription className="mt-1">
+                        By currency · no mixed totals
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      <div className="flex items-center justify-between gap-3 rounded-lg bg-muted/60 p-3">
+                        <span className="text-sm">Customer payments · HTG</span>
+                        <span className="font-semibold">
+                          {formatBusinessMoney(
+                            paymentLoanMetrics.outstandingCustomerPayments,
+                            "HTG",
+                          )}
+                        </span>
+                      </div>
+                      {Object.entries(paymentLoanMetrics.outstandingLoanPrincipalByCurrency).map(
+                        ([currency, amount]) => (
+                          <div
+                            key={currency}
+                            className="flex items-center justify-between gap-3 rounded-lg bg-muted/60 p-3"
+                          >
+                            <span className="text-sm">Loan principal · {currency}</span>
+                            <span className="font-semibold">
+                              {formatBusinessMoney(amount, currency)}
+                            </span>
+                          </div>
+                        ),
+                      )}
+                      <p className="text-xs text-muted-foreground">
+                        {paymentLoanMetrics.partiallyPaidTransactions} partially paid ·{" "}
+                        {paymentLoanMetrics.overdueCustomerPayments} overdue payments ·{" "}
+                        {paymentLoanMetrics.overdueLoans} overdue loans
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base">Quick actions</CardTitle>
+                      <CardDescription className="mt-1">
+                        Jump to an existing workflow
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="grid gap-2">
+                      <Button
+                        className="justify-start bg-emerald-600 text-white hover:bg-emerald-700"
+                        onClick={() => setActiveTab("payments-loans")}
+                      >
+                        <Plus className="size-4" /> Record customer payment
+                      </Button>
+                      <Button
+                        className="justify-start"
+                        onClick={() => setActiveTab("payments-loans")}
+                      >
+                        <Plus className="size-4" /> Issue a loan or record repayment
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="justify-start"
+                        onClick={() => setActiveTab("expenses")}
+                      >
+                        <Plus className="size-4" /> Add expense
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="justify-start"
+                        onClick={() => setActiveTab("funding")}
+                      >
+                        <Plus className="size-4" /> Add funding
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Outstanding loan principal by currency</CardTitle>
+                    <CardDescription>
+                      Principal is not revenue. Currency totals stay separate unless recorded rates
+                      support a reporting-currency conversion.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="flex flex-wrap gap-3">
+                    {Object.entries(paymentLoanMetrics.outstandingLoanPrincipalByCurrency)
+                      .length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        No outstanding loan principal.
+                      </p>
+                    ) : (
+                      Object.entries(paymentLoanMetrics.outstandingLoanPrincipalByCurrency).map(
+                        ([currency, amount]) => (
+                          <div key={currency} className="rounded-md border px-3 py-2">
+                            <p className="text-xs text-muted-foreground">{currency}</p>
+                            <p className="font-semibold">{formatBusinessMoney(amount, currency)}</p>
+                          </div>
+                        ),
+                      )
+                    )}
+                  </CardContent>
+                </Card>
+                {(metrics.valuationIncomplete ||
+                  metrics.expensesIncomplete ||
+                  metrics.profitIncomplete) && (
+                  <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+                    One or more totals are incomplete estimates because a required operation cost or
+                    recorded exchange rate is missing.
+                  </p>
+                )}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Business accounts</CardTitle>
+                    <CardDescription>
+                      Balances come from immutable ledger entries plus each account’s opening
+                      balance. Pending operations do not affect available balances. Internal
+                      transfers move value between accounts and are not revenue.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    {accounts.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        No accounts yet. Create the accounts you actually use in Funding & accounts.
+                      </p>
+                    ) : (
+                      accounts.map((account) => (
+                        <div key={account.id} className="rounded-md border p-3">
+                          <p className="font-medium">{account.name}</p>
+                          <p className="text-xs capitalize text-muted-foreground">
+                            {account.type} · {account.currency}
+                          </p>
+                          <p className="mt-2 text-lg font-semibold">
+                            {formatBusinessMoney(account.balance, account.currency)}
+                          </p>
+                        </div>
+                      ))
+                    )}
+                  </CardContent>
+                </Card>
+                {accounts.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Record balance adjustment</CardTitle>
+                      <CardDescription>
+                        Corrections are append-only, require a reason, and cannot reduce an account
+                        below zero.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <form
+                        className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
+                        onSubmit={(event) => void onCreateAdjustment(event)}
+                      >
+                        <Field label="Account">
+                          <select
+                            name="accountId"
+                            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                            required
+                          >
+                            {accounts.map((account) => (
+                              <option key={account.id} value={account.id}>
+                                {account.name} · {account.currency}
+                              </option>
+                            ))}
+                          </select>
+                        </Field>
+                        <Field
+                          label="Signed amount"
+                          hint="Positive adds to balance; negative reduces it."
+                        >
+                          <Input name="amount" type="number" step="0.00000001" required />
+                        </Field>
+                        <Field label="Reason">
+                          <Input name="reason" required maxLength={500} />
+                        </Field>
+                        <Button type="submit" disabled={isMutating}>
+                          Record adjustment
+                        </Button>
+                      </form>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            </details>
           </TabsContent>
 
           <TabsContent value="transactions" className="space-y-4">
