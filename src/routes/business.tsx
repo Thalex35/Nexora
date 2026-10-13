@@ -4,16 +4,24 @@ import {
   ArrowRight,
   ArrowDownToLine,
   ArrowUpRight,
+  Banknote,
+  BriefcaseBusiness,
+  ChartNoAxesCombined,
+  ChevronRight,
   CalendarDays,
   CircleDollarSign,
   Eye,
   EyeOff,
   HandCoins,
+  Info,
   PiggyBank,
   Plus,
+  Quote,
   Receipt,
   TrendingUp,
+  UsersRound,
   Wallet,
+  Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -132,13 +140,20 @@ function Field({ label, children, hint }: { label: string; children: ReactNode; 
 }
 
 function StatusBadge({ status }: { status: string }) {
+  const normalizedStatus = status.toLowerCase();
+  const statusClass = ["completed", "fully_paid", "repaid", "received"].includes(normalizedStatus)
+    ? "border-emerald-500/20 bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"
+    : ["failed", "cancelled", "reversed", "overdue"].includes(normalizedStatus)
+      ? "border-rose-500/20 bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-200"
+      : ["pending", "partially_paid", "partially_repaid", "upcoming", "active"].includes(
+            normalizedStatus,
+          )
+        ? "border-amber-500/20 bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200"
+        : "border-blue-500/20 bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-200";
+
   return (
-    <Badge
-      variant={
-        status === "completed" ? "default" : status === "failed" ? "destructive" : "secondary"
-      }
-    >
-      {status}
+    <Badge variant="outline" className={`whitespace-nowrap capitalize ${statusClass}`}>
+      {status.replaceAll("_", " ")}
     </Badge>
   );
 }
@@ -190,6 +205,8 @@ function BusinessPage() {
   const [reportingCurrency, setReportingCurrency] = useState<BusinessCurrency>("USD");
   const [activeTab, setActiveTab] = useState("overview");
   const [meruBalanceVisible, setMeruBalanceVisible] = useState(true);
+  const [entryType, setEntryType] = useState<"transfer" | "deposit" | "loan">("transfer");
+  const entryFormRef = useRef<HTMLDivElement>(null);
   const idempotencyKeys = useRef(new WeakMap<HTMLFormElement, string>());
 
   function idempotencyKey(form: HTMLFormElement) {
@@ -203,6 +220,13 @@ function BusinessPage() {
 
   function clearIdempotencyKey(form: HTMLFormElement) {
     idempotencyKeys.current.delete(form);
+  }
+
+  function openEntryForm(type: "transfer" | "deposit" | "loan") {
+    setEntryType(type);
+    requestAnimationFrame(() => {
+      entryFormRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
   }
 
   const records = recordsQuery.data;
@@ -766,7 +790,7 @@ function BusinessPage() {
   ]
     .sort((left, right) => right.date.localeCompare(left.date))
     .slice(0, 5);
-  const outstandingPaymentRows = openTransactions
+  const allOutstandingPaymentRows = openTransactions
     .map((transaction) => ({
       transaction,
       summary: calculateCustomerPaymentSummary(
@@ -779,8 +803,8 @@ function BusinessPage() {
       const leftDate = left.transaction.dueDate ?? left.transaction.transactionDate;
       const rightDate = right.transaction.dueDate ?? right.transaction.transactionDate;
       return leftDate.localeCompare(rightDate);
-    })
-    .slice(0, 5);
+    });
+  const outstandingPaymentRows = allOutstandingPaymentRows.slice(0, 5);
   const upcomingLoanRows = repaymentLoans
     .filter(
       (loan) => loan.dueDate !== null && loan.dueDate >= today() && loan.dueDate <= dueSoonLimit,
@@ -791,6 +815,22 @@ function BusinessPage() {
     .filter((loan) => loan.dueDate !== null && loan.dueDate < today())
     .sort((left, right) => (left.dueDate ?? "").localeCompare(right.dueDate ?? ""))
     .slice(0, 5);
+  const recentTransactions = [...transactions]
+    .sort((left, right) => right.transactionDate.localeCompare(left.transactionDate))
+    .slice(0, 7);
+  const dashboardLoanRows = [...repaymentLoans]
+    .sort((left, right) =>
+      (left.dueDate ?? "9999-12-31").localeCompare(right.dueDate ?? "9999-12-31"),
+    )
+    .slice(0, 5);
+  const outstandingCustomerCount = new Set(
+    allOutstandingPaymentRows.map(({ transaction }) => transaction.customerId),
+  ).size;
+  const recordedFeeRevenueUsd =
+    periodTransactions
+      .filter((transaction) => transaction.status === "completed")
+      .reduce((sum, transaction) => sum + (transaction.serviceFee ?? 0), 0) +
+    metrics.loanInterestAndFeesUsd;
   const collectionTotalsByCurrency = periodPayments.reduce<Record<string, number>>(
     (totals, payment) => {
       totals[payment.currency] = (totals[payment.currency] ?? 0) + payment.amount;
@@ -826,15 +866,22 @@ function BusinessPage() {
   return (
     <AppShell>
       <div className="space-y-5">
-        <PageHeader
-          title="Business"
-          description="Manage customer payments, account balances, loans, and financial performance."
-          actions={
-            <Button size="sm" variant="outline" onClick={exportReport}>
-              <ArrowDownToLine /> Export CSV
-            </Button>
-          }
-        />
+        <header className="flex items-center justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="grid size-11 shrink-0 place-items-center rounded-xl border border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-900 dark:bg-[#0b2540] dark:text-cyan-300">
+              <BriefcaseBusiness className="size-5" aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <h1 className="truncate text-2xl font-semibold text-foreground">Business</h1>
+              <p className="mt-0.5 truncate text-sm text-muted-foreground">
+                Gérez vos transferts Meru, suivez vos clients, prêts et revenus.
+              </p>
+            </div>
+          </div>
+          <Button size="sm" variant="outline" onClick={exportReport}>
+            <ArrowDownToLine aria-hidden="true" /> Export CSV
+          </Button>
+        </header>
 
         <details className="group rounded-xl border bg-card px-4 py-3 shadow-sm">
           <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-medium text-foreground [&::-webkit-details-marker]:hidden">
@@ -882,7 +929,11 @@ function BusinessPage() {
         )}
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-5">
-          <TabsList className="flex h-auto w-full justify-start gap-1 overflow-x-auto rounded-xl border bg-card p-1.5 shadow-sm">
+          <TabsList
+            className={`flex h-auto w-full justify-start gap-1 overflow-x-auto rounded-xl border bg-card p-1.5 shadow-sm ${
+              activeTab === "overview" ? "sr-only" : ""
+            }`}
+          >
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="transactions">Transactions</TabsTrigger>
             <TabsTrigger value="payments-loans">Payments & loans</TabsTrigger>
@@ -893,643 +944,289 @@ function BusinessPage() {
           </TabsList>
 
           <TabsContent value="overview" className="space-y-5">
-            <div className="grid gap-4 xl:grid-cols-[1.45fr_0.85fr]">
-              <Card className="overflow-hidden border-emerald-200 bg-gradient-to-br from-emerald-700 via-emerald-700 to-teal-700 text-white shadow-lg dark:border-emerald-900 dark:from-[#07110e] dark:via-[#101b17] dark:to-[#101c1a]">
-                <CardContent className="flex min-h-52 flex-col justify-between gap-8 p-6 sm:p-8">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-sm font-medium text-emerald-50/80">
-                        Available Meru balance
-                      </p>
-                      <p className="mt-1 text-xs text-emerald-50/70">
-                        Confirmed USD funds · ledger balance
-                      </p>
-                    </div>
-                    <span className="grid size-11 place-items-center rounded-xl border border-white/15 bg-white/10 text-emerald-50">
-                      <Wallet className="size-5" aria-hidden="true" />
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap items-end justify-between gap-4">
-                    <div>
-                      <p className="text-3xl font-bold tracking-tight sm:text-4xl">
-                        {!hasMeruAccount
-                          ? "Not set up"
-                          : meruBalanceVisible
-                            ? formatBusinessMoney(metrics.meruWalletBalance, "USD")
-                            : "••••••"}
-                      </p>
-                      <p className="mt-2 text-sm text-emerald-50/75">
-                        {hasMeruAccount
-                          ? "Pending operations are not included"
-                          : "Add a Meru USD account to show its balance"}
-                      </p>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      aria-label={meruBalanceVisible ? "Hide balance" : "Show balance"}
-                      className="border-white/25 bg-white/10 text-white hover:bg-white/20 hover:text-white"
-                      onClick={() => setMeruBalanceVisible((visible) => !visible)}
-                    >
-                      {meruBalanceVisible ? (
-                        <Eye className="size-4" aria-hidden="true" />
-                      ) : (
-                        <EyeOff className="size-4" aria-hidden="true" />
-                      )}
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border-border bg-card">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Quick actions</CardTitle>
-                  <CardDescription>Go directly to an existing workflow</CardDescription>
-                </CardHeader>
-                <CardContent className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
-                  <Button
-                    className="justify-start bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-500 dark:text-[#07110e] dark:hover:bg-emerald-400"
-                    onClick={() => setActiveTab("transactions")}
-                  >
-                    <Plus className="size-4" /> Record customer transfer
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="justify-start"
-                    onClick={() => setActiveTab("payments-loans")}
-                  >
-                    <Plus className="size-4" /> Collect payment or manage loan
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="justify-start"
-                    onClick={() => setActiveTab("funding")}
-                  >
-                    <Plus className="size-4" /> Add funding or account
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="justify-start"
-                    onClick={() => setActiveTab("expenses")}
-                  >
-                    <Plus className="size-4" /> Record expense
-                  </Button>
-                </CardContent>
-              </Card>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
-              {[
-                {
-                  label: "Customer transfers",
-                  value: formatBusinessMoney(completedHtgTransactionTotal, "HTG"),
-                  note: `${metrics.completedTransactions} completed this period`,
-                  icon: ArrowUpRight,
-                },
-                {
-                  label: "USD sent to customers",
-                  value: formatBusinessMoney(metrics.totalUsdSentToCustomers, "USD"),
-                  note: "Confirmed transfers this period",
-                  icon: CircleDollarSign,
-                },
-                {
-                  label: "Realized net profit",
-                  value: formatBusinessMoney(metrics.netProfit, "USD"),
-                  note: metrics.profitIncomplete
-                    ? "Incomplete: missing recorded inputs"
-                    : "USD estimate",
-                  icon: TrendingUp,
-                },
-                {
-                  label: "Customer payments outstanding",
-                  value: formatBusinessMoney(paymentLoanMetrics.outstandingCustomerPayments, "HTG"),
-                  note: `${paymentLoanMetrics.overdueCustomerPayments} overdue · HTG`,
-                  icon: HandCoins,
-                },
-              ].map(({ label, value, note, icon: Icon }) => (
-                <Card key={label} className="border-border bg-card">
-                  <CardContent className="flex items-start justify-between gap-3 p-4 sm:p-5">
+            <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,2.1fr)_minmax(290px,0.95fr)]">
+              <section aria-label="Aperçu Business" className="min-w-0 space-y-4">
+                <Card className="relative isolate overflow-hidden border-cyan-900/70 bg-gradient-to-br from-[#061527] via-[#052b3a] to-[#073d43] text-white shadow-lg dark:from-[#061323] dark:via-[#06232f] dark:to-[#063b3e]">
+                  <div
+                    className="pointer-events-none absolute -right-5 -top-20 size-64 rounded-full border-[28px] border-cyan-400/10"
+                    aria-hidden="true"
+                  />
+                  <div
+                    className="pointer-events-none absolute -right-16 -top-28 size-72 rounded-full border-[18px] border-teal-300/10"
+                    aria-hidden="true"
+                  />
+                  <CardContent className="relative flex min-h-36 items-center justify-between gap-5 p-5 sm:p-6">
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-muted-foreground">{label}</p>
-                      <p className="mt-2 truncate text-2xl font-bold tracking-tight text-foreground">
-                        {value}
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium text-slate-200">Solde global Meru</p>
+                        <span
+                          title="Solde disponible du compte Meru USD, calculé à partir du grand livre et des mouvements confirmés."
+                          aria-label="À propos du solde Meru"
+                          role="img"
+                        >
+                          <Info className="size-4 text-cyan-200" aria-hidden="true" />
+                        </span>
+                      </div>
+                      <div className="mt-1 flex flex-wrap items-center gap-3">
+                        <p className="text-4xl font-bold tracking-tight text-teal-300 sm:text-5xl">
+                          {!hasMeruAccount
+                            ? "Non configuré"
+                            : meruBalanceVisible
+                              ? formatBusinessMoney(metrics.meruWalletBalance, "USD")
+                              : "••••••"}
+                        </p>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          aria-label={meruBalanceVisible ? "Masquer le solde" : "Afficher le solde"}
+                          className="size-8 rounded-full border-slate-500/50 bg-slate-950/30 text-white hover:bg-slate-800/70 hover:text-white"
+                          onClick={() => setMeruBalanceVisible((visible) => !visible)}
+                        >
+                          {meruBalanceVisible ? (
+                            <Eye className="size-4" aria-hidden="true" />
+                          ) : (
+                            <EyeOff className="size-4" aria-hidden="true" />
+                          )}
+                        </Button>
+                      </div>
+                      <p className="mt-2 max-w-xl text-xs text-cyan-100/80">
+                        {hasMeruAccount
+                          ? "Montant disponible après les transferts confirmés et frais enregistrés. Les opérations en attente ne sont pas incluses."
+                          : "Créez un compte Meru USD dans Financement & comptes pour afficher son solde."}
                       </p>
-                      <p className="mt-1 text-xs text-muted-foreground">{note}</p>
                     </div>
-                    <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
-                      <Icon className="size-5" aria-hidden="true" />
-                    </span>
+                    <div className="hidden shrink-0 text-right sm:block" aria-hidden="true">
+                      <span className="text-3xl font-bold tracking-tight text-white/90">meru</span>
+                      <p className="text-[10px] text-cyan-100/70">USD · ledger</p>
+                    </div>
                   </CardContent>
                 </Card>
-              ))}
-            </div>
 
-            <div className="grid gap-4 xl:grid-cols-[1.5fr_0.8fr]">
-              <Card className="min-w-0 border-border bg-card">
-                <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
-                  <div>
-                    <CardTitle className="text-base">Recent transactions</CardTitle>
-                    <CardDescription>Latest saved business activity</CardDescription>
-                  </div>
-                  <Button variant="ghost" size="sm" onClick={() => setActiveTab("transactions")}>
-                    View all <ArrowRight className="ml-1 size-3.5" aria-hidden="true" />
-                  </Button>
-                </CardHeader>
-                <CardContent>
-                  {recentActivity.length === 0 ? (
-                    <p className="rounded-lg bg-muted/60 p-4 text-sm text-muted-foreground">
-                      Your saved business activity will appear here.
-                    </p>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full min-w-[540px] text-left text-sm">
-                        <thead className="border-b text-xs uppercase tracking-wide text-muted-foreground">
-                          <tr>
-                            <th className="pb-3 font-medium">Date</th>
-                            <th className="pb-3 font-medium">Activity</th>
-                            <th className="pb-3 font-medium">Customer / detail</th>
-                            <th className="pb-3 text-right font-medium">Amount</th>
-                            <th className="pb-3 text-right font-medium">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-border">
-                          {recentActivity.map((activity) => (
-                            <tr key={activity.id}>
-                              <td className="whitespace-nowrap py-3 text-xs text-muted-foreground">
-                                {activity.date.slice(0, 10)}
-                              </td>
-                              <td className="whitespace-nowrap py-3 font-medium">
-                                {activity.title}
-                              </td>
-                              <td className="max-w-40 truncate py-3 text-muted-foreground">
-                                {activity.detail}
-                              </td>
-                              <td
-                                className={`whitespace-nowrap py-3 text-right font-semibold ${
-                                  activity.direction === "in"
-                                    ? "text-emerald-700 dark:text-emerald-300"
-                                    : "text-foreground"
-                                }`}
-                              >
-                                {activity.direction === "in" ? "+" : "−"}
-                                {formatBusinessMoney(activity.amount, activity.currency)}
-                              </td>
-                              <td className="py-3 text-right">
-                                <Badge
-                                  variant={
-                                    activity.status === "completed"
-                                      ? "default"
-                                      : activity.status === "failed" ||
-                                          activity.status === "cancelled"
-                                        ? "destructive"
-                                        : "secondary"
-                                  }
-                                  className="capitalize"
-                                >
-                                  {activity.status.replaceAll("_", " ")}
-                                </Badge>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card className="border-border bg-card">
-                <CardHeader>
-                  <CardTitle className="text-base">Loan principal outstanding</CardTitle>
-                  <CardDescription>
-                    Principal is not revenue; balances stay grouped by currency.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  {Object.entries(paymentLoanMetrics.outstandingLoanPrincipalByCurrency).length ===
-                  0 ? (
-                    <p className="rounded-lg bg-muted/60 p-4 text-sm text-muted-foreground">
-                      No outstanding loan principal.
-                    </p>
-                  ) : (
-                    Object.entries(paymentLoanMetrics.outstandingLoanPrincipalByCurrency)
-                      .sort(([left], [right]) => left.localeCompare(right))
-                      .map(([currency, amount]) => (
-                        <div
-                          key={currency}
-                          className="flex items-center justify-between rounded-lg bg-muted/60 p-3"
-                        >
-                          <span className="text-sm font-medium">{currency}</span>
-                          <span className="font-semibold">
-                            {formatBusinessMoney(amount, currency)}
-                          </span>
-                        </div>
-                      ))
-                  )}
-                  <p className="pt-2 text-xs text-muted-foreground">
-                    {paymentLoanMetrics.overdueLoans} overdue loan
-                    {paymentLoanMetrics.overdueLoans === 1 ? "" : "s"} · principal repayments do not
-                    count as profit
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
-
-            <div className="grid gap-4 xl:grid-cols-2">
-              <Card className="border-border bg-card">
-                <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
-                  <div>
-                    <CardTitle className="text-base">Customer payment status</CardTitle>
-                    <CardDescription>
-                      {paymentLoanMetrics.partiallyPaidTransactions} partially paid ·{" "}
-                      {paymentLoanMetrics.overdueCustomerPayments} overdue
-                    </CardDescription>
-                  </div>
-                  <Button variant="ghost" size="sm" onClick={() => setActiveTab("payments-loans")}>
-                    Manage <ArrowRight className="ml-1 size-3.5" aria-hidden="true" />
-                  </Button>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  {outstandingPaymentRows.length === 0 ? (
-                    <p className="rounded-lg bg-muted/60 p-4 text-sm text-muted-foreground">
-                      No customer payments are outstanding.
-                    </p>
-                  ) : (
-                    outstandingPaymentRows.map(({ transaction, summary }) => (
-                      <div
-                        key={transaction.id}
-                        className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3"
-                      >
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium">{transaction.customerName}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {summary.status.replaceAll("_", " ")}
-                            {transaction.dueDate ? ` · Due ${transaction.dueDate}` : ""}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-semibold">
-                            {formatBusinessMoney(summary.outstanding, "HTG")}
-                          </p>
-                          <p className="text-xs text-muted-foreground">remaining</p>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card className="border-border bg-card">
-                <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
-                  <div>
-                    <CardTitle className="text-base">Upcoming loan repayments</CardTitle>
-                    <CardDescription>Due in the next 30 days · overdue shown first</CardDescription>
-                  </div>
-                  <Button variant="ghost" size="sm" onClick={() => setActiveTab("payments-loans")}>
-                    Manage <ArrowRight className="ml-1 size-3.5" aria-hidden="true" />
-                  </Button>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  {[...overdueLoanRows, ...upcomingLoanRows].length === 0 ? (
-                    <p className="rounded-lg bg-muted/60 p-4 text-sm text-muted-foreground">
-                      No loan repayments are due soon.
-                    </p>
-                  ) : (
-                    [...overdueLoanRows, ...upcomingLoanRows].slice(0, 5).map((loan) => {
-                      const summary = calculateLoanSummary(
-                        loan,
-                        loanRepayments.filter((repayment) => repayment.loanId === loan.id),
-                      );
-                      const isOverdue = loan.dueDate !== null && loan.dueDate < today();
-                      return (
-                        <div
-                          key={loan.id}
-                          className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3"
-                        >
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-medium">{loan.customerName}</p>
-                            <p
-                              className={`text-xs ${
-                                isOverdue
-                                  ? "font-medium text-rose-700 dark:text-rose-300"
-                                  : "text-muted-foreground"
-                              }`}
-                            >
-                              {isOverdue ? "Overdue" : "Due"} · {loan.dueDate}
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <p className="font-semibold">
-                              {formatBusinessMoney(summary.nextRepayment, loan.currency)}
-                            </p>
-                            <p className="text-xs text-muted-foreground">principal + charges</p>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-
-            <details className="group rounded-xl border bg-card p-4 shadow-sm">
-              <summary className="cursor-pointer text-sm font-semibold text-foreground">
-                Detailed accounting overview and balances
-              </summary>
-              <div className="space-y-5 pt-5">
                 <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
                   {[
                     {
-                      label: "Available Meru balance",
-                      value: hasMeruAccount
-                        ? formatBusinessMoney(metrics.meruWalletBalance, "USD")
-                        : "Not set up",
-                      currency: "USD",
-                      icon: Wallet,
-                      cardClass:
-                        "border-emerald-200/80 bg-emerald-50/70 dark:border-emerald-900/70 dark:bg-emerald-950/35",
-                      iconClass:
-                        "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/70 dark:text-emerald-200",
+                      label: "Transferts effectués",
+                      value: String(metrics.completedTransactions),
+                      note: "Confirmés sur la période",
+                      icon: ArrowUpRight,
+                      color:
+                        "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
                     },
                     {
-                      label: "Available cash balance",
-                      value: formatBusinessMoney(metrics.cashOnHand, "HTG"),
-                      currency: "HTG",
+                      label: "Revenus (frais)",
+                      value: formatBusinessMoney(recordedFeeRevenueUsd, "USD"),
+                      note: metrics.loanRevenueIncomplete
+                        ? "Frais reçus · conversion incomplète"
+                        : "Frais enregistrés et encaissés",
+                      icon: Banknote,
+                      color: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
+                    },
+                    {
+                      label: "Prêts en cours",
+                      value: String(repaymentLoans.length),
+                      note:
+                        Object.entries(paymentLoanMetrics.outstandingLoanPrincipalByCurrency)
+                          .map(
+                            ([currency, amount]) =>
+                              `${formatBusinessMoney(amount, currency)} ${currency}`,
+                          )
+                          .join(" · ") || "Aucun principal restant",
                       icon: PiggyBank,
-                      cardClass:
-                        "border-violet-200/80 bg-violet-50/70 dark:border-violet-900/70 dark:bg-violet-950/35",
-                      iconClass:
-                        "bg-violet-100 text-violet-700 dark:bg-violet-900/70 dark:text-violet-200",
+                      color:
+                        "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
                     },
                     {
-                      label: "Customer payments received",
-                      value: formatBusinessMoney(metrics.totalCustomerReceipts, "HTG"),
-                      currency: "HTG",
-                      icon: CircleDollarSign,
-                      cardClass:
-                        "border-blue-200/80 bg-blue-50/70 dark:border-blue-900/70 dark:bg-blue-950/35",
-                      iconClass: "bg-blue-100 text-blue-700 dark:bg-blue-900/70 dark:text-blue-200",
+                      label: "Clients en attente",
+                      value: String(outstandingCustomerCount),
+                      note: `${formatBusinessMoney(paymentLoanMetrics.outstandingCustomerPayments, "HTG")} à recevoir`,
+                      icon: UsersRound,
+                      color: "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300",
                     },
-                    {
-                      label: "Operating costs",
-                      value: formatBusinessMoney(metrics.totalBusinessExpenses, "USD"),
-                      currency: "USD estimate",
-                      icon: HandCoins,
-                      cardClass:
-                        "border-rose-200/80 bg-rose-50/70 dark:border-rose-900/70 dark:bg-rose-950/35",
-                      iconClass: "bg-rose-100 text-rose-700 dark:bg-rose-900/70 dark:text-rose-200",
-                    },
-                  ].map(({ label, value, currency, icon: Icon, cardClass, iconClass }) => (
-                    <Card key={label} className={`overflow-hidden ${cardClass}`}>
-                      <CardContent className="flex items-start justify-between gap-3 p-4 sm:p-5">
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
-                            {label}
-                          </p>
-                          <p className="mt-2 truncate text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-                            {value}
-                          </p>
-                          <span className="mt-2 inline-flex rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-300">
-                            {currency}
-                          </span>
-                        </div>
+                  ].map(({ label, value, note, icon: Icon, color }) => (
+                    <Card
+                      key={label}
+                      className="border-slate-200 bg-white shadow-sm dark:border-[#173451] dark:bg-[#091a2e]"
+                    >
+                      <CardContent className="flex min-h-24 items-center gap-3 p-3.5">
                         <span
-                          className={`grid size-10 shrink-0 place-items-center rounded-full ${iconClass}`}
+                          className={`grid size-9 shrink-0 place-items-center rounded-xl ${color}`}
                         >
-                          <Icon className="size-5" aria-hidden="true" />
+                          <Icon className="size-4" aria-hidden="true" />
                         </span>
+                        <div className="min-w-0">
+                          <p className="truncate text-xs text-muted-foreground">{label}</p>
+                          <p className="truncate text-xl font-bold text-foreground">{value}</p>
+                          <p className="truncate text-[10px] text-muted-foreground">{note}</p>
+                        </div>
                       </CardContent>
                     </Card>
                   ))}
                 </div>
-                <div className="grid gap-4 xl:grid-cols-[1fr_0.85fr_1.1fr]">
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <CardTitle className="text-base">Profit &amp; loss</CardTitle>
-                          <CardDescription className="mt-1">
-                            Current reporting period · USD estimate
-                          </CardDescription>
-                        </div>
-                        <span className="grid size-9 place-items-center rounded-lg bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-300">
-                          <TrendingUp className="size-4" aria-hidden="true" />
-                        </span>
+
+                <Card className="min-w-0 border-slate-200 bg-white shadow-sm dark:border-[#173451] dark:bg-[#091a2e]">
+                  <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0 border-b border-slate-100 pb-3 dark:border-[#142d47]">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-blue-100 text-blue-700 dark:bg-[#102f50] dark:text-blue-300">
+                        <ArrowRight className="size-4" aria-hidden="true" />
+                      </span>
+                      <div className="min-w-0">
+                        <CardTitle className="truncate text-base">Transactions récentes</CardTitle>
+                        <CardDescription className="truncate text-xs">
+                          Transferts client · montants collectés depuis le registre de paiements
+                        </CardDescription>
                       </div>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-3xl font-bold tracking-tight text-emerald-700 dark:text-emerald-300">
-                        {formatBusinessMoney(metrics.netProfit, "USD")}
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="shrink-0 border-cyan-600 text-cyan-700 hover:bg-cyan-50 dark:border-cyan-700 dark:text-cyan-300 dark:hover:bg-cyan-950"
+                      onClick={() => openEntryForm("transfer")}
+                    >
+                      <Plus className="size-4" aria-hidden="true" /> Nouvelle transaction
+                    </Button>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    {recentTransactions.length === 0 ? (
+                      <p className="p-5 text-sm text-muted-foreground">
+                        Aucune transaction enregistrée pour le moment.
                       </p>
-                      <p className="text-xs text-muted-foreground">Net profit</p>
-                      <div className="mt-5 space-y-4">
-                        {[
-                          {
-                            label: "Net profit",
-                            value: Math.abs(metrics.netProfit),
-                            display: formatBusinessMoney(metrics.netProfit, "USD"),
-                            color: "bg-emerald-500",
-                          },
-                          {
-                            label: "Operating costs",
-                            value: metrics.totalBusinessExpenses,
-                            display: formatBusinessMoney(metrics.totalBusinessExpenses, "USD"),
-                            color: "bg-blue-500",
-                          },
-                        ].map((item) => {
-                          const maxValue = Math.max(
-                            Math.abs(metrics.netProfit),
-                            metrics.totalBusinessExpenses,
-                            1,
-                          );
-                          return (
-                            <div key={item.label}>
-                              <div className="mb-1.5 flex items-center justify-between gap-3 text-xs">
-                                <span className="text-muted-foreground">{item.label}</span>
-                                <span className="font-semibold text-foreground">
-                                  {item.display}
-                                </span>
-                              </div>
-                              <div className="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                                <div
-                                  className={`h-full rounded-full ${item.color}`}
-                                  style={{
-                                    width: `${Math.min(100, (item.value / maxValue) * 100)}%`,
-                                  }}
-                                />
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                      {metrics.profitIncomplete && (
-                        <p className="mt-4 rounded-lg bg-amber-50 p-2.5 text-xs text-amber-800 dark:bg-amber-950/50 dark:text-amber-200">
-                          Some costs or income lack a recorded exchange rate, so profit is
-                          incomplete.
-                        </p>
-                      )}
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <CardTitle className="text-base">Collections by currency</CardTitle>
-                          <CardDescription className="mt-1">
-                            Persisted customer payments in this period
-                          </CardDescription>
-                        </div>
-                        <span className="grid size-9 place-items-center rounded-lg bg-violet-50 text-violet-600 dark:bg-violet-950 dark:text-violet-300">
-                          <Receipt className="size-4" aria-hidden="true" />
-                        </span>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-2">
-                      {Object.keys(collectionTotalsByCurrency).length === 0 ? (
-                        <p className="rounded-lg bg-muted/60 p-4 text-sm text-muted-foreground">
-                          No customer payments recorded in this period.
-                        </p>
-                      ) : (
-                        Object.entries(collectionTotalsByCurrency)
-                          .sort(([left], [right]) => left.localeCompare(right))
-                          .map(([currency, amount]) => (
-                            <div
-                              key={currency}
-                              className="flex items-center justify-between gap-3 rounded-lg bg-muted/60 p-3"
-                            >
-                              <span className="flex items-center gap-2 text-sm font-medium">
-                                <span className="size-2 rounded-full bg-violet-500 dark:bg-violet-300" />
-                                {currency} collected
-                              </span>
-                              <span className="font-semibold">
-                                {formatBusinessMoney(amount, currency)}
-                              </span>
-                            </div>
-                          ))
-                      )}
-                      <p className="pt-2 text-xs text-muted-foreground">
-                        Amounts in different currencies are kept separate.
-                      </p>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <CardTitle className="text-base">Recent activity</CardTitle>
-                          <CardDescription className="mt-1">
-                            Latest saved business records
-                          </CardDescription>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setActiveTab("transactions")}
-                        >
-                          View all <ArrowRight className="ml-1 size-3.5" />
-                        </Button>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      {recentActivity.length === 0 ? (
-                        <p className="rounded-lg bg-muted/60 p-4 text-sm text-muted-foreground">
-                          Your saved business activity will appear here.
-                        </p>
-                      ) : (
-                        <ul className="divide-y divide-border">
-                          {recentActivity.map((activity) => (
-                            <li
-                              key={activity.id}
-                              className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
-                            >
-                              <div className="flex min-w-0 items-center gap-3">
-                                <span
-                                  className={`grid size-8 shrink-0 place-items-center rounded-full ${
-                                    activity.direction === "in"
-                                      ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
-                                      : "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
-                                  }`}
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full min-w-[760px] text-left text-xs">
+                          <thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500 dark:bg-[#071426] dark:text-slate-400">
+                            <tr>
+                              <th className="px-3 py-2.5 font-medium">Date</th>
+                              <th className="px-3 py-2.5 font-medium">Type</th>
+                              <th className="px-3 py-2.5 font-medium">Client</th>
+                              <th className="px-3 py-2.5 text-right font-medium">USD envoyé</th>
+                              <th className="px-3 py-2.5 text-right font-medium">Frais/coûts</th>
+                              <th className="px-3 py-2.5 text-right font-medium">HTG reçu</th>
+                              <th className="px-3 py-2.5 font-medium">Statut</th>
+                              <th className="px-3 py-2.5 font-medium">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 dark:divide-[#142d47]">
+                            {recentTransactions.map((transaction) => {
+                              const paymentSummary = calculateCustomerPaymentSummary(
+                                transaction,
+                                payments.filter(
+                                  (payment) => payment.customerTransactionId === transaction.id,
+                                ),
+                              );
+                              const transactionCosts =
+                                calculateTransactionProfit(transaction).costs;
+                              return (
+                                <tr
+                                  key={transaction.id}
+                                  className="transition-colors hover:bg-slate-50/80 dark:hover:bg-[#0c2037]"
                                 >
-                                  {activity.direction === "in" ? (
-                                    <ArrowDownToLine className="size-4" aria-hidden="true" />
-                                  ) : (
-                                    <ArrowUpRight className="size-4" aria-hidden="true" />
-                                  )}
-                                </span>
-                                <div className="min-w-0">
-                                  <p className="truncate text-sm font-medium">{activity.title}</p>
-                                  <p className="truncate text-xs text-muted-foreground">
-                                    {activity.detail} · {activity.date.slice(0, 10)}
-                                  </p>
-                                </div>
-                              </div>
-                              <div className="shrink-0 text-right">
-                                <p
-                                  className={`text-sm font-semibold ${
-                                    activity.direction === "in"
-                                      ? "text-emerald-700 dark:text-emerald-300"
-                                      : "text-foreground"
-                                  }`}
-                                >
-                                  {activity.direction === "in" ? "+" : "−"}
-                                  {formatBusinessMoney(activity.amount, activity.currency)}
-                                </p>
-                                <p className="text-[10px] capitalize text-muted-foreground">
-                                  {activity.status.replaceAll("_", " ")}
-                                </p>
-                              </div>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </CardContent>
-                  </Card>
-                </div>
-
-                <div className="grid gap-4 xl:grid-cols-3">
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <CardTitle className="text-base">Top customers</CardTitle>
-                          <CardDescription className="mt-1">
-                            Recorded payments · HTG
-                          </CardDescription>
-                        </div>
-                        <Button variant="ghost" size="sm" onClick={() => setActiveTab("customers")}>
-                          View all <ArrowRight className="ml-1 size-3.5" />
-                        </Button>
+                                  <td className="whitespace-nowrap px-3 py-2.5 text-muted-foreground">
+                                    {new Date(transaction.transactionDate).toLocaleString()}
+                                  </td>
+                                  <td className="px-3 py-2.5">
+                                    <Badge className="border-0 bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-200">
+                                      Transfert
+                                    </Badge>
+                                  </td>
+                                  <td className="max-w-32 truncate px-3 py-2.5 font-medium">
+                                    {transaction.customerName}
+                                  </td>
+                                  <td className="whitespace-nowrap px-3 py-2.5 text-right">
+                                    {formatBusinessMoney(transaction.usdSent, "USD")}
+                                  </td>
+                                  <td className="whitespace-nowrap px-3 py-2.5 text-right text-muted-foreground">
+                                    {formatBusinessMoney(transactionCosts, "USD")}
+                                  </td>
+                                  <td className="whitespace-nowrap px-3 py-2.5 text-right text-emerald-700 dark:text-emerald-300">
+                                    {formatBusinessMoney(paymentSummary.totalPaid, "HTG")}
+                                  </td>
+                                  <td className="px-3 py-2.5">
+                                    <StatusBadge status={transaction.status} />
+                                  </td>
+                                  <td className="px-3 py-2.5">
+                                    <OperationActions
+                                      type="customer_transaction"
+                                      id={transaction.id}
+                                      status={transaction.status}
+                                      disabled={isMutating}
+                                      onAction={(action) =>
+                                        void changeStatus(
+                                          "customer_transaction",
+                                          transaction.id,
+                                          action,
+                                        )
+                                      }
+                                    />
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
                       </div>
+                    )}
+                    <div className="flex justify-end border-t border-slate-100 p-2.5 dark:border-[#142d47]">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-cyan-700 dark:text-cyan-300"
+                        onClick={() => setActiveTab("transactions")}
+                      >
+                        Voir tout <ChevronRight className="ml-1 size-3.5" aria-hidden="true" />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <div className="grid gap-4 xl:grid-cols-2">
+                  <Card className="border-slate-200 bg-white shadow-sm dark:border-[#173451] dark:bg-[#091a2e]">
+                    <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0 pb-3">
+                      <div>
+                        <CardTitle className="text-sm">Clients en attente de paiement</CardTitle>
+                        <CardDescription className="text-xs">
+                          Soldes réels en HTG · transfert et collecte indépendants
+                        </CardDescription>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-cyan-700 dark:text-cyan-300"
+                        onClick={() => setActiveTab("payments-loans")}
+                      >
+                        Voir tout <ChevronRight className="size-3.5" aria-hidden="true" />
+                      </Button>
                     </CardHeader>
-                    <CardContent>
-                      {topCustomerRows.length === 0 ? (
-                        <p className="rounded-lg bg-muted/60 p-4 text-sm text-muted-foreground">
-                          Customer activity will appear when records are saved.
+                    <CardContent className="p-0">
+                      {outstandingPaymentRows.length === 0 ? (
+                        <p className="px-4 pb-4 text-sm text-muted-foreground">
+                          Aucun paiement client en attente.
                         </p>
                       ) : (
                         <div className="overflow-x-auto">
-                          <table className="w-full text-left text-xs">
-                            <thead className="text-muted-foreground">
+                          <table className="w-full min-w-[390px] text-xs">
+                            <thead className="border-y border-slate-100 bg-slate-50 text-[10px] text-muted-foreground dark:border-[#142d47] dark:bg-[#071426]">
                               <tr>
-                                <th className="pb-2 font-medium">Customer</th>
-                                <th className="pb-2 text-right font-medium">Payments</th>
-                                <th className="pb-2 text-right font-medium">Operations</th>
+                                <th className="px-3 py-2 text-left font-medium">Nom</th>
+                                <th className="px-3 py-2 text-right font-medium">Reste (HTG)</th>
+                                <th className="px-3 py-2 text-left font-medium">Statut</th>
+                                <th className="px-3 py-2 text-right font-medium">Échéance</th>
                               </tr>
                             </thead>
-                            <tbody className="divide-y divide-border">
-                              {topCustomerRows.map((customer) => (
-                                <tr key={customer.id}>
-                                  <td className="max-w-32 truncate py-2.5 font-medium">
-                                    {customer.name}
+                            <tbody className="divide-y divide-slate-100 dark:divide-[#142d47]">
+                              {outstandingPaymentRows.map(({ transaction, summary }) => (
+                                <tr key={transaction.id}>
+                                  <td className="max-w-28 truncate px-3 py-2.5 font-medium">
+                                    {transaction.customerName}
                                   </td>
-                                  <td className="py-2.5 text-right font-semibold">
-                                    {formatBusinessMoney(customer.paid, "HTG")}
+                                  <td className="whitespace-nowrap px-3 py-2.5 text-right">
+                                    {formatBusinessMoney(summary.outstanding, "HTG")}
                                   </td>
-                                  <td className="py-2.5 text-right text-muted-foreground">
-                                    {customer.transactions}
+                                  <td className="px-3 py-2.5">
+                                    <StatusBadge status={summary.status} />
+                                  </td>
+                                  <td className="whitespace-nowrap px-3 py-2.5 text-right text-muted-foreground">
+                                    {transaction.dueDate ?? "—"}
                                   </td>
                                 </tr>
                               ))}
@@ -1540,188 +1237,1440 @@ function BusinessPage() {
                     </CardContent>
                   </Card>
 
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-base">Outstanding balances</CardTitle>
-                      <CardDescription className="mt-1">
-                        By currency · no mixed totals
-                      </CardDescription>
+                  <Card className="border-slate-200 bg-white shadow-sm dark:border-[#173451] dark:bg-[#091a2e]">
+                    <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0 pb-3">
+                      <div>
+                        <CardTitle className="text-sm">Prêts en cours</CardTitle>
+                        <CardDescription className="text-xs">
+                          Principal restant · par devise
+                        </CardDescription>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-cyan-700 dark:text-cyan-300"
+                        onClick={() => setActiveTab("payments-loans")}
+                      >
+                        Voir tout <ChevronRight className="size-3.5" aria-hidden="true" />
+                      </Button>
                     </CardHeader>
-                    <CardContent className="space-y-2">
-                      <div className="flex items-center justify-between gap-3 rounded-lg bg-muted/60 p-3">
-                        <span className="text-sm">Customer payments · HTG</span>
-                        <span className="font-semibold">
-                          {formatBusinessMoney(
-                            paymentLoanMetrics.outstandingCustomerPayments,
-                            "HTG",
-                          )}
+                    <CardContent className="p-0">
+                      {dashboardLoanRows.length === 0 ? (
+                        <p className="px-4 pb-4 text-sm text-muted-foreground">
+                          Aucun prêt avec un solde restant.
+                        </p>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full min-w-[390px] text-xs">
+                            <thead className="border-y border-slate-100 bg-slate-50 text-[10px] text-muted-foreground dark:border-[#142d47] dark:bg-[#071426]">
+                              <tr>
+                                <th className="px-3 py-2 text-left font-medium">Nom</th>
+                                <th className="px-3 py-2 text-right font-medium">Principal</th>
+                                <th className="px-3 py-2 text-left font-medium">Échéance</th>
+                                <th className="px-3 py-2 text-right font-medium">Statut</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 dark:divide-[#142d47]">
+                              {dashboardLoanRows.map((loan) => {
+                                const summary = calculateLoanSummary(
+                                  loan,
+                                  loanRepayments.filter(
+                                    (repayment) => repayment.loanId === loan.id,
+                                  ),
+                                );
+                                const overdue =
+                                  loan.dueDate !== null &&
+                                  loan.dueDate < today() &&
+                                  summary.outstandingPrincipal > 0;
+                                return (
+                                  <tr key={loan.id}>
+                                    <td className="max-w-28 truncate px-3 py-2.5 font-medium">
+                                      {loan.customerName}
+                                    </td>
+                                    <td className="whitespace-nowrap px-3 py-2.5 text-right">
+                                      {formatBusinessMoney(
+                                        summary.outstandingPrincipal,
+                                        loan.currency,
+                                      )}
+                                    </td>
+                                    <td className="whitespace-nowrap px-3 py-2.5 text-muted-foreground">
+                                      {loan.dueDate ?? loan.issuedDate}
+                                    </td>
+                                    <td className="px-3 py-2.5 text-right">
+                                      <StatusBadge status={overdue ? "overdue" : loan.status} />
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              </section>
+
+              <aside className="min-w-0 space-y-4">
+                <Card className="border-slate-200 bg-white shadow-sm dark:border-[#173451] dark:bg-[#091a2e]">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="flex items-center gap-2 text-sm">
+                      <Zap className="size-4 text-amber-500" aria-hidden="true" />
+                      Actions rapides
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {[
+                      {
+                        title: "Nouvelle transaction",
+                        description: "Transfert, dépôt ou prêt",
+                        icon: BriefcaseBusiness,
+                        action: () => openEntryForm("transfer"),
+                        style:
+                          "border-teal-500/60 bg-gradient-to-r from-teal-600 to-cyan-600 text-white hover:from-teal-500 hover:to-cyan-500",
+                      },
+                      {
+                        title: "Voir tous les clients",
+                        description: "Gérer les profils et soldes",
+                        icon: UsersRound,
+                        action: () => setActiveTab("customers"),
+                        style:
+                          "border-blue-900/20 bg-blue-50 text-blue-950 hover:bg-blue-100 dark:border-blue-900 dark:bg-[#102b4b] dark:text-blue-100 dark:hover:bg-[#16365b]",
+                      },
+                      {
+                        title: "Voir les rapports",
+                        description: "Statistiques et historique",
+                        icon: ChartNoAxesCombined,
+                        action: () => setActiveTab("reports"),
+                        style:
+                          "border-violet-900/20 bg-violet-50 text-violet-950 hover:bg-violet-100 dark:border-violet-900 dark:bg-[#241f49] dark:text-violet-100 dark:hover:bg-[#30295d]",
+                      },
+                    ].map(({ title, description, icon: Icon, action, style }) => (
+                      <Button
+                        key={title}
+                        variant="outline"
+                        className={`h-auto w-full justify-start gap-3 rounded-xl px-3 py-2.5 text-left ${style}`}
+                        onClick={action}
+                      >
+                        <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-black/5 dark:bg-black/15">
+                          <Icon className="size-4" aria-hidden="true" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-xs font-semibold">{title}</span>
+                          <span className="mt-0.5 block truncate text-[10px] opacity-75">
+                            {description}
+                          </span>
+                        </span>
+                        <ChevronRight className="size-4 shrink-0 opacity-75" aria-hidden="true" />
+                      </Button>
+                    ))}
+                  </CardContent>
+                </Card>
+
+                <Card
+                  id="business-entry-form"
+                  ref={entryFormRef}
+                  className="scroll-mt-6 border-slate-200 bg-white shadow-sm dark:border-[#173451] dark:bg-[#091a2e]"
+                >
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-sm">
+                      <CircleDollarSign className="size-4 text-cyan-600 dark:text-cyan-300" />
+                      Ajouter une transaction
+                    </CardTitle>
+                    <CardDescription className="text-xs">
+                      Utilise les opérations et règles comptables existantes.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="mb-4 grid grid-cols-3 rounded-lg border border-slate-200 p-1 dark:border-[#1a3653]">
+                      {(
+                        [
+                          ["transfer", "Transfert"],
+                          ["deposit", "Dépôt"],
+                          ["loan", "Prêt"],
+                        ] as const
+                      ).map(([type, label]) => (
+                        <button
+                          key={type}
+                          type="button"
+                          className={`rounded-md px-2 py-2 text-xs font-medium transition-colors ${
+                            entryType === type
+                              ? "bg-cyan-600 text-white shadow-sm dark:bg-teal-500 dark:text-[#041521]"
+                              : "text-muted-foreground hover:bg-slate-100 dark:hover:bg-[#10243b]"
+                          }`}
+                          aria-pressed={entryType === type}
+                          onClick={() => setEntryType(type)}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {entryType === "transfer" &&
+                      (customers.length === 0 ||
+                      htgAccounts.length === 0 ||
+                      usdAccounts.length === 0 ? (
+                        <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+                          Créez un client et des comptes HTG et USD avant d’enregistrer un
+                          transfert.
+                        </p>
+                      ) : (
+                        <form
+                          key="quick-transfer"
+                          className="space-y-3"
+                          onSubmit={(event) => void onCreateTransaction(event)}
+                        >
+                          <Field label="Nom de l’utilisateur">
+                            <select
+                              name="customerId"
+                              className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm dark:border-[#1a3653] dark:bg-[#061527] dark:text-slate-100"
+                              required
+                            >
+                              {customers.map((customer) => (
+                                <option key={customer.id} value={customer.id}>
+                                  {customer.name}
+                                </option>
+                              ))}
+                            </select>
+                          </Field>
+                          <Field label="Compte de réception HTG">
+                            <select
+                              name="receiptAccountId"
+                              className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm dark:border-[#1a3653] dark:bg-[#061527] dark:text-slate-100"
+                              required
+                            >
+                              {htgAccounts.map((account) => (
+                                <option key={account.id} value={account.id}>
+                                  {account.name}
+                                </option>
+                              ))}
+                            </select>
+                          </Field>
+                          <Field label="Compte Meru / sortie USD">
+                            <select
+                              name="payoutAccountId"
+                              className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm dark:border-[#1a3653] dark:bg-[#061527] dark:text-slate-100"
+                              required
+                            >
+                              {usdAccounts.map((account) => (
+                                <option key={account.id} value={account.id}>
+                                  {account.name}
+                                </option>
+                              ))}
+                            </select>
+                          </Field>
+                          <div className="grid grid-cols-2 gap-3">
+                            <Field label="Montant envoyé (USD)">
+                              <Input
+                                name="usdSent"
+                                type="number"
+                                min="0.01"
+                                step="0.01"
+                                required
+                                className="dark:border-[#1a3653] dark:bg-[#061527]"
+                              />
+                            </Field>
+                            <Field label="Frais transfert (USD)">
+                              <Input
+                                name="transferFee"
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                defaultValue="0"
+                                required
+                                className="dark:border-[#1a3653] dark:bg-[#061527]"
+                              />
+                            </Field>
+                          </div>
+                          <Field label="Montant dû en gourdes (HTG)">
+                            <Input
+                              name="htgReceived"
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              required
+                              className="dark:border-[#1a3653] dark:bg-[#061527]"
+                            />
+                          </Field>
+                          <details className="rounded-lg border border-slate-200 px-3 py-2 dark:border-[#1a3653]">
+                            <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
+                              Détails facultatifs
+                            </summary>
+                            <div className="mt-3 space-y-3">
+                              <Field label="Date et heure">
+                                <Input
+                                  name="transactionDate"
+                                  type="datetime-local"
+                                  defaultValue={new Date().toISOString().slice(0, 16)}
+                                  required
+                                  className="dark:border-[#1a3653] dark:bg-[#061527]"
+                                />
+                              </Field>
+                              <Field label="Date limite (facultatif)">
+                                <Input
+                                  name="dueDate"
+                                  type="date"
+                                  className="dark:border-[#1a3653] dark:bg-[#061527]"
+                                />
+                              </Field>
+                              <Field label="Taux HTG par USD (facultatif)">
+                                <Input
+                                  name="exchangeRate"
+                                  type="number"
+                                  min="0.000001"
+                                  step="0.000001"
+                                  className="dark:border-[#1a3653] dark:bg-[#061527]"
+                                />
+                              </Field>
+                              <Field label="Frais de service / marge (USD)">
+                                <Input
+                                  name="serviceFee"
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  className="dark:border-[#1a3653] dark:bg-[#061527]"
+                                />
+                              </Field>
+                              <Field label="Coût d’acquisition crypto (USD)">
+                                <Input
+                                  name="cryptoCost"
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  className="dark:border-[#1a3653] dark:bg-[#061527]"
+                                />
+                              </Field>
+                              <Field label="Autres frais (USD)">
+                                <Input
+                                  name="otherExpenses"
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  className="dark:border-[#1a3653] dark:bg-[#061527]"
+                                />
+                              </Field>
+                              <Field label="Référence">
+                                <Input
+                                  name="reference"
+                                  className="dark:border-[#1a3653] dark:bg-[#061527]"
+                                />
+                              </Field>
+                              <Field label="Notes">
+                                <Input
+                                  name="notes"
+                                  className="dark:border-[#1a3653] dark:bg-[#061527]"
+                                />
+                              </Field>
+                            </div>
+                          </details>
+                          <p className="text-[11px] leading-relaxed text-muted-foreground">
+                            Le transfert sera créé en attente. Confirmez-le dans Transactions pour
+                            comptabiliser le mouvement USD. Les paiements HTG se saisissent
+                            séparément.
+                          </p>
+                          <Button
+                            type="submit"
+                            disabled={isMutating}
+                            className="w-full bg-teal-600 text-white hover:bg-teal-700 dark:bg-teal-400 dark:text-[#041521] dark:hover:bg-teal-300"
+                          >
+                            <Plus className="size-4" aria-hidden="true" /> Enregistrer
+                          </Button>
+                        </form>
+                      ))}
+
+                    {entryType === "deposit" &&
+                      (accounts.length === 0 ? (
+                        <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+                          Créez un compte avant d’enregistrer un dépôt.
+                        </p>
+                      ) : (
+                        <form
+                          key="quick-deposit"
+                          className="space-y-3"
+                          onSubmit={(event) => void onCreateFunding(event)}
+                        >
+                          <input type="hidden" name="fundingType" value="replenishment" />
+                          <Field label="Compte crédité">
+                            <select
+                              name="destinationAccountId"
+                              className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm dark:border-[#1a3653] dark:bg-[#061527] dark:text-slate-100"
+                              required
+                            >
+                              {accounts.map((account) => (
+                                <option key={account.id} value={account.id}>
+                                  {account.name} · {account.currency}
+                                </option>
+                              ))}
+                            </select>
+                          </Field>
+                          <Field label="Compte source (facultatif)">
+                            <select
+                              name="sourceAccountId"
+                              defaultValue=""
+                              className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm dark:border-[#1a3653] dark:bg-[#061527] dark:text-slate-100"
+                            >
+                              <option value="">Fonds externes / non suivis</option>
+                              {accounts.map((account) => (
+                                <option key={account.id} value={account.id}>
+                                  {account.name} · {account.currency}
+                                </option>
+                              ))}
+                            </select>
+                          </Field>
+                          <Field label="Montant réellement crédité">
+                            <Input
+                              name="creditedAmount"
+                              type="number"
+                              min="0.00000001"
+                              step="0.00000001"
+                              required
+                              className="dark:border-[#1a3653] dark:bg-[#061527]"
+                            />
+                          </Field>
+                          <div className="grid grid-cols-2 gap-3">
+                            <Field label="Frais (devise source)">
+                              <Input
+                                name="feeAmount"
+                                type="number"
+                                min="0"
+                                step="0.00000001"
+                                defaultValue="0"
+                                required
+                                className="dark:border-[#1a3653] dark:bg-[#061527]"
+                              />
+                            </Field>
+                            <Field label="Frais (USD)">
+                              <Input
+                                name="feeUsd"
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                className="dark:border-[#1a3653] dark:bg-[#061527]"
+                              />
+                            </Field>
+                          </div>
+                          <Field label="Date et heure">
+                            <Input
+                              name="fundingDate"
+                              type="datetime-local"
+                              defaultValue={new Date().toISOString().slice(0, 16)}
+                              required
+                              className="dark:border-[#1a3653] dark:bg-[#061527]"
+                            />
+                          </Field>
+                          <Field label="Référence ou notes">
+                            <Input
+                              name="reference"
+                              maxLength={200}
+                              className="dark:border-[#1a3653] dark:bg-[#061527]"
+                            />
+                          </Field>
+                          <p className="text-[11px] leading-relaxed text-muted-foreground">
+                            Dépôt enregistré en attente. Confirmez le crédit réel dans Financement &
+                            comptes. Un dépôt n’est pas un revenu.
+                          </p>
+                          <Button
+                            type="submit"
+                            disabled={isMutating}
+                            className="w-full bg-teal-600 text-white hover:bg-teal-700 dark:bg-teal-400 dark:text-[#041521] dark:hover:bg-teal-300"
+                          >
+                            <Plus className="size-4" aria-hidden="true" /> Enregistrer
+                          </Button>
+                        </form>
+                      ))}
+
+                    {entryType === "loan" &&
+                      (customers.length === 0 || accounts.length === 0 ? (
+                        <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+                          Créez un client et un compte de décaissement avant d’émettre un prêt.
+                        </p>
+                      ) : (
+                        <form
+                          key="quick-loan"
+                          className="space-y-3"
+                          onSubmit={(event) => void onCreateLoan(event)}
+                        >
+                          <Field label="Nom de l’emprunteur">
+                            <select
+                              name="loanCustomerId"
+                              className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm dark:border-[#1a3653] dark:bg-[#061527] dark:text-slate-100"
+                              required
+                            >
+                              {customers.map((customer) => (
+                                <option key={customer.id} value={customer.id}>
+                                  {customer.name}
+                                </option>
+                              ))}
+                            </select>
+                          </Field>
+                          <Field label="Compte de décaissement">
+                            <select
+                              name="loanAccountId"
+                              className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm dark:border-[#1a3653] dark:bg-[#061527] dark:text-slate-100"
+                              required
+                            >
+                              {accounts.map((account) => (
+                                <option key={account.id} value={account.id}>
+                                  {account.name} · {account.currency}
+                                </option>
+                              ))}
+                            </select>
+                          </Field>
+                          <Field label="Principal prêté">
+                            <Input
+                              name="loanPrincipal"
+                              type="number"
+                              min="0.01"
+                              step="0.01"
+                              required
+                              className="dark:border-[#1a3653] dark:bg-[#061527]"
+                            />
+                          </Field>
+                          <div className="grid grid-cols-2 gap-3">
+                            <Field label="Date d’émission">
+                              <Input
+                                name="loanIssuedDate"
+                                type="date"
+                                defaultValue={today()}
+                                required
+                                className="dark:border-[#1a3653] dark:bg-[#061527]"
+                              />
+                            </Field>
+                            <Field label="Date d’échéance">
+                              <Input
+                                name="loanDueDate"
+                                type="date"
+                                className="dark:border-[#1a3653] dark:bg-[#061527]"
+                              />
+                            </Field>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <Field label="Intérêts convenus">
+                              <Input
+                                name="loanInterest"
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                defaultValue="0"
+                                className="dark:border-[#1a3653] dark:bg-[#061527]"
+                              />
+                            </Field>
+                            <Field label="Frais convenus">
+                              <Input
+                                name="loanFee"
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                defaultValue="0"
+                                className="dark:border-[#1a3653] dark:bg-[#061527]"
+                              />
+                            </Field>
+                          </div>
+                          <Field label="Notes (facultatif)">
+                            <Input
+                              name="loanNotes"
+                              maxLength={1000}
+                              className="dark:border-[#1a3653] dark:bg-[#061527]"
+                            />
+                          </Field>
+                          <p className="text-[11px] leading-relaxed text-muted-foreground">
+                            Le principal est un actif et non un revenu. Le décaissement est
+                            comptabilisé dans la devise du compte sélectionné.
+                          </p>
+                          <Button
+                            type="submit"
+                            disabled={isMutating}
+                            className="w-full bg-teal-600 text-white hover:bg-teal-700 dark:bg-teal-400 dark:text-[#041521] dark:hover:bg-teal-300"
+                          >
+                            <Plus className="size-4" aria-hidden="true" /> Enregistrer le prêt
+                          </Button>
+                        </form>
+                      ))}
+                  </CardContent>
+                </Card>
+
+                <Card className="overflow-hidden border-slate-200 bg-gradient-to-br from-slate-50 to-cyan-50 shadow-sm dark:border-[#173451] dark:from-[#08182a] dark:to-[#09283a]">
+                  <CardContent className="relative p-4">
+                    <Quote
+                      className="absolute right-4 top-4 size-8 text-cyan-200 dark:text-cyan-900"
+                      aria-hidden="true"
+                    />
+                    <p className="pr-8 text-xs font-medium leading-relaxed text-slate-700 dark:text-slate-200">
+                      « Chaque transaction compte. Gérez votre activité avec méthode et discipline.
+                      »
+                    </p>
+                    <p className="mt-2 text-[10px] text-muted-foreground">— Nexora</p>
+                  </CardContent>
+                </Card>
+              </aside>
+            </div>
+
+            <details className="group rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-[#173451] dark:bg-[#091a2e]">
+              <summary className="cursor-pointer text-sm font-semibold text-foreground">
+                Ouvrir la vue comptable détaillée
+              </summary>
+              <div className="space-y-5 pt-5">
+                <div className="grid gap-4 xl:grid-cols-[1.45fr_0.85fr]">
+                  <Card className="overflow-hidden border-emerald-200 bg-gradient-to-br from-emerald-700 via-emerald-700 to-teal-700 text-white shadow-lg dark:border-emerald-900 dark:from-[#07110e] dark:via-[#101b17] dark:to-[#101c1a]">
+                    <CardContent className="flex min-h-52 flex-col justify-between gap-8 p-6 sm:p-8">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="text-sm font-medium text-emerald-50/80">
+                            Available Meru balance
+                          </p>
+                          <p className="mt-1 text-xs text-emerald-50/70">
+                            Confirmed USD funds · ledger balance
+                          </p>
+                        </div>
+                        <span className="grid size-11 place-items-center rounded-xl border border-white/15 bg-white/10 text-emerald-50">
+                          <Wallet className="size-5" aria-hidden="true" />
                         </span>
                       </div>
-                      {Object.entries(paymentLoanMetrics.outstandingLoanPrincipalByCurrency).map(
-                        ([currency, amount]) => (
-                          <div
-                            key={currency}
-                            className="flex items-center justify-between gap-3 rounded-lg bg-muted/60 p-3"
-                          >
-                            <span className="text-sm">Loan principal · {currency}</span>
-                            <span className="font-semibold">
-                              {formatBusinessMoney(amount, currency)}
-                            </span>
-                          </div>
-                        ),
-                      )}
-                      <p className="text-xs text-muted-foreground">
-                        {paymentLoanMetrics.partiallyPaidTransactions} partially paid ·{" "}
-                        {paymentLoanMetrics.overdueCustomerPayments} overdue payments ·{" "}
-                        {paymentLoanMetrics.overdueLoans} overdue loans
-                      </p>
+                      <div className="flex flex-wrap items-end justify-between gap-4">
+                        <div>
+                          <p className="text-3xl font-bold tracking-tight sm:text-4xl">
+                            {!hasMeruAccount
+                              ? "Not set up"
+                              : meruBalanceVisible
+                                ? formatBusinessMoney(metrics.meruWalletBalance, "USD")
+                                : "••••••"}
+                          </p>
+                          <p className="mt-2 text-sm text-emerald-50/75">
+                            {hasMeruAccount
+                              ? "Pending operations are not included"
+                              : "Add a Meru USD account to show its balance"}
+                          </p>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          aria-label={meruBalanceVisible ? "Hide balance" : "Show balance"}
+                          className="border-white/25 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+                          onClick={() => setMeruBalanceVisible((visible) => !visible)}
+                        >
+                          {meruBalanceVisible ? (
+                            <Eye className="size-4" aria-hidden="true" />
+                          ) : (
+                            <EyeOff className="size-4" aria-hidden="true" />
+                          )}
+                        </Button>
+                      </div>
                     </CardContent>
                   </Card>
 
-                  <Card>
+                  <Card className="border-border bg-card">
                     <CardHeader className="pb-3">
                       <CardTitle className="text-base">Quick actions</CardTitle>
-                      <CardDescription className="mt-1">
-                        Jump to an existing workflow
-                      </CardDescription>
+                      <CardDescription>Go directly to an existing workflow</CardDescription>
                     </CardHeader>
-                    <CardContent className="grid gap-2">
+                    <CardContent className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
                       <Button
-                        className="justify-start bg-emerald-600 text-white hover:bg-emerald-700"
-                        onClick={() => setActiveTab("payments-loans")}
+                        className="justify-start bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-500 dark:text-[#07110e] dark:hover:bg-emerald-400"
+                        onClick={() => setActiveTab("transactions")}
                       >
-                        <Plus className="size-4" /> Record customer payment
-                      </Button>
-                      <Button
-                        className="justify-start"
-                        onClick={() => setActiveTab("payments-loans")}
-                      >
-                        <Plus className="size-4" /> Issue a loan or record repayment
+                        <Plus className="size-4" /> Record customer transfer
                       </Button>
                       <Button
                         variant="outline"
                         className="justify-start"
-                        onClick={() => setActiveTab("expenses")}
+                        onClick={() => setActiveTab("payments-loans")}
                       >
-                        <Plus className="size-4" /> Add expense
+                        <Plus className="size-4" /> Collect payment or manage loan
                       </Button>
                       <Button
                         variant="outline"
                         className="justify-start"
                         onClick={() => setActiveTab("funding")}
                       >
-                        <Plus className="size-4" /> Add funding
+                        <Plus className="size-4" /> Add funding or account
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="justify-start"
+                        onClick={() => setActiveTab("expenses")}
+                      >
+                        <Plus className="size-4" /> Record expense
                       </Button>
                     </CardContent>
                   </Card>
                 </div>
 
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Outstanding loan principal by currency</CardTitle>
-                    <CardDescription>
-                      Principal is not revenue. Currency totals stay separate unless recorded rates
-                      support a reporting-currency conversion.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="flex flex-wrap gap-3">
-                    {Object.entries(paymentLoanMetrics.outstandingLoanPrincipalByCurrency)
-                      .length === 0 ? (
-                      <p className="text-sm text-muted-foreground">
-                        No outstanding loan principal.
-                      </p>
-                    ) : (
-                      Object.entries(paymentLoanMetrics.outstandingLoanPrincipalByCurrency).map(
-                        ([currency, amount]) => (
-                          <div key={currency} className="rounded-md border px-3 py-2">
-                            <p className="text-xs text-muted-foreground">{currency}</p>
-                            <p className="font-semibold">{formatBusinessMoney(amount, currency)}</p>
-                          </div>
-                        ),
-                      )
-                    )}
-                  </CardContent>
-                </Card>
-                {(metrics.valuationIncomplete ||
-                  metrics.expensesIncomplete ||
-                  metrics.profitIncomplete) && (
-                  <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-                    One or more totals are incomplete estimates because a required operation cost or
-                    recorded exchange rate is missing.
-                  </p>
-                )}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Business accounts</CardTitle>
-                    <CardDescription>
-                      Balances come from immutable ledger entries plus each account’s opening
-                      balance. Pending operations do not affect available balances. Internal
-                      transfers move value between accounts and are not revenue.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                    {accounts.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">
-                        No accounts yet. Create the accounts you actually use in Funding & accounts.
-                      </p>
-                    ) : (
-                      accounts.map((account) => (
-                        <div key={account.id} className="rounded-md border p-3">
-                          <p className="font-medium">{account.name}</p>
-                          <p className="text-xs capitalize text-muted-foreground">
-                            {account.type} · {account.currency}
+                <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
+                  {[
+                    {
+                      label: "Customer transfers",
+                      value: formatBusinessMoney(completedHtgTransactionTotal, "HTG"),
+                      note: `${metrics.completedTransactions} completed this period`,
+                      icon: ArrowUpRight,
+                    },
+                    {
+                      label: "USD sent to customers",
+                      value: formatBusinessMoney(metrics.totalUsdSentToCustomers, "USD"),
+                      note: "Confirmed transfers this period",
+                      icon: CircleDollarSign,
+                    },
+                    {
+                      label: "Realized net profit",
+                      value: formatBusinessMoney(metrics.netProfit, "USD"),
+                      note: metrics.profitIncomplete
+                        ? "Incomplete: missing recorded inputs"
+                        : "USD estimate",
+                      icon: TrendingUp,
+                    },
+                    {
+                      label: "Customer payments outstanding",
+                      value: formatBusinessMoney(
+                        paymentLoanMetrics.outstandingCustomerPayments,
+                        "HTG",
+                      ),
+                      note: `${paymentLoanMetrics.overdueCustomerPayments} overdue · HTG`,
+                      icon: HandCoins,
+                    },
+                  ].map(({ label, value, note, icon: Icon }) => (
+                    <Card key={label} className="border-border bg-card">
+                      <CardContent className="flex items-start justify-between gap-3 p-4 sm:p-5">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-muted-foreground">{label}</p>
+                          <p className="mt-2 truncate text-2xl font-bold tracking-tight text-foreground">
+                            {value}
                           </p>
-                          <p className="mt-2 text-lg font-semibold">
-                            {formatBusinessMoney(account.balance, account.currency)}
-                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">{note}</p>
                         </div>
-                      ))
-                    )}
-                  </CardContent>
-                </Card>
-                {accounts.length > 0 && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Record balance adjustment</CardTitle>
-                      <CardDescription>
-                        Corrections are append-only, require a reason, and cannot reduce an account
-                        below zero.
-                      </CardDescription>
+                        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                          <Icon className="size-5" aria-hidden="true" />
+                        </span>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+
+                <div className="grid gap-4 xl:grid-cols-[1.5fr_0.8fr]">
+                  <Card className="min-w-0 border-border bg-card">
+                    <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
+                      <div>
+                        <CardTitle className="text-base">Recent transactions</CardTitle>
+                        <CardDescription>Latest saved business activity</CardDescription>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setActiveTab("transactions")}
+                      >
+                        View all <ArrowRight className="ml-1 size-3.5" aria-hidden="true" />
+                      </Button>
                     </CardHeader>
                     <CardContent>
-                      <form
-                        className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
-                        onSubmit={(event) => void onCreateAdjustment(event)}
-                      >
-                        <Field label="Account">
-                          <select
-                            name="accountId"
-                            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-                            required
-                          >
-                            {accounts.map((account) => (
-                              <option key={account.id} value={account.id}>
-                                {account.name} · {account.currency}
-                              </option>
-                            ))}
-                          </select>
-                        </Field>
-                        <Field
-                          label="Signed amount"
-                          hint="Positive adds to balance; negative reduces it."
-                        >
-                          <Input name="amount" type="number" step="0.00000001" required />
-                        </Field>
-                        <Field label="Reason">
-                          <Input name="reason" required maxLength={500} />
-                        </Field>
-                        <Button type="submit" disabled={isMutating}>
-                          Record adjustment
-                        </Button>
-                      </form>
+                      {recentActivity.length === 0 ? (
+                        <p className="rounded-lg bg-muted/60 p-4 text-sm text-muted-foreground">
+                          Your saved business activity will appear here.
+                        </p>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full min-w-[540px] text-left text-sm">
+                            <thead className="border-b text-xs uppercase tracking-wide text-muted-foreground">
+                              <tr>
+                                <th className="pb-3 font-medium">Date</th>
+                                <th className="pb-3 font-medium">Activity</th>
+                                <th className="pb-3 font-medium">Customer / detail</th>
+                                <th className="pb-3 text-right font-medium">Amount</th>
+                                <th className="pb-3 text-right font-medium">Status</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-border">
+                              {recentActivity.map((activity) => (
+                                <tr key={activity.id}>
+                                  <td className="whitespace-nowrap py-3 text-xs text-muted-foreground">
+                                    {activity.date.slice(0, 10)}
+                                  </td>
+                                  <td className="whitespace-nowrap py-3 font-medium">
+                                    {activity.title}
+                                  </td>
+                                  <td className="max-w-40 truncate py-3 text-muted-foreground">
+                                    {activity.detail}
+                                  </td>
+                                  <td
+                                    className={`whitespace-nowrap py-3 text-right font-semibold ${
+                                      activity.direction === "in"
+                                        ? "text-emerald-700 dark:text-emerald-300"
+                                        : "text-foreground"
+                                    }`}
+                                  >
+                                    {activity.direction === "in" ? "+" : "−"}
+                                    {formatBusinessMoney(activity.amount, activity.currency)}
+                                  </td>
+                                  <td className="py-3 text-right">
+                                    <Badge
+                                      variant={
+                                        activity.status === "completed"
+                                          ? "default"
+                                          : activity.status === "failed" ||
+                                              activity.status === "cancelled"
+                                            ? "destructive"
+                                            : "secondary"
+                                      }
+                                      className="capitalize"
+                                    >
+                                      {activity.status.replaceAll("_", " ")}
+                                    </Badge>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
-                )}
+
+                  <Card className="border-border bg-card">
+                    <CardHeader>
+                      <CardTitle className="text-base">Loan principal outstanding</CardTitle>
+                      <CardDescription>
+                        Principal is not revenue; balances stay grouped by currency.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      {Object.entries(paymentLoanMetrics.outstandingLoanPrincipalByCurrency)
+                        .length === 0 ? (
+                        <p className="rounded-lg bg-muted/60 p-4 text-sm text-muted-foreground">
+                          No outstanding loan principal.
+                        </p>
+                      ) : (
+                        Object.entries(paymentLoanMetrics.outstandingLoanPrincipalByCurrency)
+                          .sort(([left], [right]) => left.localeCompare(right))
+                          .map(([currency, amount]) => (
+                            <div
+                              key={currency}
+                              className="flex items-center justify-between rounded-lg bg-muted/60 p-3"
+                            >
+                              <span className="text-sm font-medium">{currency}</span>
+                              <span className="font-semibold">
+                                {formatBusinessMoney(amount, currency)}
+                              </span>
+                            </div>
+                          ))
+                      )}
+                      <p className="pt-2 text-xs text-muted-foreground">
+                        {paymentLoanMetrics.overdueLoans} overdue loan
+                        {paymentLoanMetrics.overdueLoans === 1 ? "" : "s"} · principal repayments do
+                        not count as profit
+                      </p>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <div className="grid gap-4 xl:grid-cols-2">
+                  <Card className="border-border bg-card">
+                    <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
+                      <div>
+                        <CardTitle className="text-base">Customer payment status</CardTitle>
+                        <CardDescription>
+                          {paymentLoanMetrics.partiallyPaidTransactions} partially paid ·{" "}
+                          {paymentLoanMetrics.overdueCustomerPayments} overdue
+                        </CardDescription>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setActiveTab("payments-loans")}
+                      >
+                        Manage <ArrowRight className="ml-1 size-3.5" aria-hidden="true" />
+                      </Button>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      {outstandingPaymentRows.length === 0 ? (
+                        <p className="rounded-lg bg-muted/60 p-4 text-sm text-muted-foreground">
+                          No customer payments are outstanding.
+                        </p>
+                      ) : (
+                        outstandingPaymentRows.map(({ transaction, summary }) => (
+                          <div
+                            key={transaction.id}
+                            className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3"
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium">
+                                {transaction.customerName}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {summary.status.replaceAll("_", " ")}
+                                {transaction.dueDate ? ` · Due ${transaction.dueDate}` : ""}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-semibold">
+                                {formatBusinessMoney(summary.outstanding, "HTG")}
+                              </p>
+                              <p className="text-xs text-muted-foreground">remaining</p>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border-border bg-card">
+                    <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
+                      <div>
+                        <CardTitle className="text-base">Upcoming loan repayments</CardTitle>
+                        <CardDescription>
+                          Due in the next 30 days · overdue shown first
+                        </CardDescription>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setActiveTab("payments-loans")}
+                      >
+                        Manage <ArrowRight className="ml-1 size-3.5" aria-hidden="true" />
+                      </Button>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      {[...overdueLoanRows, ...upcomingLoanRows].length === 0 ? (
+                        <p className="rounded-lg bg-muted/60 p-4 text-sm text-muted-foreground">
+                          No loan repayments are due soon.
+                        </p>
+                      ) : (
+                        [...overdueLoanRows, ...upcomingLoanRows].slice(0, 5).map((loan) => {
+                          const summary = calculateLoanSummary(
+                            loan,
+                            loanRepayments.filter((repayment) => repayment.loanId === loan.id),
+                          );
+                          const isOverdue = loan.dueDate !== null && loan.dueDate < today();
+                          return (
+                            <div
+                              key={loan.id}
+                              className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3"
+                            >
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-medium">{loan.customerName}</p>
+                                <p
+                                  className={`text-xs ${
+                                    isOverdue
+                                      ? "font-medium text-rose-700 dark:text-rose-300"
+                                      : "text-muted-foreground"
+                                  }`}
+                                >
+                                  {isOverdue ? "Overdue" : "Due"} · {loan.dueDate}
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <p className="font-semibold">
+                                  {formatBusinessMoney(summary.nextRepayment, loan.currency)}
+                                </p>
+                                <p className="text-xs text-muted-foreground">principal + charges</p>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <details className="group rounded-xl border bg-card p-4 shadow-sm">
+                  <summary className="cursor-pointer text-sm font-semibold text-foreground">
+                    Detailed accounting overview and balances
+                  </summary>
+                  <div className="space-y-5 pt-5">
+                    <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
+                      {[
+                        {
+                          label: "Available Meru balance",
+                          value: hasMeruAccount
+                            ? formatBusinessMoney(metrics.meruWalletBalance, "USD")
+                            : "Not set up",
+                          currency: "USD",
+                          icon: Wallet,
+                          cardClass:
+                            "border-emerald-200/80 bg-emerald-50/70 dark:border-emerald-900/70 dark:bg-emerald-950/35",
+                          iconClass:
+                            "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/70 dark:text-emerald-200",
+                        },
+                        {
+                          label: "Available cash balance",
+                          value: formatBusinessMoney(metrics.cashOnHand, "HTG"),
+                          currency: "HTG",
+                          icon: PiggyBank,
+                          cardClass:
+                            "border-violet-200/80 bg-violet-50/70 dark:border-violet-900/70 dark:bg-violet-950/35",
+                          iconClass:
+                            "bg-violet-100 text-violet-700 dark:bg-violet-900/70 dark:text-violet-200",
+                        },
+                        {
+                          label: "Customer payments received",
+                          value: formatBusinessMoney(metrics.totalCustomerReceipts, "HTG"),
+                          currency: "HTG",
+                          icon: CircleDollarSign,
+                          cardClass:
+                            "border-blue-200/80 bg-blue-50/70 dark:border-blue-900/70 dark:bg-blue-950/35",
+                          iconClass:
+                            "bg-blue-100 text-blue-700 dark:bg-blue-900/70 dark:text-blue-200",
+                        },
+                        {
+                          label: "Operating costs",
+                          value: formatBusinessMoney(metrics.totalBusinessExpenses, "USD"),
+                          currency: "USD estimate",
+                          icon: HandCoins,
+                          cardClass:
+                            "border-rose-200/80 bg-rose-50/70 dark:border-rose-900/70 dark:bg-rose-950/35",
+                          iconClass:
+                            "bg-rose-100 text-rose-700 dark:bg-rose-900/70 dark:text-rose-200",
+                        },
+                      ].map(({ label, value, currency, icon: Icon, cardClass, iconClass }) => (
+                        <Card key={label} className={`overflow-hidden ${cardClass}`}>
+                          <CardContent className="flex items-start justify-between gap-3 p-4 sm:p-5">
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                                {label}
+                              </p>
+                              <p className="mt-2 truncate text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+                                {value}
+                              </p>
+                              <span className="mt-2 inline-flex rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-300">
+                                {currency}
+                              </span>
+                            </div>
+                            <span
+                              className={`grid size-10 shrink-0 place-items-center rounded-full ${iconClass}`}
+                            >
+                              <Icon className="size-5" aria-hidden="true" />
+                            </span>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                    <div className="grid gap-4 xl:grid-cols-[1fr_0.85fr_1.1fr]">
+                      <Card>
+                        <CardHeader className="pb-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <CardTitle className="text-base">Profit &amp; loss</CardTitle>
+                              <CardDescription className="mt-1">
+                                Current reporting period · USD estimate
+                              </CardDescription>
+                            </div>
+                            <span className="grid size-9 place-items-center rounded-lg bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-300">
+                              <TrendingUp className="size-4" aria-hidden="true" />
+                            </span>
+                          </div>
+                        </CardHeader>
+                        <CardContent>
+                          <p className="text-3xl font-bold tracking-tight text-emerald-700 dark:text-emerald-300">
+                            {formatBusinessMoney(metrics.netProfit, "USD")}
+                          </p>
+                          <p className="text-xs text-muted-foreground">Net profit</p>
+                          <div className="mt-5 space-y-4">
+                            {[
+                              {
+                                label: "Net profit",
+                                value: Math.abs(metrics.netProfit),
+                                display: formatBusinessMoney(metrics.netProfit, "USD"),
+                                color: "bg-emerald-500",
+                              },
+                              {
+                                label: "Operating costs",
+                                value: metrics.totalBusinessExpenses,
+                                display: formatBusinessMoney(metrics.totalBusinessExpenses, "USD"),
+                                color: "bg-blue-500",
+                              },
+                            ].map((item) => {
+                              const maxValue = Math.max(
+                                Math.abs(metrics.netProfit),
+                                metrics.totalBusinessExpenses,
+                                1,
+                              );
+                              return (
+                                <div key={item.label}>
+                                  <div className="mb-1.5 flex items-center justify-between gap-3 text-xs">
+                                    <span className="text-muted-foreground">{item.label}</span>
+                                    <span className="font-semibold text-foreground">
+                                      {item.display}
+                                    </span>
+                                  </div>
+                                  <div className="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                                    <div
+                                      className={`h-full rounded-full ${item.color}`}
+                                      style={{
+                                        width: `${Math.min(100, (item.value / maxValue) * 100)}%`,
+                                      }}
+                                    />
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                          {metrics.profitIncomplete && (
+                            <p className="mt-4 rounded-lg bg-amber-50 p-2.5 text-xs text-amber-800 dark:bg-amber-950/50 dark:text-amber-200">
+                              Some costs or income lack a recorded exchange rate, so profit is
+                              incomplete.
+                            </p>
+                          )}
+                        </CardContent>
+                      </Card>
+
+                      <Card>
+                        <CardHeader className="pb-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <CardTitle className="text-base">Collections by currency</CardTitle>
+                              <CardDescription className="mt-1">
+                                Persisted customer payments in this period
+                              </CardDescription>
+                            </div>
+                            <span className="grid size-9 place-items-center rounded-lg bg-violet-50 text-violet-600 dark:bg-violet-950 dark:text-violet-300">
+                              <Receipt className="size-4" aria-hidden="true" />
+                            </span>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="space-y-2">
+                          {Object.keys(collectionTotalsByCurrency).length === 0 ? (
+                            <p className="rounded-lg bg-muted/60 p-4 text-sm text-muted-foreground">
+                              No customer payments recorded in this period.
+                            </p>
+                          ) : (
+                            Object.entries(collectionTotalsByCurrency)
+                              .sort(([left], [right]) => left.localeCompare(right))
+                              .map(([currency, amount]) => (
+                                <div
+                                  key={currency}
+                                  className="flex items-center justify-between gap-3 rounded-lg bg-muted/60 p-3"
+                                >
+                                  <span className="flex items-center gap-2 text-sm font-medium">
+                                    <span className="size-2 rounded-full bg-violet-500 dark:bg-violet-300" />
+                                    {currency} collected
+                                  </span>
+                                  <span className="font-semibold">
+                                    {formatBusinessMoney(amount, currency)}
+                                  </span>
+                                </div>
+                              ))
+                          )}
+                          <p className="pt-2 text-xs text-muted-foreground">
+                            Amounts in different currencies are kept separate.
+                          </p>
+                        </CardContent>
+                      </Card>
+
+                      <Card>
+                        <CardHeader className="pb-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <CardTitle className="text-base">Recent activity</CardTitle>
+                              <CardDescription className="mt-1">
+                                Latest saved business records
+                              </CardDescription>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setActiveTab("transactions")}
+                            >
+                              View all <ArrowRight className="ml-1 size-3.5" />
+                            </Button>
+                          </div>
+                        </CardHeader>
+                        <CardContent>
+                          {recentActivity.length === 0 ? (
+                            <p className="rounded-lg bg-muted/60 p-4 text-sm text-muted-foreground">
+                              Your saved business activity will appear here.
+                            </p>
+                          ) : (
+                            <ul className="divide-y divide-border">
+                              {recentActivity.map((activity) => (
+                                <li
+                                  key={activity.id}
+                                  className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+                                >
+                                  <div className="flex min-w-0 items-center gap-3">
+                                    <span
+                                      className={`grid size-8 shrink-0 place-items-center rounded-full ${
+                                        activity.direction === "in"
+                                          ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+                                          : "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
+                                      }`}
+                                    >
+                                      {activity.direction === "in" ? (
+                                        <ArrowDownToLine className="size-4" aria-hidden="true" />
+                                      ) : (
+                                        <ArrowUpRight className="size-4" aria-hidden="true" />
+                                      )}
+                                    </span>
+                                    <div className="min-w-0">
+                                      <p className="truncate text-sm font-medium">
+                                        {activity.title}
+                                      </p>
+                                      <p className="truncate text-xs text-muted-foreground">
+                                        {activity.detail} · {activity.date.slice(0, 10)}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <div className="shrink-0 text-right">
+                                    <p
+                                      className={`text-sm font-semibold ${
+                                        activity.direction === "in"
+                                          ? "text-emerald-700 dark:text-emerald-300"
+                                          : "text-foreground"
+                                      }`}
+                                    >
+                                      {activity.direction === "in" ? "+" : "−"}
+                                      {formatBusinessMoney(activity.amount, activity.currency)}
+                                    </p>
+                                    <p className="text-[10px] capitalize text-muted-foreground">
+                                      {activity.status.replaceAll("_", " ")}
+                                    </p>
+                                  </div>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    <div className="grid gap-4 xl:grid-cols-3">
+                      <Card>
+                        <CardHeader className="pb-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <CardTitle className="text-base">Top customers</CardTitle>
+                              <CardDescription className="mt-1">
+                                Recorded payments · HTG
+                              </CardDescription>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setActiveTab("customers")}
+                            >
+                              View all <ArrowRight className="ml-1 size-3.5" />
+                            </Button>
+                          </div>
+                        </CardHeader>
+                        <CardContent>
+                          {topCustomerRows.length === 0 ? (
+                            <p className="rounded-lg bg-muted/60 p-4 text-sm text-muted-foreground">
+                              Customer activity will appear when records are saved.
+                            </p>
+                          ) : (
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-left text-xs">
+                                <thead className="text-muted-foreground">
+                                  <tr>
+                                    <th className="pb-2 font-medium">Customer</th>
+                                    <th className="pb-2 text-right font-medium">Payments</th>
+                                    <th className="pb-2 text-right font-medium">Operations</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-border">
+                                  {topCustomerRows.map((customer) => (
+                                    <tr key={customer.id}>
+                                      <td className="max-w-32 truncate py-2.5 font-medium">
+                                        {customer.name}
+                                      </td>
+                                      <td className="py-2.5 text-right font-semibold">
+                                        {formatBusinessMoney(customer.paid, "HTG")}
+                                      </td>
+                                      <td className="py-2.5 text-right text-muted-foreground">
+                                        {customer.transactions}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+
+                      <Card>
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-base">Outstanding balances</CardTitle>
+                          <CardDescription className="mt-1">
+                            By currency · no mixed totals
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-2">
+                          <div className="flex items-center justify-between gap-3 rounded-lg bg-muted/60 p-3">
+                            <span className="text-sm">Customer payments · HTG</span>
+                            <span className="font-semibold">
+                              {formatBusinessMoney(
+                                paymentLoanMetrics.outstandingCustomerPayments,
+                                "HTG",
+                              )}
+                            </span>
+                          </div>
+                          {Object.entries(
+                            paymentLoanMetrics.outstandingLoanPrincipalByCurrency,
+                          ).map(([currency, amount]) => (
+                            <div
+                              key={currency}
+                              className="flex items-center justify-between gap-3 rounded-lg bg-muted/60 p-3"
+                            >
+                              <span className="text-sm">Loan principal · {currency}</span>
+                              <span className="font-semibold">
+                                {formatBusinessMoney(amount, currency)}
+                              </span>
+                            </div>
+                          ))}
+                          <p className="text-xs text-muted-foreground">
+                            {paymentLoanMetrics.partiallyPaidTransactions} partially paid ·{" "}
+                            {paymentLoanMetrics.overdueCustomerPayments} overdue payments ·{" "}
+                            {paymentLoanMetrics.overdueLoans} overdue loans
+                          </p>
+                        </CardContent>
+                      </Card>
+
+                      <Card>
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-base">Quick actions</CardTitle>
+                          <CardDescription className="mt-1">
+                            Jump to an existing workflow
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent className="grid gap-2">
+                          <Button
+                            className="justify-start bg-emerald-600 text-white hover:bg-emerald-700"
+                            onClick={() => setActiveTab("payments-loans")}
+                          >
+                            <Plus className="size-4" /> Record customer payment
+                          </Button>
+                          <Button
+                            className="justify-start"
+                            onClick={() => setActiveTab("payments-loans")}
+                          >
+                            <Plus className="size-4" /> Issue a loan or record repayment
+                          </Button>
+                          <Button
+                            variant="outline"
+                            className="justify-start"
+                            onClick={() => setActiveTab("expenses")}
+                          >
+                            <Plus className="size-4" /> Add expense
+                          </Button>
+                          <Button
+                            variant="outline"
+                            className="justify-start"
+                            onClick={() => setActiveTab("funding")}
+                          >
+                            <Plus className="size-4" /> Add funding
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Outstanding loan principal by currency</CardTitle>
+                        <CardDescription>
+                          Principal is not revenue. Currency totals stay separate unless recorded
+                          rates support a reporting-currency conversion.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="flex flex-wrap gap-3">
+                        {Object.entries(paymentLoanMetrics.outstandingLoanPrincipalByCurrency)
+                          .length === 0 ? (
+                          <p className="text-sm text-muted-foreground">
+                            No outstanding loan principal.
+                          </p>
+                        ) : (
+                          Object.entries(paymentLoanMetrics.outstandingLoanPrincipalByCurrency).map(
+                            ([currency, amount]) => (
+                              <div key={currency} className="rounded-md border px-3 py-2">
+                                <p className="text-xs text-muted-foreground">{currency}</p>
+                                <p className="font-semibold">
+                                  {formatBusinessMoney(amount, currency)}
+                                </p>
+                              </div>
+                            ),
+                          )
+                        )}
+                      </CardContent>
+                    </Card>
+                    {(metrics.valuationIncomplete ||
+                      metrics.expensesIncomplete ||
+                      metrics.profitIncomplete) && (
+                      <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+                        One or more totals are incomplete estimates because a required operation
+                        cost or recorded exchange rate is missing.
+                      </p>
+                    )}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Business accounts</CardTitle>
+                        <CardDescription>
+                          Balances come from immutable ledger entries plus each account’s opening
+                          balance. Pending operations do not affect available balances. Internal
+                          transfers move value between accounts and are not revenue.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                        {accounts.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">
+                            No accounts yet. Create the accounts you actually use in Funding &
+                            accounts.
+                          </p>
+                        ) : (
+                          accounts.map((account) => (
+                            <div key={account.id} className="rounded-md border p-3">
+                              <p className="font-medium">{account.name}</p>
+                              <p className="text-xs capitalize text-muted-foreground">
+                                {account.type} · {account.currency}
+                              </p>
+                              <p className="mt-2 text-lg font-semibold">
+                                {formatBusinessMoney(account.balance, account.currency)}
+                              </p>
+                            </div>
+                          ))
+                        )}
+                      </CardContent>
+                    </Card>
+                    {accounts.length > 0 && (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Record balance adjustment</CardTitle>
+                          <CardDescription>
+                            Corrections are append-only, require a reason, and cannot reduce an
+                            account below zero.
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <form
+                            className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
+                            onSubmit={(event) => void onCreateAdjustment(event)}
+                          >
+                            <Field label="Account">
+                              <select
+                                name="accountId"
+                                className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                                required
+                              >
+                                {accounts.map((account) => (
+                                  <option key={account.id} value={account.id}>
+                                    {account.name} · {account.currency}
+                                  </option>
+                                ))}
+                              </select>
+                            </Field>
+                            <Field
+                              label="Signed amount"
+                              hint="Positive adds to balance; negative reduces it."
+                            >
+                              <Input name="amount" type="number" step="0.00000001" required />
+                            </Field>
+                            <Field label="Reason">
+                              <Input name="reason" required maxLength={500} />
+                            </Field>
+                            <Button type="submit" disabled={isMutating}>
+                              Record adjustment
+                            </Button>
+                          </form>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </div>
+                </details>
               </div>
             </details>
           </TabsContent>
