@@ -227,6 +227,7 @@ export function useBusinessRecords() {
           type: account.account_type as BusinessAccount["type"],
           currency: account.currency as BusinessAccount["currency"],
           balance: Number(accountBalances.get(account.id) ?? account.opening_balance),
+          openingBalance: Number(account.opening_balance),
         })),
         transactions,
         payments,
