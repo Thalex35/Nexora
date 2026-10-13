@@ -18,6 +18,7 @@ import {
   Plus,
   Quote,
   Receipt,
+  Search,
   TrendingUp,
   UsersRound,
   Wallet,
@@ -31,6 +32,13 @@ import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -206,7 +214,18 @@ function BusinessPage() {
   const [activeTab, setActiveTab] = useState("overview");
   const [meruBalanceVisible, setMeruBalanceVisible] = useState(true);
   const [entryType, setEntryType] = useState<"transfer" | "deposit" | "loan">("transfer");
-  const entryFormRef = useRef<HTMLDivElement>(null);
+  const [entryDialogOpen, setEntryDialogOpen] = useState(false);
+  const [selectedTransactionCustomerId, setSelectedTransactionCustomerId] = useState("");
+  const [selectedFundingAccountId, setSelectedFundingAccountId] = useState("");
+  const [selectedLoanAccountId, setSelectedLoanAccountId] = useState("");
+  const [transferAmount, setTransferAmount] = useState("");
+  const [transferFee, setTransferFee] = useState("0");
+  const [transferHtgDue, setTransferHtgDue] = useState("");
+  const [fundingCreditedAmount, setFundingCreditedAmount] = useState("");
+  const [fundingFee, setFundingFee] = useState("0");
+  const [loanPrincipalAmount, setLoanPrincipalAmount] = useState("");
+  const [loanInterestAmount, setLoanInterestAmount] = useState("0");
+  const [loanFeeAmount, setLoanFeeAmount] = useState("0");
   const idempotencyKeys = useRef(new WeakMap<HTMLFormElement, string>());
 
   function idempotencyKey(form: HTMLFormElement) {
@@ -224,9 +243,18 @@ function BusinessPage() {
 
   function openEntryForm(type: "transfer" | "deposit" | "loan") {
     setEntryType(type);
-    requestAnimationFrame(() => {
-      entryFormRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-    });
+    setSelectedTransactionCustomerId(customers[0]?.id ?? "");
+    setSelectedFundingAccountId(accounts[0]?.id ?? "");
+    setSelectedLoanAccountId(accounts[0]?.id ?? "");
+    setTransferAmount("");
+    setTransferFee("0");
+    setTransferHtgDue("");
+    setFundingCreditedAmount("");
+    setFundingFee("0");
+    setLoanPrincipalAmount("");
+    setLoanInterestAmount("0");
+    setLoanFeeAmount("0");
+    setEntryDialogOpen(true);
   }
 
   const records = recordsQuery.data;
@@ -390,6 +418,7 @@ function BusinessPage() {
       });
       clearIdempotencyKey(event.currentTarget);
       event.currentTarget.reset();
+      setEntryDialogOpen(false);
       toast.success("Customer operation recorded as pending. Confirm it to post ledger movements.");
     } catch (error) {
       toast.error(
@@ -444,6 +473,7 @@ function BusinessPage() {
       });
       clearIdempotencyKey(form);
       form.reset();
+      setEntryDialogOpen(false);
       toast.success("Loan issued; the principal disbursement was posted to the selected account.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Couldn't issue the loan.");
@@ -499,6 +529,7 @@ function BusinessPage() {
       });
       clearIdempotencyKey(event.currentTarget);
       event.currentTarget.reset();
+      setEntryDialogOpen(false);
       toast.success("Funding recorded as pending. Confirm it after the credit is verified.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Couldn't record funding.");
@@ -693,11 +724,6 @@ function BusinessPage() {
   const hasMeruAccount = accounts.some(
     (account) => account.type === "meru" && account.currency === "USD",
   );
-  const visibleCustomers = customers.filter((customer) =>
-    `${customer.name} ${customer.nickname ?? ""} ${customer.contact ?? ""}`
-      .toLocaleLowerCase()
-      .includes(customerSearch.trim().toLocaleLowerCase()),
-  );
   const htgAccounts = accounts.filter((account) => account.currency === "HTG");
   const usdAccounts = accounts.filter((account) => account.currency === "USD");
   const activeLoans = loans.filter((loan) => loan.status !== "repaid");
@@ -714,6 +740,35 @@ function BusinessPage() {
       transaction.status !== "failed" &&
       transaction.status !== "cancelled" &&
       transaction.status !== "reversed",
+  );
+  const customerRows = customers.map((customer) => {
+    const history = periodTransactions.filter(
+      (transaction) => transaction.customerId === customer.id,
+    );
+    const outstanding = openTransactions
+      .filter((transaction) => transaction.customerId === customer.id)
+      .reduce(
+        (sum, transaction) =>
+          sum +
+          calculateCustomerPaymentSummary(
+            transaction,
+            payments.filter((payment) => payment.customerTransactionId === transaction.id),
+          ).outstanding,
+        0,
+      );
+    return {
+      customer,
+      history,
+      outstanding,
+      completedTransactions: history.filter((transaction) => transaction.status === "completed")
+        .length,
+      performance: calculateCustomerPerformance(customer.id, periodTransactions),
+    };
+  });
+  const visibleCustomers = customerRows.filter(({ customer }) =>
+    `${customer.name} ${customer.nickname ?? ""} ${customer.contact ?? ""}`
+      .toLocaleLowerCase()
+      .includes(customerSearch.trim().toLocaleLowerCase()),
   );
   const topCustomerRows = customers
     .map((customer) => {
@@ -1367,427 +1422,596 @@ function BusinessPage() {
                   </CardContent>
                 </Card>
 
-                <Card
-                  id="business-entry-form"
-                  ref={entryFormRef}
-                  className="scroll-mt-6 border-slate-200 bg-white shadow-sm dark:border-[#173451] dark:bg-[#091a2e]"
-                >
-                  <CardHeader className="pb-3">
-                    <CardTitle className="flex items-center gap-2 text-sm">
-                      <CircleDollarSign className="size-4 text-cyan-600 dark:text-cyan-300" />
-                      Ajouter une transaction
-                    </CardTitle>
-                    <CardDescription className="text-xs">
-                      Utilise les opérations et règles comptables existantes.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="mb-4 grid grid-cols-3 rounded-lg border border-slate-200 p-1 dark:border-[#1a3653]">
-                      {(
-                        [
-                          ["transfer", "Transfert"],
-                          ["deposit", "Dépôt"],
-                          ["loan", "Prêt"],
-                        ] as const
-                      ).map(([type, label]) => (
-                        <button
-                          key={type}
-                          type="button"
-                          className={`rounded-md px-2 py-2 text-xs font-medium transition-colors ${
-                            entryType === type
-                              ? "bg-cyan-600 text-white shadow-sm dark:bg-teal-500 dark:text-[#041521]"
-                              : "text-muted-foreground hover:bg-slate-100 dark:hover:bg-[#10243b]"
-                          }`}
-                          aria-pressed={entryType === type}
-                          onClick={() => setEntryType(type)}
+                <Dialog open={entryDialogOpen} onOpenChange={setEntryDialogOpen}>
+                  <DialogContent className="max-h-[92vh] max-w-5xl overflow-y-auto border-cyan-900/60 bg-background p-0 shadow-2xl sm:rounded-xl">
+                    <div className="grid min-w-0 lg:grid-cols-[minmax(0,1.8fr)_minmax(250px,0.8fr)]">
+                      <section className="min-w-0 p-4 sm:p-6">
+                        <DialogHeader className="mb-5 pr-8 text-left">
+                          <DialogTitle className="flex items-center gap-3 text-lg">
+                            <span className="grid size-10 place-items-center rounded-xl bg-cyan-100 text-cyan-800 dark:bg-teal-500/20 dark:text-teal-300">
+                              <Plus className="size-5" aria-hidden="true" />
+                            </span>
+                            Nouvelle transaction
+                          </DialogTitle>
+                          <DialogDescription className="pl-[52px] text-xs">
+                            Effectuez un transfert, un dépôt ou un prêt avec les règles comptables
+                            existantes.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <Card
+                          id="business-entry-form"
+                          className="border-slate-200 bg-white shadow-sm dark:border-[#173451] dark:bg-[#091a2e]"
                         >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-
-                    {entryType === "transfer" &&
-                      (customers.length === 0 ||
-                      htgAccounts.length === 0 ||
-                      usdAccounts.length === 0 ? (
-                        <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
-                          Créez un client et des comptes HTG et USD avant d’enregistrer un
-                          transfert.
-                        </p>
-                      ) : (
-                        <form
-                          key="quick-transfer"
-                          className="space-y-3"
-                          onSubmit={(event) => void onCreateTransaction(event)}
-                        >
-                          <Field label="Nom de l’utilisateur">
-                            <select
-                              name="customerId"
-                              className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm dark:border-[#1a3653] dark:bg-[#061527] dark:text-slate-100"
-                              required
-                            >
-                              {customers.map((customer) => (
-                                <option key={customer.id} value={customer.id}>
-                                  {customer.name}
-                                </option>
+                          <CardContent className="p-4">
+                            <div className="mb-4 grid grid-cols-3 rounded-lg border border-slate-200 p-1 dark:border-[#1a3653]">
+                              {(
+                                [
+                                  ["transfer", "Transfert"],
+                                  ["deposit", "Dépôt"],
+                                  ["loan", "Prêt"],
+                                ] as const
+                              ).map(([type, label]) => (
+                                <button
+                                  key={type}
+                                  type="button"
+                                  className={`rounded-md px-2 py-2 text-xs font-medium transition-colors ${
+                                    entryType === type
+                                      ? "bg-cyan-600 text-white shadow-sm dark:bg-teal-500 dark:text-[#041521]"
+                                      : "text-muted-foreground hover:bg-slate-100 dark:hover:bg-[#10243b]"
+                                  }`}
+                                  aria-pressed={entryType === type}
+                                  onClick={() => setEntryType(type)}
+                                >
+                                  {label}
+                                </button>
                               ))}
-                            </select>
-                          </Field>
-                          <Field label="Compte de réception HTG">
-                            <select
-                              name="receiptAccountId"
-                              className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm dark:border-[#1a3653] dark:bg-[#061527] dark:text-slate-100"
-                              required
-                            >
-                              {htgAccounts.map((account) => (
-                                <option key={account.id} value={account.id}>
-                                  {account.name}
-                                </option>
-                              ))}
-                            </select>
-                          </Field>
-                          <Field label="Compte Meru / sortie USD">
-                            <select
-                              name="payoutAccountId"
-                              className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm dark:border-[#1a3653] dark:bg-[#061527] dark:text-slate-100"
-                              required
-                            >
-                              {usdAccounts.map((account) => (
-                                <option key={account.id} value={account.id}>
-                                  {account.name}
-                                </option>
-                              ))}
-                            </select>
-                          </Field>
-                          <div className="grid grid-cols-2 gap-3">
-                            <Field label="Montant envoyé (USD)">
-                              <Input
-                                name="usdSent"
-                                type="number"
-                                min="0.01"
-                                step="0.01"
-                                required
-                                className="dark:border-[#1a3653] dark:bg-[#061527]"
-                              />
-                            </Field>
-                            <Field label="Frais transfert (USD)">
-                              <Input
-                                name="transferFee"
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                defaultValue="0"
-                                required
-                                className="dark:border-[#1a3653] dark:bg-[#061527]"
-                              />
-                            </Field>
-                          </div>
-                          <Field label="Montant dû en gourdes (HTG)">
-                            <Input
-                              name="htgReceived"
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              required
-                              className="dark:border-[#1a3653] dark:bg-[#061527]"
-                            />
-                          </Field>
-                          <details className="rounded-lg border border-slate-200 px-3 py-2 dark:border-[#1a3653]">
-                            <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
-                              Détails facultatifs
-                            </summary>
-                            <div className="mt-3 space-y-3">
-                              <Field label="Date et heure">
-                                <Input
-                                  name="transactionDate"
-                                  type="datetime-local"
-                                  defaultValue={new Date().toISOString().slice(0, 16)}
-                                  required
-                                  className="dark:border-[#1a3653] dark:bg-[#061527]"
-                                />
-                              </Field>
-                              <Field label="Date limite (facultatif)">
-                                <Input
-                                  name="dueDate"
-                                  type="date"
-                                  className="dark:border-[#1a3653] dark:bg-[#061527]"
-                                />
-                              </Field>
-                              <Field label="Taux HTG par USD (facultatif)">
-                                <Input
-                                  name="exchangeRate"
-                                  type="number"
-                                  min="0.000001"
-                                  step="0.000001"
-                                  className="dark:border-[#1a3653] dark:bg-[#061527]"
-                                />
-                              </Field>
-                              <Field label="Frais de service / marge (USD)">
-                                <Input
-                                  name="serviceFee"
-                                  type="number"
-                                  min="0"
-                                  step="0.01"
-                                  className="dark:border-[#1a3653] dark:bg-[#061527]"
-                                />
-                              </Field>
-                              <Field label="Coût d’acquisition crypto (USD)">
-                                <Input
-                                  name="cryptoCost"
-                                  type="number"
-                                  min="0"
-                                  step="0.01"
-                                  className="dark:border-[#1a3653] dark:bg-[#061527]"
-                                />
-                              </Field>
-                              <Field label="Autres frais (USD)">
-                                <Input
-                                  name="otherExpenses"
-                                  type="number"
-                                  min="0"
-                                  step="0.01"
-                                  className="dark:border-[#1a3653] dark:bg-[#061527]"
-                                />
-                              </Field>
-                              <Field label="Référence">
-                                <Input
-                                  name="reference"
-                                  className="dark:border-[#1a3653] dark:bg-[#061527]"
-                                />
-                              </Field>
-                              <Field label="Notes">
-                                <Input
-                                  name="notes"
-                                  className="dark:border-[#1a3653] dark:bg-[#061527]"
-                                />
-                              </Field>
                             </div>
-                          </details>
-                          <p className="text-[11px] leading-relaxed text-muted-foreground">
-                            Le transfert sera créé en attente. Confirmez-le dans Transactions pour
-                            comptabiliser le mouvement USD. Les paiements HTG se saisissent
-                            séparément.
-                          </p>
-                          <Button
-                            type="submit"
-                            disabled={isMutating}
-                            className="w-full bg-teal-600 text-white hover:bg-teal-700 dark:bg-teal-400 dark:text-[#041521] dark:hover:bg-teal-300"
-                          >
-                            <Plus className="size-4" aria-hidden="true" /> Enregistrer
-                          </Button>
-                        </form>
-                      ))}
 
-                    {entryType === "deposit" &&
-                      (accounts.length === 0 ? (
-                        <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
-                          Créez un compte avant d’enregistrer un dépôt.
-                        </p>
-                      ) : (
-                        <form
-                          key="quick-deposit"
-                          className="space-y-3"
-                          onSubmit={(event) => void onCreateFunding(event)}
-                        >
-                          <input type="hidden" name="fundingType" value="replenishment" />
-                          <Field label="Compte crédité">
-                            <select
-                              name="destinationAccountId"
-                              className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm dark:border-[#1a3653] dark:bg-[#061527] dark:text-slate-100"
-                              required
-                            >
-                              {accounts.map((account) => (
-                                <option key={account.id} value={account.id}>
-                                  {account.name} · {account.currency}
-                                </option>
+                            {entryType === "transfer" &&
+                              (customers.length === 0 ||
+                              htgAccounts.length === 0 ||
+                              usdAccounts.length === 0 ? (
+                                <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+                                  Créez un client et des comptes HTG et USD avant d’enregistrer un
+                                  transfert.
+                                </p>
+                              ) : (
+                                <form
+                                  key="quick-transfer"
+                                  className="space-y-3"
+                                  onSubmit={(event) => void onCreateTransaction(event)}
+                                >
+                                  <Field label="Nom de l’utilisateur">
+                                    <select
+                                      name="customerId"
+                                      value={
+                                        selectedTransactionCustomerId || customers[0]?.id || ""
+                                      }
+                                      onChange={(event) =>
+                                        setSelectedTransactionCustomerId(event.target.value)
+                                      }
+                                      className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm dark:border-[#1a3653] dark:bg-[#061527] dark:text-slate-100"
+                                      required
+                                    >
+                                      {customers.map((customer) => (
+                                        <option key={customer.id} value={customer.id}>
+                                          {customer.name}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </Field>
+                                  <Field label="Compte de réception HTG">
+                                    <select
+                                      name="receiptAccountId"
+                                      className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm dark:border-[#1a3653] dark:bg-[#061527] dark:text-slate-100"
+                                      required
+                                    >
+                                      {htgAccounts.map((account) => (
+                                        <option key={account.id} value={account.id}>
+                                          {account.name}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </Field>
+                                  <Field label="Compte Meru / sortie USD">
+                                    <select
+                                      name="payoutAccountId"
+                                      className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm dark:border-[#1a3653] dark:bg-[#061527] dark:text-slate-100"
+                                      required
+                                    >
+                                      {usdAccounts.map((account) => (
+                                        <option key={account.id} value={account.id}>
+                                          {account.name}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </Field>
+                                  <div className="grid grid-cols-2 gap-3">
+                                    <Field label="Montant envoyé (USD)">
+                                      <Input
+                                        name="usdSent"
+                                        type="number"
+                                        min="0.01"
+                                        step="0.01"
+                                        value={transferAmount}
+                                        onChange={(event) => setTransferAmount(event.target.value)}
+                                        required
+                                        className="dark:border-[#1a3653] dark:bg-[#061527]"
+                                      />
+                                    </Field>
+                                    <Field label="Frais transfert (USD)">
+                                      <Input
+                                        name="transferFee"
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        value={transferFee}
+                                        onChange={(event) => setTransferFee(event.target.value)}
+                                        required
+                                        className="dark:border-[#1a3653] dark:bg-[#061527]"
+                                      />
+                                    </Field>
+                                  </div>
+                                  <Field label="Montant dû en gourdes (HTG)">
+                                    <Input
+                                      name="htgReceived"
+                                      type="number"
+                                      min="0"
+                                      step="0.01"
+                                      value={transferHtgDue}
+                                      onChange={(event) => setTransferHtgDue(event.target.value)}
+                                      required
+                                      className="dark:border-[#1a3653] dark:bg-[#061527]"
+                                    />
+                                  </Field>
+                                  <details className="rounded-lg border border-slate-200 px-3 py-2 dark:border-[#1a3653]">
+                                    <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
+                                      Détails facultatifs
+                                    </summary>
+                                    <div className="mt-3 space-y-3">
+                                      <Field label="Date et heure">
+                                        <Input
+                                          name="transactionDate"
+                                          type="datetime-local"
+                                          defaultValue={new Date().toISOString().slice(0, 16)}
+                                          required
+                                          className="dark:border-[#1a3653] dark:bg-[#061527]"
+                                        />
+                                      </Field>
+                                      <Field label="Date limite (facultatif)">
+                                        <Input
+                                          name="dueDate"
+                                          type="date"
+                                          className="dark:border-[#1a3653] dark:bg-[#061527]"
+                                        />
+                                      </Field>
+                                      <Field label="Taux HTG par USD (facultatif)">
+                                        <Input
+                                          name="exchangeRate"
+                                          type="number"
+                                          min="0.000001"
+                                          step="0.000001"
+                                          className="dark:border-[#1a3653] dark:bg-[#061527]"
+                                        />
+                                      </Field>
+                                      <Field label="Frais de service / marge (USD)">
+                                        <Input
+                                          name="serviceFee"
+                                          type="number"
+                                          min="0"
+                                          step="0.01"
+                                          className="dark:border-[#1a3653] dark:bg-[#061527]"
+                                        />
+                                      </Field>
+                                      <Field label="Coût d’acquisition crypto (USD)">
+                                        <Input
+                                          name="cryptoCost"
+                                          type="number"
+                                          min="0"
+                                          step="0.01"
+                                          className="dark:border-[#1a3653] dark:bg-[#061527]"
+                                        />
+                                      </Field>
+                                      <Field label="Autres frais (USD)">
+                                        <Input
+                                          name="otherExpenses"
+                                          type="number"
+                                          min="0"
+                                          step="0.01"
+                                          className="dark:border-[#1a3653] dark:bg-[#061527]"
+                                        />
+                                      </Field>
+                                      <Field label="Référence">
+                                        <Input
+                                          name="reference"
+                                          className="dark:border-[#1a3653] dark:bg-[#061527]"
+                                        />
+                                      </Field>
+                                      <Field label="Notes">
+                                        <Input
+                                          name="notes"
+                                          className="dark:border-[#1a3653] dark:bg-[#061527]"
+                                        />
+                                      </Field>
+                                    </div>
+                                  </details>
+                                  <p className="text-[11px] leading-relaxed text-muted-foreground">
+                                    Le transfert sera créé en attente. Confirmez-le dans
+                                    Transactions pour comptabiliser le mouvement USD. Les paiements
+                                    HTG se saisissent séparément.
+                                  </p>
+                                  <Button
+                                    type="submit"
+                                    disabled={isMutating}
+                                    className="w-full bg-teal-600 text-white hover:bg-teal-700 dark:bg-teal-400 dark:text-[#041521] dark:hover:bg-teal-300"
+                                  >
+                                    <Plus className="size-4" aria-hidden="true" /> Enregistrer
+                                  </Button>
+                                </form>
                               ))}
-                            </select>
-                          </Field>
-                          <Field label="Compte source (facultatif)">
-                            <select
-                              name="sourceAccountId"
-                              defaultValue=""
-                              className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm dark:border-[#1a3653] dark:bg-[#061527] dark:text-slate-100"
-                            >
-                              <option value="">Fonds externes / non suivis</option>
-                              {accounts.map((account) => (
-                                <option key={account.id} value={account.id}>
-                                  {account.name} · {account.currency}
-                                </option>
-                              ))}
-                            </select>
-                          </Field>
-                          <Field label="Montant réellement crédité">
-                            <Input
-                              name="creditedAmount"
-                              type="number"
-                              min="0.00000001"
-                              step="0.00000001"
-                              required
-                              className="dark:border-[#1a3653] dark:bg-[#061527]"
-                            />
-                          </Field>
-                          <div className="grid grid-cols-2 gap-3">
-                            <Field label="Frais (devise source)">
-                              <Input
-                                name="feeAmount"
-                                type="number"
-                                min="0"
-                                step="0.00000001"
-                                defaultValue="0"
-                                required
-                                className="dark:border-[#1a3653] dark:bg-[#061527]"
-                              />
-                            </Field>
-                            <Field label="Frais (USD)">
-                              <Input
-                                name="feeUsd"
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                className="dark:border-[#1a3653] dark:bg-[#061527]"
-                              />
-                            </Field>
-                          </div>
-                          <Field label="Date et heure">
-                            <Input
-                              name="fundingDate"
-                              type="datetime-local"
-                              defaultValue={new Date().toISOString().slice(0, 16)}
-                              required
-                              className="dark:border-[#1a3653] dark:bg-[#061527]"
-                            />
-                          </Field>
-                          <Field label="Référence ou notes">
-                            <Input
-                              name="reference"
-                              maxLength={200}
-                              className="dark:border-[#1a3653] dark:bg-[#061527]"
-                            />
-                          </Field>
-                          <p className="text-[11px] leading-relaxed text-muted-foreground">
-                            Dépôt enregistré en attente. Confirmez le crédit réel dans Financement &
-                            comptes. Un dépôt n’est pas un revenu.
-                          </p>
-                          <Button
-                            type="submit"
-                            disabled={isMutating}
-                            className="w-full bg-teal-600 text-white hover:bg-teal-700 dark:bg-teal-400 dark:text-[#041521] dark:hover:bg-teal-300"
-                          >
-                            <Plus className="size-4" aria-hidden="true" /> Enregistrer
-                          </Button>
-                        </form>
-                      ))}
 
-                    {entryType === "loan" &&
-                      (customers.length === 0 || accounts.length === 0 ? (
-                        <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
-                          Créez un client et un compte de décaissement avant d’émettre un prêt.
-                        </p>
-                      ) : (
-                        <form
-                          key="quick-loan"
-                          className="space-y-3"
-                          onSubmit={(event) => void onCreateLoan(event)}
+                            {entryType === "deposit" &&
+                              (accounts.length === 0 ? (
+                                <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+                                  Créez un compte avant d’enregistrer un dépôt.
+                                </p>
+                              ) : (
+                                <form
+                                  key="quick-deposit"
+                                  className="space-y-3"
+                                  onSubmit={(event) => void onCreateFunding(event)}
+                                >
+                                  <input type="hidden" name="fundingType" value="replenishment" />
+                                  <Field label="Compte crédité">
+                                    <select
+                                      name="destinationAccountId"
+                                      value={selectedFundingAccountId || accounts[0]?.id || ""}
+                                      onChange={(event) =>
+                                        setSelectedFundingAccountId(event.target.value)
+                                      }
+                                      className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm dark:border-[#1a3653] dark:bg-[#061527] dark:text-slate-100"
+                                      required
+                                    >
+                                      {accounts.map((account) => (
+                                        <option key={account.id} value={account.id}>
+                                          {account.name} · {account.currency}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </Field>
+                                  <Field label="Compte source (facultatif)">
+                                    <select
+                                      name="sourceAccountId"
+                                      defaultValue=""
+                                      className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm dark:border-[#1a3653] dark:bg-[#061527] dark:text-slate-100"
+                                    >
+                                      <option value="">Fonds externes / non suivis</option>
+                                      {accounts.map((account) => (
+                                        <option key={account.id} value={account.id}>
+                                          {account.name} · {account.currency}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </Field>
+                                  <Field label="Montant réellement crédité">
+                                    <Input
+                                      name="creditedAmount"
+                                      type="number"
+                                      min="0.00000001"
+                                      step="0.00000001"
+                                      value={fundingCreditedAmount}
+                                      onChange={(event) =>
+                                        setFundingCreditedAmount(event.target.value)
+                                      }
+                                      required
+                                      className="dark:border-[#1a3653] dark:bg-[#061527]"
+                                    />
+                                  </Field>
+                                  <div className="grid grid-cols-2 gap-3">
+                                    <Field label="Frais (devise source)">
+                                      <Input
+                                        name="feeAmount"
+                                        type="number"
+                                        min="0"
+                                        step="0.00000001"
+                                        value={fundingFee}
+                                        onChange={(event) => setFundingFee(event.target.value)}
+                                        required
+                                        className="dark:border-[#1a3653] dark:bg-[#061527]"
+                                      />
+                                    </Field>
+                                    <Field label="Frais (USD)">
+                                      <Input
+                                        name="feeUsd"
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        className="dark:border-[#1a3653] dark:bg-[#061527]"
+                                      />
+                                    </Field>
+                                  </div>
+                                  <Field label="Date et heure">
+                                    <Input
+                                      name="fundingDate"
+                                      type="datetime-local"
+                                      defaultValue={new Date().toISOString().slice(0, 16)}
+                                      required
+                                      className="dark:border-[#1a3653] dark:bg-[#061527]"
+                                    />
+                                  </Field>
+                                  <Field label="Référence ou notes">
+                                    <Input
+                                      name="reference"
+                                      maxLength={200}
+                                      className="dark:border-[#1a3653] dark:bg-[#061527]"
+                                    />
+                                  </Field>
+                                  <p className="text-[11px] leading-relaxed text-muted-foreground">
+                                    Dépôt enregistré en attente. Confirmez le crédit réel dans
+                                    Financement & comptes. Un dépôt n’est pas un revenu.
+                                  </p>
+                                  <Button
+                                    type="submit"
+                                    disabled={isMutating}
+                                    className="w-full bg-teal-600 text-white hover:bg-teal-700 dark:bg-teal-400 dark:text-[#041521] dark:hover:bg-teal-300"
+                                  >
+                                    <Plus className="size-4" aria-hidden="true" /> Enregistrer
+                                  </Button>
+                                </form>
+                              ))}
+
+                            {entryType === "loan" &&
+                              (customers.length === 0 || accounts.length === 0 ? (
+                                <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+                                  Créez un client et un compte de décaissement avant d’émettre un
+                                  prêt.
+                                </p>
+                              ) : (
+                                <form
+                                  key="quick-loan"
+                                  className="space-y-3"
+                                  onSubmit={(event) => void onCreateLoan(event)}
+                                >
+                                  <Field label="Nom de l’emprunteur">
+                                    <select
+                                      name="loanCustomerId"
+                                      className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm dark:border-[#1a3653] dark:bg-[#061527] dark:text-slate-100"
+                                      required
+                                    >
+                                      {customers.map((customer) => (
+                                        <option key={customer.id} value={customer.id}>
+                                          {customer.name}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </Field>
+                                  <Field label="Compte de décaissement">
+                                    <select
+                                      name="loanAccountId"
+                                      value={selectedLoanAccountId || accounts[0]?.id || ""}
+                                      onChange={(event) =>
+                                        setSelectedLoanAccountId(event.target.value)
+                                      }
+                                      className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm dark:border-[#1a3653] dark:bg-[#061527] dark:text-slate-100"
+                                      required
+                                    >
+                                      {accounts.map((account) => (
+                                        <option key={account.id} value={account.id}>
+                                          {account.name} · {account.currency}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </Field>
+                                  <Field label="Principal prêté">
+                                    <Input
+                                      name="loanPrincipal"
+                                      type="number"
+                                      min="0.01"
+                                      step="0.01"
+                                      value={loanPrincipalAmount}
+                                      onChange={(event) =>
+                                        setLoanPrincipalAmount(event.target.value)
+                                      }
+                                      required
+                                      className="dark:border-[#1a3653] dark:bg-[#061527]"
+                                    />
+                                  </Field>
+                                  <div className="grid grid-cols-2 gap-3">
+                                    <Field label="Date d’émission">
+                                      <Input
+                                        name="loanIssuedDate"
+                                        type="date"
+                                        defaultValue={today()}
+                                        required
+                                        className="dark:border-[#1a3653] dark:bg-[#061527]"
+                                      />
+                                    </Field>
+                                    <Field label="Date d’échéance">
+                                      <Input
+                                        name="loanDueDate"
+                                        type="date"
+                                        className="dark:border-[#1a3653] dark:bg-[#061527]"
+                                      />
+                                    </Field>
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-3">
+                                    <Field label="Intérêts convenus">
+                                      <Input
+                                        name="loanInterest"
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        value={loanInterestAmount}
+                                        onChange={(event) =>
+                                          setLoanInterestAmount(event.target.value)
+                                        }
+                                        className="dark:border-[#1a3653] dark:bg-[#061527]"
+                                      />
+                                    </Field>
+                                    <Field label="Frais convenus">
+                                      <Input
+                                        name="loanFee"
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        value={loanFeeAmount}
+                                        onChange={(event) => setLoanFeeAmount(event.target.value)}
+                                        className="dark:border-[#1a3653] dark:bg-[#061527]"
+                                      />
+                                    </Field>
+                                  </div>
+                                  <Field label="Notes (facultatif)">
+                                    <Input
+                                      name="loanNotes"
+                                      maxLength={1000}
+                                      className="dark:border-[#1a3653] dark:bg-[#061527]"
+                                    />
+                                  </Field>
+                                  <p className="text-[11px] leading-relaxed text-muted-foreground">
+                                    Le principal est un actif et non un revenu. Le décaissement est
+                                    comptabilisé dans la devise du compte sélectionné.
+                                  </p>
+                                  <Button
+                                    type="submit"
+                                    disabled={isMutating}
+                                    className="w-full bg-teal-600 text-white hover:bg-teal-700 dark:bg-teal-400 dark:text-[#041521] dark:hover:bg-teal-300"
+                                  >
+                                    <Plus className="size-4" aria-hidden="true" /> Enregistrer le
+                                    prêt
+                                  </Button>
+                                </form>
+                              ))}
+                          </CardContent>
+                        </Card>
+                      </section>
+
+                      <aside className="min-w-0 space-y-4 border-t border-slate-200 bg-slate-50/70 p-4 dark:border-[#173451] dark:bg-[#071426] sm:p-6 lg:border-l lg:border-t-0">
+                        <Card className="border-cyan-900/60 bg-white shadow-sm dark:bg-[#091a2e]">
+                          <CardHeader className="pb-3">
+                            <CardTitle className="flex items-center gap-2 text-sm">
+                              <CircleDollarSign className="size-4 text-cyan-600 dark:text-cyan-300" />
+                              Aperçu de la transaction
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent className="space-y-3 text-xs">
+                            {entryType === "transfer" && (
+                              <>
+                                <div className="flex justify-between gap-3">
+                                  <span className="text-muted-foreground">Client</span>
+                                  <span className="max-w-36 truncate text-right font-medium">
+                                    {customers.find(
+                                      (customer) => customer.id === selectedTransactionCustomerId,
+                                    )?.name ??
+                                      customers[0]?.name ??
+                                      "—"}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between gap-3">
+                                  <span className="text-muted-foreground">Montant (USD)</span>
+                                  <span className="font-medium">
+                                    {formatBusinessMoney(
+                                      Math.max(0, Number(transferAmount) || 0),
+                                      "USD",
+                                    )}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between gap-3">
+                                  <span className="text-muted-foreground">Frais (USD)</span>
+                                  <span className="font-medium">
+                                    {formatBusinessMoney(
+                                      Math.max(0, Number(transferFee) || 0),
+                                      "USD",
+                                    )}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between gap-3">
+                                  <span className="text-muted-foreground">Montant dû (HTG)</span>
+                                  <span className="font-medium">
+                                    {formatBusinessMoney(
+                                      Math.max(0, Number(transferHtgDue) || 0),
+                                      "HTG",
+                                    )}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between gap-3 border-t pt-3 font-semibold">
+                                  <span>Total débité (USD)</span>
+                                  <span>
+                                    {formatBusinessMoney(
+                                      Math.max(0, Number(transferAmount) || 0) +
+                                        Math.max(0, Number(transferFee) || 0),
+                                      "USD",
+                                    )}
+                                  </span>
+                                </div>
+                              </>
+                            )}
+                            {entryType === "deposit" && (
+                              <>
+                                <p className="text-muted-foreground">Crédit réel à confirmer</p>
+                                <p className="text-xl font-semibold text-foreground">
+                                  {formatBusinessMoney(
+                                    Math.max(0, Number(fundingCreditedAmount) || 0),
+                                    accounts.find(
+                                      (account) => account.id === selectedFundingAccountId,
+                                    )?.currency ??
+                                      accounts[0]?.currency ??
+                                      "USD",
+                                  )}
+                                </p>
+                                <p className="leading-relaxed text-muted-foreground">
+                                  Le dépôt reste en attente jusqu’à confirmation du montant crédité.
+                                  Un dépôt n’est pas un revenu.
+                                </p>
+                              </>
+                            )}
+                            {entryType === "loan" && (
+                              <>
+                                <p className="text-muted-foreground">Principal décaissé</p>
+                                <p className="text-xl font-semibold text-foreground">
+                                  {formatBusinessMoney(
+                                    Math.max(0, Number(loanPrincipalAmount) || 0),
+                                    accounts.find((account) => account.id === selectedLoanAccountId)
+                                      ?.currency ??
+                                      accounts[0]?.currency ??
+                                      "USD",
+                                  )}
+                                </p>
+                                <p className="leading-relaxed text-muted-foreground">
+                                  Le principal constitue un actif et n’est pas comptabilisé comme un
+                                  revenu.
+                                </p>
+                              </>
+                            )}
+                          </CardContent>
+                        </Card>
+
+                        <Card className="border-cyan-900/60 bg-white shadow-sm dark:bg-[#091a2e]">
+                          <CardHeader className="pb-2">
+                            <CardTitle className="flex items-center gap-2 text-sm">
+                              <Info className="size-4 text-cyan-600 dark:text-cyan-300" />
+                              Informations importantes
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent className="space-y-2 text-xs leading-relaxed text-muted-foreground">
+                            <p>Les opérations sont d’abord enregistrées en attente.</p>
+                            <p>Les paiements HTG sont enregistrés séparément des transferts.</p>
+                            <p>
+                              Les dépôts utilisent le crédit réel, sans assimiler crypto et USD.
+                            </p>
+                          </CardContent>
+                        </Card>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full"
+                          onClick={() => setEntryDialogOpen(false)}
                         >
-                          <Field label="Nom de l’emprunteur">
-                            <select
-                              name="loanCustomerId"
-                              className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm dark:border-[#1a3653] dark:bg-[#061527] dark:text-slate-100"
-                              required
-                            >
-                              {customers.map((customer) => (
-                                <option key={customer.id} value={customer.id}>
-                                  {customer.name}
-                                </option>
-                              ))}
-                            </select>
-                          </Field>
-                          <Field label="Compte de décaissement">
-                            <select
-                              name="loanAccountId"
-                              className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm dark:border-[#1a3653] dark:bg-[#061527] dark:text-slate-100"
-                              required
-                            >
-                              {accounts.map((account) => (
-                                <option key={account.id} value={account.id}>
-                                  {account.name} · {account.currency}
-                                </option>
-                              ))}
-                            </select>
-                          </Field>
-                          <Field label="Principal prêté">
-                            <Input
-                              name="loanPrincipal"
-                              type="number"
-                              min="0.01"
-                              step="0.01"
-                              required
-                              className="dark:border-[#1a3653] dark:bg-[#061527]"
-                            />
-                          </Field>
-                          <div className="grid grid-cols-2 gap-3">
-                            <Field label="Date d’émission">
-                              <Input
-                                name="loanIssuedDate"
-                                type="date"
-                                defaultValue={today()}
-                                required
-                                className="dark:border-[#1a3653] dark:bg-[#061527]"
-                              />
-                            </Field>
-                            <Field label="Date d’échéance">
-                              <Input
-                                name="loanDueDate"
-                                type="date"
-                                className="dark:border-[#1a3653] dark:bg-[#061527]"
-                              />
-                            </Field>
-                          </div>
-                          <div className="grid grid-cols-2 gap-3">
-                            <Field label="Intérêts convenus">
-                              <Input
-                                name="loanInterest"
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                defaultValue="0"
-                                className="dark:border-[#1a3653] dark:bg-[#061527]"
-                              />
-                            </Field>
-                            <Field label="Frais convenus">
-                              <Input
-                                name="loanFee"
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                defaultValue="0"
-                                className="dark:border-[#1a3653] dark:bg-[#061527]"
-                              />
-                            </Field>
-                          </div>
-                          <Field label="Notes (facultatif)">
-                            <Input
-                              name="loanNotes"
-                              maxLength={1000}
-                              className="dark:border-[#1a3653] dark:bg-[#061527]"
-                            />
-                          </Field>
-                          <p className="text-[11px] leading-relaxed text-muted-foreground">
-                            Le principal est un actif et non un revenu. Le décaissement est
-                            comptabilisé dans la devise du compte sélectionné.
-                          </p>
-                          <Button
-                            type="submit"
-                            disabled={isMutating}
-                            className="w-full bg-teal-600 text-white hover:bg-teal-700 dark:bg-teal-400 dark:text-[#041521] dark:hover:bg-teal-300"
-                          >
-                            <Plus className="size-4" aria-hidden="true" /> Enregistrer le prêt
-                          </Button>
-                        </form>
-                      ))}
-                  </CardContent>
-                </Card>
+                          Annuler
+                        </Button>
+                      </aside>
+                    </div>
+                  </DialogContent>
+                </Dialog>
 
                 <Card className="overflow-hidden border-slate-200 bg-gradient-to-br from-slate-50 to-cyan-50 shadow-sm dark:border-[#173451] dark:from-[#08182a] dark:to-[#09283a]">
                   <CardContent className="relative p-4">
@@ -3404,150 +3628,285 @@ function BusinessPage() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="customers" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Add customer</CardTitle>
-                <CardDescription>
-                  Only store information needed to identify and manage customers; never store their
-                  account credentials.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form
-                  className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
-                  onSubmit={(event) => void onCreateCustomer(event)}
+          <TabsContent value="customers" className="space-y-5">
+            <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
+              {[
+                {
+                  label: "Total clients",
+                  value: String(customers.length),
+                  note: "Profils enregistrés",
+                  icon: UsersRound,
+                  accent: "bg-teal-500/15 text-teal-700 dark:text-teal-300",
+                },
+                {
+                  label: "Avec opérations terminées",
+                  value: String(
+                    customerRows.filter(({ completedTransactions }) => completedTransactions > 0)
+                      .length,
+                  ),
+                  note: `Sur la période ${startDate} — ${endDate}`,
+                  icon: TrendingUp,
+                  accent: "bg-blue-500/15 text-blue-700 dark:text-blue-300",
+                },
+                {
+                  label: "Paiements à recevoir",
+                  value: String(customerRows.filter(({ outstanding }) => outstanding > 0).length),
+                  note: `${formatBusinessMoney(paymentLoanMetrics.outstandingCustomerPayments, "HTG")} HTG en attente`,
+                  icon: HandCoins,
+                  accent: "bg-violet-500/15 text-violet-700 dark:text-violet-300",
+                },
+                {
+                  label: "Clients avec prêts",
+                  value: String(new Set(activeLoans.map((loan) => loan.customerId)).size),
+                  note: "Principal suivi séparément",
+                  icon: PiggyBank,
+                  accent: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+                },
+              ].map(({ label, value, note, icon: Icon, accent }) => (
+                <Card
+                  key={label}
+                  className="border-slate-200 bg-white shadow-sm dark:border-[#173451] dark:bg-[#091a2e]"
                 >
-                  <Field label="Full/display name">
-                    <Input name="name" required maxLength={160} />
-                  </Field>
-                  <Field label="Nickname or reference">
-                    <Input name="nickname" maxLength={100} />
-                  </Field>
-                  <Field label="Optional contact">
-                    <Input name="contact" maxLength={200} />
-                  </Field>
-                  <Field label="Notes">
-                    <Input name="notes" maxLength={1000} />
-                  </Field>
-                  <Button
-                    type="submit"
-                    className="sm:col-span-2 xl:col-span-4"
-                    disabled={isMutating}
-                  >
-                    Save customer
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
-            <Field label="Search customers">
-              <Input
-                value={customerSearch}
-                onChange={(event) => setCustomerSearch(event.target.value)}
-                placeholder="Name, nickname, or contact"
-              />
-            </Field>
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {customers.length === 0 ? (
-                <Card className="md:col-span-2 xl:col-span-3">
-                  <CardContent className="py-6 text-sm text-muted-foreground">
-                    No customers saved yet.
+                  <CardContent className="flex min-h-24 items-center gap-3 p-3.5">
+                    <span
+                      className={`grid size-10 shrink-0 place-items-center rounded-xl ${accent}`}
+                    >
+                      <Icon className="size-4" aria-hidden="true" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate text-xs text-muted-foreground">{label}</p>
+                      <p className="text-xl font-bold text-foreground">{value}</p>
+                      <p className="truncate text-[10px] text-muted-foreground">{note}</p>
+                    </div>
                   </CardContent>
                 </Card>
-              ) : visibleCustomers.length === 0 ? (
-                <Card className="md:col-span-2 xl:col-span-3">
-                  <CardContent className="py-6 text-sm text-muted-foreground">
-                    No customers match this search.
-                  </CardContent>
-                </Card>
-              ) : (
-                visibleCustomers.map((customer) => {
-                  const summary = calculateCustomerPerformance(customer.id, periodTransactions);
-                  const history = periodTransactions.filter(
-                    (transaction) => transaction.customerId === customer.id,
-                  );
-                  return (
-                    <Card key={customer.id}>
-                      <CardHeader>
-                        <CardTitle>{customer.name}</CardTitle>
-                        <CardDescription>
-                          {customer.nickname || "No internal reference"} · added{" "}
-                          {new Date(customer.createdAt).toLocaleDateString()}
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent className="space-y-2 text-sm">
-                        {customer.contact && (
-                          <p className="text-muted-foreground">{customer.contact}</p>
-                        )}
-                        {customer.notes && <p>{customer.notes}</p>}
-                        <details className="pt-1">
-                          <summary className="cursor-pointer">Edit customer</summary>
-                          <form
-                            className="mt-2 space-y-2"
-                            onSubmit={(event) => void onUpdateCustomer(event, customer.id)}
-                          >
-                            <Input
-                              aria-label="Display name"
-                              name="name"
-                              defaultValue={customer.name}
-                              required
-                            />
-                            <Input
-                              aria-label="Nickname"
-                              name="nickname"
-                              defaultValue={customer.nickname ?? ""}
-                            />
-                            <Input
-                              aria-label="Contact"
-                              name="contact"
-                              defaultValue={customer.contact ?? ""}
-                            />
-                            <Input
-                              aria-label="Notes"
-                              name="notes"
-                              defaultValue={customer.notes ?? ""}
-                            />
-                            <Button type="submit" size="sm" disabled={isMutating}>
-                              Save details
-                            </Button>
-                          </form>
-                        </details>
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Completed HTG receipts</span>
-                          <span>{formatBusinessMoney(summary.totalHtgReceived, "HTG")}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Completed USD sent</span>
-                          <span>{formatBusinessMoney(summary.totalUsdSent, "USD")}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Estimated profit</span>
-                          <span>{formatBusinessMoney(summary.estimatedProfit, "USD")}</span>
-                        </div>
-                        <details className="pt-2">
-                          <summary className="cursor-pointer">
-                            Transaction history ({history.length})
-                          </summary>
-                          <ul className="mt-2 space-y-2">
-                            {history.map((item) => (
-                              <li
-                                key={item.id}
-                                className="flex items-center justify-between gap-2 border-t pt-2"
-                              >
-                                <span>
-                                  {item.transactionDate.slice(0, 10)} ·{" "}
-                                  {formatBusinessMoney(item.htgReceived, "HTG")}
-                                </span>
-                                <StatusBadge status={item.status} />
-                              </li>
-                            ))}
-                          </ul>
-                        </details>
-                      </CardContent>
-                    </Card>
-                  );
-                })
-              )}
+              ))}
+            </div>
+
+            <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.8fr)_minmax(290px,0.8fr)]">
+              <Card className="min-w-0 border-slate-200 bg-white shadow-sm dark:border-[#173451] dark:bg-[#091a2e]">
+                <CardHeader className="space-y-3 border-b border-slate-100 pb-4 dark:border-[#142d47]">
+                  <div>
+                    <CardTitle className="text-base">Clients</CardTitle>
+                    <CardDescription>
+                      Profils et activité liée aux opérations Business.
+                    </CardDescription>
+                  </div>
+                  <div className="relative max-w-lg">
+                    <Search
+                      className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                      aria-hidden="true"
+                    />
+                    <Input
+                      aria-label="Rechercher un client"
+                      value={customerSearch}
+                      onChange={(event) => setCustomerSearch(event.target.value)}
+                      placeholder="Nom, référence ou contact…"
+                      className="pl-9"
+                    />
+                  </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                  {customers.length === 0 ? (
+                    <p className="p-6 text-sm text-muted-foreground">
+                      Aucun client enregistré. Ajoutez un client pour commencer.
+                    </p>
+                  ) : visibleCustomers.length === 0 ? (
+                    <p className="p-6 text-sm text-muted-foreground">
+                      Aucun client ne correspond à cette recherche.
+                    </p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[760px] text-left text-xs">
+                        <thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500 dark:bg-[#071426] dark:text-slate-400">
+                          <tr>
+                            <th className="px-3 py-3 font-medium">Nom du client</th>
+                            <th className="px-3 py-3 font-medium">Contact</th>
+                            <th className="px-3 py-3 text-right font-medium">Opérations</th>
+                            <th className="px-3 py-3 text-right font-medium">USD envoyé</th>
+                            <th className="px-3 py-3 text-right font-medium">Reste dû (HTG)</th>
+                            <th className="px-3 py-3 text-right font-medium">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-[#142d47]">
+                          {visibleCustomers.map(
+                            ({ customer, history, outstanding, performance }) => {
+                              const initials = customer.name
+                                .trim()
+                                .split(/\s+/)
+                                .slice(0, 2)
+                                .map((part) => part.charAt(0).toLocaleUpperCase())
+                                .join("");
+                              return (
+                                <tr
+                                  key={customer.id}
+                                  className="transition-colors hover:bg-slate-50/80 dark:hover:bg-[#0c2037]"
+                                >
+                                  <td className="px-3 py-3">
+                                    <div className="flex min-w-40 items-center gap-2.5">
+                                      <span className="grid size-8 shrink-0 place-items-center rounded-full bg-cyan-100 text-[10px] font-semibold text-cyan-800 dark:bg-[#102f50] dark:text-cyan-200">
+                                        {initials || "?"}
+                                      </span>
+                                      <span className="min-w-0">
+                                        <span className="block truncate font-medium text-foreground">
+                                          {customer.name}
+                                        </span>
+                                        <span className="block truncate text-[10px] text-muted-foreground">
+                                          {customer.nickname || "Client"}
+                                        </span>
+                                      </span>
+                                    </div>
+                                  </td>
+                                  <td className="max-w-40 truncate px-3 py-3 text-muted-foreground">
+                                    {customer.contact || "—"}
+                                  </td>
+                                  <td className="px-3 py-3 text-right">
+                                    {performance.transactionCount}
+                                  </td>
+                                  <td className="whitespace-nowrap px-3 py-3 text-right">
+                                    {formatBusinessMoney(performance.totalUsdSent, "USD")}
+                                  </td>
+                                  <td className="whitespace-nowrap px-3 py-3 text-right">
+                                    <span
+                                      className={
+                                        outstanding > 0
+                                          ? "font-semibold text-amber-700 dark:text-amber-300"
+                                          : "text-muted-foreground"
+                                      }
+                                    >
+                                      {formatBusinessMoney(outstanding, "HTG")}
+                                    </span>
+                                  </td>
+                                  <td className="px-3 py-3 text-right">
+                                    <details className="relative inline-block text-left">
+                                      <summary className="cursor-pointer list-none rounded-md px-2 py-1 text-xs font-medium text-cyan-700 hover:bg-cyan-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-cyan-300 dark:hover:bg-[#10243b]">
+                                        Gérer
+                                      </summary>
+                                      <div className="absolute right-0 z-20 mt-2 w-72 max-w-[80vw] rounded-xl border border-slate-200 bg-background p-4 text-left shadow-xl dark:border-[#1a3653]">
+                                        <p className="mb-3 text-xs text-muted-foreground">
+                                          Ajouté le{" "}
+                                          {new Date(customer.createdAt).toLocaleDateString()}
+                                          {customer.notes ? ` · ${customer.notes}` : ""}
+                                        </p>
+                                        <form
+                                          className="space-y-2"
+                                          onSubmit={(event) =>
+                                            void onUpdateCustomer(event, customer.id)
+                                          }
+                                        >
+                                          <Field label="Nom complet">
+                                            <Input
+                                              name="name"
+                                              defaultValue={customer.name}
+                                              required
+                                              maxLength={160}
+                                            />
+                                          </Field>
+                                          <Field label="Référence">
+                                            <Input
+                                              name="nickname"
+                                              defaultValue={customer.nickname ?? ""}
+                                              maxLength={100}
+                                            />
+                                          </Field>
+                                          <Field label="Contact">
+                                            <Input
+                                              name="contact"
+                                              defaultValue={customer.contact ?? ""}
+                                              maxLength={200}
+                                            />
+                                          </Field>
+                                          <Field label="Notes">
+                                            <Input
+                                              name="notes"
+                                              defaultValue={customer.notes ?? ""}
+                                              maxLength={1000}
+                                            />
+                                          </Field>
+                                          <Button type="submit" size="sm" disabled={isMutating}>
+                                            Enregistrer
+                                          </Button>
+                                        </form>
+                                        <div className="mt-4 space-y-2 border-t pt-3">
+                                          <p className="text-xs font-semibold">
+                                            Transactions de la période
+                                          </p>
+                                          {history.length === 0 ? (
+                                            <p className="text-xs text-muted-foreground">
+                                              Aucune opération sur cette période.
+                                            </p>
+                                          ) : (
+                                            <ul className="max-h-36 space-y-2 overflow-y-auto">
+                                              {history.map((item) => (
+                                                <li
+                                                  key={item.id}
+                                                  className="flex items-center justify-between gap-2 text-xs"
+                                                >
+                                                  <span className="truncate">
+                                                    {item.transactionDate.slice(0, 10)} ·{" "}
+                                                    {formatBusinessMoney(item.usdSent, "USD")}
+                                                  </span>
+                                                  <StatusBadge status={item.status} />
+                                                </li>
+                                              ))}
+                                            </ul>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </details>
+                                  </td>
+                                </tr>
+                              );
+                            },
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  <div className="border-t border-slate-100 px-4 py-3 text-[10px] text-muted-foreground dark:border-[#142d47]">
+                    {visibleCustomers.length} client{visibleCustomers.length === 1 ? "" : "s"}
+                    {customerSearch.trim() ? " correspondant à la recherche" : " enregistré(s)"}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-slate-200 bg-white shadow-sm dark:border-[#173451] dark:bg-[#091a2e]">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <UsersRound className="size-4 text-cyan-600 dark:text-cyan-300" />
+                    Ajouter un client
+                  </CardTitle>
+                  <CardDescription>
+                    Renseignez les informations de contact disponibles pour ce profil.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form className="space-y-3" onSubmit={(event) => void onCreateCustomer(event)}>
+                    <Field label="Nom complet *">
+                      <Input name="name" required maxLength={160} placeholder="Ex. Marie Jean" />
+                    </Field>
+                    <Field label="Référence ou surnom">
+                      <Input name="nickname" maxLength={100} placeholder="Référence interne" />
+                    </Field>
+                    <Field label="Téléphone ou e-mail">
+                      <Input name="contact" maxLength={200} placeholder="Coordonnées du client" />
+                    </Field>
+                    <Field label="Notes (facultatif)">
+                      <Input name="notes" maxLength={1000} placeholder="Informations utiles…" />
+                    </Field>
+                    <p className="text-[11px] leading-relaxed text-muted-foreground">
+                      Ne stockez pas de mot de passe ni d’identifiants de compte.
+                    </p>
+                    <Button
+                      type="submit"
+                      disabled={isMutating}
+                      className="w-full bg-teal-600 text-white hover:bg-teal-700 dark:bg-teal-400 dark:text-[#041521] dark:hover:bg-teal-300"
+                    >
+                      <Plus className="size-4" aria-hidden="true" /> Enregistrer le client
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
             </div>
           </TabsContent>
 
