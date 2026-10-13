@@ -94,7 +94,7 @@ export function AppSidebar() {
           <p className="truncate text-sm font-medium text-sidebar-foreground">
             {profile?.full_name ?? "Nexora user"}
           </p>
-          <p className="truncate text-xs text-muted-foreground">{user?.email}</p>
+          <p className="truncate text-xs text-sidebar-foreground/65">{user?.email}</p>
         </div>
         <SidebarMenuButton onClick={() => void handleSignOut()} disabled={signingOut}>
           <LogOut className="h-4 w-4" />

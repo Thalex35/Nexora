@@ -5,7 +5,7 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * NEXORA design system — dark-first, premium, calm, technological.
+ * Nexora design system — clear, calm, and finance-oriented.
  * All colors are oklch semantic tokens. Never hardcode colors in components.
  */
 
@@ -65,22 +65,70 @@
   --radius: 0.75rem;
   --font-nexora: "Inter", ui-sans-serif, system-ui, sans-serif;
 
-  /* #0B0F14 */
+  --background: oklch(0.975 0.006 248);
+  --foreground: oklch(0.25 0.035 258);
+
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.25 0.035 258);
+
+  --surface: oklch(0.955 0.01 248);
+  --surface-foreground: oklch(0.25 0.035 258);
+
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.25 0.035 258);
+
+  --primary: oklch(0.48 0.19 265);
+  --primary-foreground: oklch(0.99 0.002 248);
+
+  --secondary: oklch(0.94 0.014 248);
+  --secondary-foreground: oklch(0.31 0.04 258);
+
+  --muted: oklch(0.955 0.01 248);
+  --muted-foreground: oklch(0.54 0.035 258);
+
+  --accent: oklch(0.93 0.025 265);
+  --accent-foreground: oklch(0.35 0.13 265);
+
+  --destructive: oklch(0.58 0.21 25);
+  --destructive-foreground: oklch(0.98 0.004 248);
+  --success: oklch(0.55 0.15 155);
+  --success-foreground: oklch(0.99 0.002 248);
+  --warning: oklch(0.72 0.15 75);
+  --warning-foreground: oklch(0.24 0.03 70);
+
+  --border: oklch(0.9 0.014 248);
+  --input: oklch(0.88 0.018 248);
+  --ring: oklch(0.58 0.17 265);
+
+  --chart-1: oklch(0.57 0.2 265);
+  --chart-2: oklch(0.62 0.16 155);
+  --chart-3: oklch(0.68 0.16 300);
+  --chart-4: oklch(0.68 0.15 75);
+  --chart-5: oklch(0.62 0.04 250);
+
+  --sidebar: oklch(0.22 0.045 258);
+  --sidebar-foreground: oklch(0.91 0.018 248);
+  --sidebar-primary: oklch(0.53 0.2 265);
+  --sidebar-primary-foreground: oklch(0.99 0.002 248);
+  --sidebar-accent: oklch(0.31 0.06 258);
+  --sidebar-accent-foreground: oklch(0.98 0.004 248);
+  --sidebar-border: oklch(0.32 0.045 258);
+  --sidebar-ring: oklch(0.7 0.12 265);
+}
+
+.dark {
   --background: oklch(0.168 0.012 248);
   --foreground: oklch(0.971 0.004 248);
 
-  /* #111820 main surface / card */
   --card: oklch(0.219 0.014 248);
   --card-foreground: oklch(0.971 0.004 248);
 
-  /* #17212B secondary surface */
   --surface: oklch(0.268 0.016 248);
   --surface-foreground: oklch(0.971 0.004 248);
 
   --popover: oklch(0.219 0.014 248);
   --popover-foreground: oklch(0.971 0.004 248);
 
-  /* #2DD4BF nexora accent */
   --primary: oklch(0.784 0.13 182);
   --primary-foreground: oklch(0.168 0.012 248);
 
@@ -88,7 +136,6 @@
   --secondary-foreground: oklch(0.971 0.004 248);
 
   --muted: oklch(0.268 0.016 248);
-  /* #94A3B8 */
   --muted-foreground: oklch(0.706 0.03 255);
 
   --accent: oklch(0.3 0.018 248);
@@ -127,6 +174,10 @@
   }
 
   html {
+    color-scheme: light;
+  }
+
+  html.dark {
     color-scheme: dark;
   }
 
@@ -135,6 +186,11 @@
     color: var(--color-foreground);
     font-family: var(--font-nexora);
     -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background: oklch(0.86 0.07 265);
+    color: oklch(0.22 0.045 258);
   }
 
   h1,
@@ -149,6 +205,7 @@
   background-color: var(--color-card);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
+  box-shadow: 0 1px 2px oklch(0.22 0.045 258 / 0.04);
 }
 
 @utility nexora-label {

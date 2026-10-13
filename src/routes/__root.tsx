@@ -7,7 +7,7 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useSyncExternalStore, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -107,6 +107,12 @@ function RootShell({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "try{const theme=localStorage.getItem('nexora-theme')||'dark';document.documentElement.classList.toggle('dark',theme!=='light');document.documentElement.style.colorScheme=theme==='light'?'light':'dark'}catch{document.documentElement.classList.add('dark')}",
+          }}
+        />
         <HeadContent />
       </head>
       <body>
@@ -119,13 +125,22 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const theme = useSyncExternalStore<"dark" | "light">(
+    (onChange) => {
+      window.addEventListener("nexora-theme-change", onChange);
+      return () => window.removeEventListener("nexora-theme-change", onChange);
+    },
+    (): "dark" | "light" =>
+      document.documentElement.classList.contains("dark") ? "dark" : "light",
+    (): "dark" => "dark",
+  );
 
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
         <Outlet />
-        <Toaster theme="dark" />
+        <Toaster theme={theme} />
       </AuthProvider>
     </QueryClientProvider>
   );
