@@ -207,6 +207,9 @@ function BusinessPage() {
   const [endDate, setEndDate] = useState(today);
   const [customerFilter, setCustomerFilter] = useState("all");
   const [customerSearch, setCustomerSearch] = useState("");
+  const [customerPaymentFilter, setCustomerPaymentFilter] = useState("all");
+  const [customerActivityFilter, setCustomerActivityFilter] = useState("all");
+  const [customerPage, setCustomerPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState("all");
   const [transactionAccountFilter, setTransactionAccountFilter] = useState("all");
   const [accountFilter, setAccountFilter] = useState("all");
@@ -763,15 +766,32 @@ function BusinessPage() {
       customer,
       history,
       outstanding,
-      completedTransactions: history.filter((transaction) => transaction.status === "completed")
+      transactionCount: transactions.filter((transaction) => transaction.customerId === customer.id)
         .length,
       performance: calculateCustomerPerformance(customer.id, periodTransactions),
     };
   });
-  const visibleCustomers = customerRows.filter(({ customer }) =>
-    `${customer.name} ${customer.nickname ?? ""} ${customer.contact ?? ""}`
-      .toLocaleLowerCase()
-      .includes(customerSearch.trim().toLocaleLowerCase()),
+  const visibleCustomers = customerRows
+    .filter(({ customer }) =>
+      `${customer.name} ${customer.nickname ?? ""} ${customer.contact ?? ""}`
+        .toLocaleLowerCase()
+        .includes(customerSearch.trim().toLocaleLowerCase()),
+    )
+    .filter(
+      ({ outstanding, transactionCount }) =>
+        (customerPaymentFilter === "all" ||
+          (customerPaymentFilter === "pending" && outstanding > 0) ||
+          (customerPaymentFilter === "clear" && outstanding === 0)) &&
+        (customerActivityFilter === "all" ||
+          (customerActivityFilter === "active" && transactionCount > 0) ||
+          (customerActivityFilter === "new" && transactionCount === 0)),
+    );
+  const customerPageSize = 10;
+  const customerPageCount = Math.max(1, Math.ceil(visibleCustomers.length / customerPageSize));
+  const currentCustomerPage = Math.min(customerPage, customerPageCount);
+  const paginatedCustomers = visibleCustomers.slice(
+    (currentCustomerPage - 1) * customerPageSize,
+    currentCustomerPage * customerPageSize,
   );
   const topCustomerRows = customers
     .map((customer) => {
@@ -3799,19 +3819,18 @@ function BusinessPage() {
                   accent: "bg-teal-500/15 text-teal-700 dark:text-teal-300",
                 },
                 {
-                  label: "Avec opérations terminées",
+                  label: "Clients actifs",
                   value: String(
-                    customerRows.filter(({ completedTransactions }) => completedTransactions > 0)
-                      .length,
+                    customerRows.filter(({ transactionCount }) => transactionCount > 0).length,
                   ),
-                  note: `Sur la période ${startDate} — ${endDate}`,
+                  note: "Avec au moins une opération enregistrée",
                   icon: TrendingUp,
                   accent: "bg-blue-500/15 text-blue-700 dark:text-blue-300",
                 },
                 {
                   label: "Paiements à recevoir",
                   value: String(customerRows.filter(({ outstanding }) => outstanding > 0).length),
-                  note: `${formatBusinessMoney(paymentLoanMetrics.outstandingCustomerPayments, "HTG")} HTG en attente`,
+                  note: `${formatBusinessMoney(paymentLoanMetrics.outstandingCustomerPayments, "HTG")} à recevoir`,
                   icon: HandCoins,
                   accent: "bg-violet-500/15 text-violet-700 dark:text-violet-300",
                 },
@@ -3825,11 +3844,11 @@ function BusinessPage() {
               ].map(({ label, value, note, icon: Icon, accent }) => (
                 <Card
                   key={label}
-                  className="border-slate-200 bg-white shadow-sm dark:border-[#173451] dark:bg-[#091a2e]"
+                  className="overflow-hidden border-slate-200 bg-white shadow-sm dark:border-[#173451] dark:bg-[#091a2e]"
                 >
-                  <CardContent className="flex min-h-24 items-center gap-3 p-3.5">
+                  <CardContent className="flex min-h-[98px] items-center gap-3 p-3.5">
                     <span
-                      className={`grid size-10 shrink-0 place-items-center rounded-xl ${accent}`}
+                      className={`grid size-10 shrink-0 place-items-center rounded-full shadow-sm ${accent}`}
                     >
                       <Icon className="size-4" aria-hidden="true" />
                     </span>
@@ -3843,27 +3862,68 @@ function BusinessPage() {
               ))}
             </div>
 
-            <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.8fr)_minmax(290px,0.8fr)]">
+            <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.85fr)_minmax(285px,0.85fr)]">
               <Card className="min-w-0 border-slate-200 bg-white shadow-sm dark:border-[#173451] dark:bg-[#091a2e]">
-                <CardHeader className="space-y-3 border-b border-slate-100 pb-4 dark:border-[#142d47]">
-                  <div>
-                    <CardTitle className="text-base">Clients</CardTitle>
-                    <CardDescription>
-                      Profils et activité liée aux opérations Business.
-                    </CardDescription>
+                <CardHeader className="space-y-3 border-b border-slate-100 pb-3 dark:border-[#142d47]">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <CardTitle className="text-base">Clients</CardTitle>
+                      <CardDescription className="text-xs">
+                        Profils et activité liée aux opérations Business.
+                      </CardDescription>
+                    </div>
                   </div>
-                  <div className="relative max-w-lg">
-                    <Search
-                      className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-                      aria-hidden="true"
-                    />
-                    <Input
-                      aria-label="Rechercher un client"
-                      value={customerSearch}
-                      onChange={(event) => setCustomerSearch(event.target.value)}
-                      placeholder="Nom, référence ou contact…"
-                      className="pl-9"
-                    />
+                  <div className="grid gap-2 sm:grid-cols-[minmax(140px,1fr)_auto_auto_auto]">
+                    <div className="relative min-w-0">
+                      <Search
+                        className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                        aria-hidden="true"
+                      />
+                      <Input
+                        aria-label="Rechercher un client"
+                        value={customerSearch}
+                        onChange={(event) => {
+                          setCustomerSearch(event.target.value);
+                          setCustomerPage(1);
+                        }}
+                        placeholder="Rechercher un client…"
+                        className="h-9 pl-9 text-xs"
+                      />
+                    </div>
+                    <select
+                      aria-label="Filtrer par paiement"
+                      value={customerPaymentFilter}
+                      onChange={(event) => {
+                        setCustomerPaymentFilter(event.target.value);
+                        setCustomerPage(1);
+                      }}
+                      className="h-9 rounded-md border border-input bg-background px-3 text-xs"
+                    >
+                      <option value="all">Tous les paiements</option>
+                      <option value="pending">À recevoir</option>
+                      <option value="clear">Aucun solde dû</option>
+                    </select>
+                    <select
+                      aria-label="Filtrer par activité"
+                      value={customerActivityFilter}
+                      onChange={(event) => {
+                        setCustomerActivityFilter(event.target.value);
+                        setCustomerPage(1);
+                      }}
+                      className="h-9 rounded-md border border-input bg-background px-3 text-xs"
+                    >
+                      <option value="all">Toute l’activité</option>
+                      <option value="active">Avec opérations</option>
+                      <option value="new">Sans opération</option>
+                    </select>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="h-9 bg-teal-500 text-xs text-[#041521] hover:bg-teal-400"
+                      onClick={() => document.getElementById("business-customer-name")?.focus()}
+                    >
+                      <Plus className="size-3.5" aria-hidden="true" /> Ajouter un client
+                    </Button>
                   </div>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -3873,24 +3933,24 @@ function BusinessPage() {
                     </p>
                   ) : visibleCustomers.length === 0 ? (
                     <p className="p-6 text-sm text-muted-foreground">
-                      Aucun client ne correspond à cette recherche.
+                      Aucun client ne correspond à cette recherche ou à ces filtres.
                     </p>
                   ) : (
                     <div className="overflow-x-auto">
-                      <table className="w-full min-w-[760px] text-left text-xs">
+                      <table className="w-full min-w-[680px] text-left text-xs">
                         <thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500 dark:bg-[#071426] dark:text-slate-400">
                           <tr>
                             <th className="px-3 py-3 font-medium">Nom du client</th>
                             <th className="px-3 py-3 font-medium">Contact</th>
+                            <th className="px-3 py-3 text-center font-medium">Statut</th>
                             <th className="px-3 py-3 text-right font-medium">Opérations</th>
-                            <th className="px-3 py-3 text-right font-medium">USD envoyé</th>
-                            <th className="px-3 py-3 text-right font-medium">Reste dû (HTG)</th>
+                            <th className="px-3 py-3 text-right font-medium">Solde dû (HTG)</th>
                             <th className="px-3 py-3 text-right font-medium">Actions</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 dark:divide-[#142d47]">
-                          {visibleCustomers.map(
-                            ({ customer, history, outstanding, performance }) => {
+                          {paginatedCustomers.map(
+                            ({ customer, history, outstanding, transactionCount }) => {
                               const initials = customer.name
                                 .trim()
                                 .split(/\s+/)
@@ -3917,15 +3977,35 @@ function BusinessPage() {
                                       </span>
                                     </div>
                                   </td>
-                                  <td className="max-w-40 truncate px-3 py-3 text-muted-foreground">
-                                    {customer.contact || "—"}
+                                  <td className="max-w-40 px-3 py-3 text-muted-foreground">
+                                    <span className="block truncate">
+                                      {customer.contact || "—"}
+                                    </span>
+                                    {customer.contact && (
+                                      <span className="block text-[10px] text-muted-foreground/70">
+                                        Contact fourni
+                                      </span>
+                                    )}
                                   </td>
-                                  <td className="px-3 py-3 text-right">
-                                    {performance.transactionCount}
+                                  <td className="px-3 py-3 text-center">
+                                    {outstanding > 0 ? (
+                                      <Badge className="border-0 bg-amber-100 text-[10px] text-amber-900 dark:bg-amber-950 dark:text-amber-200">
+                                        En attente
+                                      </Badge>
+                                    ) : transactionCount > 0 ? (
+                                      <Badge className="border-0 bg-teal-100 text-[10px] text-teal-900 dark:bg-teal-950 dark:text-teal-200">
+                                        À jour
+                                      </Badge>
+                                    ) : (
+                                      <Badge
+                                        variant="outline"
+                                        className="text-[10px] text-muted-foreground"
+                                      >
+                                        Nouveau
+                                      </Badge>
+                                    )}
                                   </td>
-                                  <td className="whitespace-nowrap px-3 py-3 text-right">
-                                    {formatBusinessMoney(performance.totalUsdSent, "USD")}
-                                  </td>
+                                  <td className="px-3 py-3 text-right">{transactionCount}</td>
                                   <td className="whitespace-nowrap px-3 py-3 text-right">
                                     <span
                                       className={
@@ -4023,50 +4103,149 @@ function BusinessPage() {
                       </table>
                     </div>
                   )}
-                  <div className="border-t border-slate-100 px-4 py-3 text-[10px] text-muted-foreground dark:border-[#142d47]">
-                    {visibleCustomers.length} client{visibleCustomers.length === 1 ? "" : "s"}
-                    {customerSearch.trim() ? " correspondant à la recherche" : " enregistré(s)"}
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-4 py-3 text-[10px] text-muted-foreground dark:border-[#142d47]">
+                    <span>
+                      Affichage de{" "}
+                      {visibleCustomers.length === 0
+                        ? 0
+                        : (currentCustomerPage - 1) * customerPageSize + 1}{" "}
+                      à {Math.min(currentCustomerPage * customerPageSize, visibleCustomers.length)}{" "}
+                      sur {visibleCustomers.length} client{visibleCustomers.length === 1 ? "" : "s"}
+                    </span>
+                    <div className="flex items-center gap-1" aria-label="Pagination des clients">
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="outline"
+                        className="size-7"
+                        aria-label="Page précédente"
+                        disabled={currentCustomerPage <= 1}
+                        onClick={() => setCustomerPage((page) => Math.max(1, page - 1))}
+                      >
+                        <ChevronRight className="size-3.5 rotate-180" aria-hidden="true" />
+                      </Button>
+                      {Array.from({ length: customerPageCount }, (_, index) => index + 1)
+                        .slice(
+                          Math.max(0, Math.min(currentCustomerPage - 2, customerPageCount - 3)),
+                          Math.max(3, Math.min(currentCustomerPage + 1, customerPageCount)),
+                        )
+                        .map((page) => (
+                          <Button
+                            key={page}
+                            type="button"
+                            size="icon"
+                            variant={page === currentCustomerPage ? "default" : "outline"}
+                            className="size-7 text-[10px]"
+                            aria-label={`Page ${page}`}
+                            aria-current={page === currentCustomerPage ? "page" : undefined}
+                            onClick={() => setCustomerPage(page)}
+                          >
+                            {page}
+                          </Button>
+                        ))}
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="outline"
+                        className="size-7"
+                        aria-label="Page suivante"
+                        disabled={currentCustomerPage >= customerPageCount}
+                        onClick={() =>
+                          setCustomerPage((page) => Math.min(customerPageCount, page + 1))
+                        }
+                      >
+                        <ChevronRight className="size-3.5" aria-hidden="true" />
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
 
-              <Card className="border-slate-200 bg-white shadow-sm dark:border-[#173451] dark:bg-[#091a2e]">
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <UsersRound className="size-4 text-cyan-600 dark:text-cyan-300" />
-                    Ajouter un client
-                  </CardTitle>
-                  <CardDescription>
-                    Renseignez les informations de contact disponibles pour ce profil.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <form className="space-y-3" onSubmit={(event) => void onCreateCustomer(event)}>
-                    <Field label="Nom complet *">
-                      <Input name="name" required maxLength={160} placeholder="Ex. Marie Jean" />
-                    </Field>
-                    <Field label="Référence ou surnom">
-                      <Input name="nickname" maxLength={100} placeholder="Référence interne" />
-                    </Field>
-                    <Field label="Téléphone ou e-mail">
-                      <Input name="contact" maxLength={200} placeholder="Coordonnées du client" />
-                    </Field>
-                    <Field label="Notes (facultatif)">
-                      <Input name="notes" maxLength={1000} placeholder="Informations utiles…" />
-                    </Field>
-                    <p className="text-[11px] leading-relaxed text-muted-foreground">
-                      Ne stockez pas de mot de passe ni d’identifiants de compte.
-                    </p>
-                    <Button
-                      type="submit"
-                      disabled={isMutating}
-                      className="w-full bg-teal-600 text-white hover:bg-teal-700 dark:bg-teal-400 dark:text-[#041521] dark:hover:bg-teal-300"
-                    >
-                      <Plus className="size-4" aria-hidden="true" /> Enregistrer le client
-                    </Button>
-                  </form>
-                </CardContent>
-              </Card>
+              <div className="space-y-3">
+                <Card className="border-cyan-900/50 bg-white shadow-sm dark:border-[#173451] dark:bg-[#091a2e]">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <span className="grid size-8 place-items-center rounded-lg bg-teal-500/15 text-teal-600 dark:text-teal-300">
+                        <UsersRound className="size-4" aria-hidden="true" />
+                      </span>
+                      Ajouter un client
+                    </CardTitle>
+                    <CardDescription className="text-xs">
+                      Renseignez les coordonnées et informations utiles.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="[&_input]:h-9 [&_input]:text-xs [&_label]:text-[11px] [&_textarea]:text-xs">
+                    <form className="space-y-3" onSubmit={(event) => void onCreateCustomer(event)}>
+                      <Field label="Nom complet *">
+                        <Input
+                          id="business-customer-name"
+                          name="name"
+                          required
+                          maxLength={160}
+                          placeholder="Ex. Marie Jean"
+                        />
+                      </Field>
+                      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                        <Field label="Téléphone ou e-mail">
+                          <Input
+                            name="contact"
+                            maxLength={200}
+                            placeholder="Coordonnées du client"
+                          />
+                        </Field>
+                        <Field label="Référence ou surnom">
+                          <Input name="nickname" maxLength={100} placeholder="Référence interne" />
+                        </Field>
+                      </div>
+                      <Field label="Notes (facultatif)">
+                        <textarea
+                          name="notes"
+                          rows={3}
+                          maxLength={1000}
+                          placeholder="Informations utiles…"
+                          className="w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        />
+                      </Field>
+                      <p className="text-[10px] leading-relaxed text-muted-foreground">
+                        Les coordonnées sont conservées dans un seul champ de contact. Ne stockez
+                        pas d’identifiants de compte.
+                      </p>
+                      <div className="space-y-2 border-t border-slate-200 pt-3 dark:border-[#173451]">
+                        <Button
+                          type="submit"
+                          disabled={isMutating}
+                          className="w-full bg-teal-500 text-[#041521] hover:bg-teal-400"
+                        >
+                          <UsersRound className="size-4" aria-hidden="true" /> Enregistrer le client
+                        </Button>
+                        <Button type="reset" variant="outline" className="w-full">
+                          Annuler
+                        </Button>
+                      </div>
+                    </form>
+                  </CardContent>
+                </Card>
+
+                <Card className="relative isolate overflow-hidden border-cyan-900/50 bg-gradient-to-br from-slate-50 to-cyan-50 shadow-sm dark:from-[#08182a] dark:to-[#09283a]">
+                  <div
+                    className="pointer-events-none absolute -bottom-8 -right-3 size-24 rounded-full border-[12px] border-cyan-500/10"
+                    aria-hidden="true"
+                  />
+                  <CardContent className="relative flex gap-3 p-3.5">
+                    <Info
+                      className="mt-0.5 size-4 shrink-0 text-cyan-600 dark:text-cyan-300"
+                      aria-hidden="true"
+                    />
+                    <div>
+                      <p className="text-xs font-semibold">Conseil</p>
+                      <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">
+                        Les soldes affichés sont calculés à partir des opérations et paiements
+                        enregistrés. Le statut du client n’est pas modifiable séparément.
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
             </div>
           </TabsContent>
 
