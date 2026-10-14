@@ -283,6 +283,9 @@ function BusinessPage() {
   const [activeTab, setActiveTab] = useState("overview");
   const [accountDialogOpen, setAccountDialogOpen] = useState(false);
   const [expenseDialogOpen, setExpenseDialogOpen] = useState(false);
+  const [loanActionDialogOpen, setLoanActionDialogOpen] = useState(false);
+  const [loanAction, setLoanAction] = useState<"loan" | "payment" | "repayment">("loan");
+  const [loansPaymentsTab, setLoansPaymentsTab] = useState("loans");
   const [editingAccount, setEditingAccount] = useState<BusinessAccount | null>(null);
   const [accountToDelete, setAccountToDelete] = useState<BusinessAccount | null>(null);
   const [meruBalanceVisible, setMeruBalanceVisible] = useState(true);
@@ -317,11 +320,20 @@ function BusinessPage() {
 
   function navigateToBusinessSection(tab: string, sectionId: string) {
     setActiveTab(tab);
+    if (tab === "payments-loans") {
+      setLoansPaymentsTab(sectionId.includes("payment") ? "payments" : "loans");
+    }
     window.setTimeout(
       () =>
         document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" }),
       0,
     );
+  }
+
+  function openLoanAction(action: "loan" | "payment" | "repayment") {
+    setLoanAction(action);
+    setActiveTab("payments-loans");
+    setLoanActionDialogOpen(true);
   }
 
   function openEntryForm(type: "transfer" | "deposit" | "loan") {
@@ -507,6 +519,32 @@ function BusinessPage() {
     reportingCurrency,
     exchangeRates: rates,
   });
+  const paymentActivityRows = [
+    ...payments.map((payment) => ({
+      id: `payment-${payment.id}`,
+      date: payment.paymentDate,
+      person:
+        transactions.find((transaction) => transaction.id === payment.customerTransactionId)
+          ?.customerName ?? "Client",
+      type: "Paiement client",
+      amount: payment.amount,
+      currency: payment.currency,
+      method: payment.paymentMethod,
+      account: accounts.find((account) => account.id === payment.accountId)?.name ?? "—",
+      reference: payment.reference ?? payment.notes ?? "—",
+    })),
+    ...loanRepayments.map((repayment) => ({
+      id: `repayment-${repayment.id}`,
+      date: repayment.repaymentDate,
+      person: loans.find((loan) => loan.id === repayment.loanId)?.customerName ?? "Emprunteur",
+      type: "Remboursement",
+      amount: repayment.amount,
+      currency: repayment.currency,
+      method: "Remboursement",
+      account: accounts.find((account) => account.id === repayment.accountId)?.name ?? "—",
+      reference: repayment.reference ?? repayment.notes ?? "—",
+    })),
+  ].sort((left, right) => right.date.localeCompare(left.date));
   const completedPeriodTransactions = periodTransactions.filter(
     (transaction) => transaction.status === "completed",
   );
@@ -946,6 +984,7 @@ function BusinessPage() {
       });
       clearIdempotencyKey(form);
       form.reset();
+      setLoanActionDialogOpen(false);
       toast.success("Customer payment recorded and added to the selected HTG account.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Couldn't record the customer payment.");
@@ -975,6 +1014,7 @@ function BusinessPage() {
       clearIdempotencyKey(form);
       form.reset();
       setEntryDialogOpen(false);
+      setLoanActionDialogOpen(false);
       toast.success("Loan issued; the principal disbursement was posted to the selected account.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Couldn't issue the loan.");
@@ -1001,6 +1041,7 @@ function BusinessPage() {
       });
       clearIdempotencyKey(form);
       form.reset();
+      setLoanActionDialogOpen(false);
       toast.success("Loan repayment recorded; principal and interest/fees were posted separately.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Couldn't record the loan repayment.");
@@ -1447,18 +1488,26 @@ function BusinessPage() {
             <span className="grid size-11 shrink-0 place-items-center rounded-xl border border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-900 dark:bg-[#0b2540] dark:text-cyan-300">
               {activeTab === "expenses" ? (
                 <Receipt className="size-5" aria-hidden="true" />
+              ) : activeTab === "payments-loans" ? (
+                <HandCoins className="size-5" aria-hidden="true" />
               ) : (
                 <BriefcaseBusiness className="size-5" aria-hidden="true" />
               )}
             </span>
             <div className="min-w-0">
               <h1 className="truncate text-2xl font-semibold text-foreground">
-                {activeTab === "expenses" ? "Dépenses" : "Business"}
+                {activeTab === "expenses"
+                  ? "Dépenses"
+                  : activeTab === "payments-loans"
+                    ? "Prêts et paiements"
+                    : "Business"}
               </h1>
               <p className="mt-0.5 truncate text-sm text-muted-foreground">
                 {activeTab === "expenses"
                   ? "Suivez et gérez vos dépenses, prêts et paiements en un seul endroit."
-                  : "Gérez vos transferts Meru, suivez vos clients, prêts et revenus."}
+                  : activeTab === "payments-loans"
+                    ? "Suivez les prêts, les remboursements et les paiements de vos clients."
+                    : "Gérez vos transferts Meru, suivez vos clients, prêts et revenus."}
               </p>
             </div>
           </div>
@@ -3959,505 +4008,765 @@ function BusinessPage() {
           </TabsContent>
 
           <TabsContent value="payments-loans" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Collect customer payment</CardTitle>
-                <CardDescription>
-                  Record each real installment separately. Collections credit the chosen HTG
-                  account, independently of whether the related USD transfer is complete.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {transactions.filter(
-                  (transaction) =>
-                    !["failed", "cancelled", "reversed"].includes(transaction.status),
-                ).length === 0 || htgAccounts.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    Create a customer transaction and an HTG account before recording collections.
-                  </p>
-                ) : (
-                  <form
-                    id="business-payment-form"
-                    className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
-                    onSubmit={(event) => void onCreatePayment(event)}
-                  >
-                    <Field label="Customer transaction">
-                      <select
-                        name="paymentTransactionId"
-                        className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-                        required
-                      >
-                        {transactions
-                          .filter(
-                            (transaction) =>
-                              !["failed", "cancelled", "reversed"].includes(transaction.status),
-                          )
-                          .map((transaction) => (
-                            <option key={transaction.id} value={transaction.id}>
-                              {transaction.customerName} ·{" "}
-                              {formatBusinessMoney(transaction.htgReceived, "HTG")} ·{" "}
-                              {transaction.status}
-                            </option>
-                          ))}
-                      </select>
-                    </Field>
-                    <Field label="Collection account">
-                      <select
-                        name="paymentAccountId"
-                        className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-                        required
-                      >
-                        {htgAccounts.map((account) => (
-                          <option key={account.id} value={account.id}>
-                            {account.name} · HTG
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
-                    <Field label="Amount collected (HTG)">
-                      <Input name="paymentAmount" type="number" min="0.01" step="0.01" required />
-                    </Field>
-                    <Field label="Payment method">
-                      <select
-                        name="paymentMethod"
-                        className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-                        defaultValue="cash"
-                        required
-                      >
-                        <option value="cash">Cash</option>
-                        <option value="moncash">MonCash</option>
-                        <option value="natcash">NatCash</option>
-                        <option value="other">Other</option>
-                      </select>
-                    </Field>
-                    <Field label="Payment date">
-                      <Input name="paymentDate" type="date" defaultValue={today()} required />
-                    </Field>
-                    <Field label="Reference (optional)">
-                      <Input name="paymentReference" maxLength={200} />
-                    </Field>
-                    <Field label="Notes (optional)">
-                      <Input name="paymentNotes" maxLength={1000} />
-                    </Field>
-                    <div className="flex items-end">
-                      <Button type="submit" disabled={isMutating}>
-                        Record payment
-                      </Button>
+            <div className="grid gap-3 grid-cols-2 min-[900px]:grid-cols-4">
+              {[
+                {
+                  label: "Prêts en cours",
+                  value: String(repaymentLoans.length),
+                  detail: `${formatBusinessMoney(remainingLoanSummary.total, reportingCurrency)} restant${remainingLoanSummary.incomplete ? " · conversion partielle" : ""}`,
+                  icon: HandCoins,
+                  tone: "text-blue-400",
+                },
+                {
+                  label: "Encaissements reçus",
+                  value: formatBusinessMoney(receivedPaymentSummary.total, reportingCurrency),
+                  detail: `${periodPayments.length + periodLoanRepayments.length} paiement${periodPayments.length + periodLoanRepayments.length === 1 ? "" : "s"} sur la période`,
+                  icon: ArrowDownToLine,
+                  tone: "text-teal-300",
+                },
+                {
+                  label: "Paiements clients à recevoir",
+                  value: formatBusinessMoney(paymentLoanMetrics.outstandingCustomerPayments, "HTG"),
+                  detail: `${paymentLoanMetrics.partiallyPaidTransactions} paiement${paymentLoanMetrics.partiallyPaidTransactions === 1 ? "" : "s"} partiel${paymentLoanMetrics.partiallyPaidTransactions === 1 ? "" : "s"}`,
+                  icon: Wallet,
+                  tone: "text-cyan-300",
+                },
+                {
+                  label: "Échéances en retard",
+                  value: String(
+                    paymentLoanMetrics.overdueLoans + paymentLoanMetrics.overdueCustomerPayments,
+                  ),
+                  detail: `${paymentLoanMetrics.overdueLoans} prêt${paymentLoanMetrics.overdueLoans === 1 ? "" : "s"} · ${paymentLoanMetrics.overdueCustomerPayments} paiement${paymentLoanMetrics.overdueCustomerPayments === 1 ? "" : "s"}`,
+                  icon: CalendarDays,
+                  tone: "text-rose-400",
+                },
+              ].map((item) => (
+                <Card
+                  key={item.label}
+                  className="border-cyan-900/60 bg-[#061b32] shadow-sm transition-colors hover:border-cyan-700/80"
+                >
+                  <CardContent className="flex min-h-24 items-start gap-3 p-3">
+                    <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-cyan-500/15">
+                      <item.icon className={`size-4 ${item.tone}`} aria-hidden="true" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-xs text-muted-foreground">{item.label}</p>
+                      <p className="mt-1 truncate text-lg font-semibold">{item.value}</p>
+                      <p className="mt-1 text-[10px] text-muted-foreground">{item.detail}</p>
                     </div>
-                  </form>
-                )}
-              </CardContent>
-            </Card>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Customer payment balances</CardTitle>
-                <CardDescription>
-                  Paid and outstanding amounts are calculated from persisted payment records.
-                  Overpayments are rejected atomically.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {transactions.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No customer transactions yet.</p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[780px] text-sm">
-                      <thead className="text-left text-muted-foreground">
-                        <tr className="border-b">
-                          <th className="py-2 pr-3">Customer</th>
-                          <th className="py-2 pr-3">Due date</th>
-                          <th className="py-2 pr-3">Amount due (HTG)</th>
-                          <th className="py-2 pr-3">Paid (HTG)</th>
-                          <th className="py-2 pr-3">Outstanding (HTG)</th>
-                          <th className="py-2 pr-3">Payment status</th>
-                          <th className="py-2 pr-3">Transfer status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {transactions.map((transaction) => {
-                          const paymentSummary = calculateCustomerPaymentSummary(
-                            transaction,
-                            payments.filter(
-                              (payment) => payment.customerTransactionId === transaction.id,
-                            ),
-                          );
-                          return (
-                            <tr key={transaction.id} className="border-b align-top">
-                              <td className="py-3 pr-3">{transaction.customerName}</td>
-                              <td className="py-3 pr-3">{transaction.dueDate ?? "—"}</td>
-                              <td className="py-3 pr-3">
-                                {formatBusinessMoney(transaction.htgReceived, "HTG")}
-                              </td>
-                              <td className="py-3 pr-3">
-                                {formatBusinessMoney(paymentSummary.totalPaid, "HTG")}
-                              </td>
-                              <td className="py-3 pr-3">
-                                {formatBusinessMoney(paymentSummary.outstanding, "HTG")}
-                              </td>
-                              <td className="py-3 pr-3">
-                                <StatusBadge status={paymentSummary.status} />
-                              </td>
-                              <td className="py-3 pr-3">
-                                <StatusBadge status={transaction.status} />
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+            <div className="grid items-start gap-4 min-[900px]:grid-cols-[minmax(0,2.1fr)_minmax(240px,0.9fr)]">
+              <section className="min-w-0" aria-label="Gestion des prêts et paiements">
+                <Tabs value={loansPaymentsTab} onValueChange={setLoansPaymentsTab}>
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                    <TabsList className="h-9 border border-cyan-900/60 bg-[#061b32] text-muted-foreground">
+                      <TabsTrigger
+                        value="loans"
+                        className="data-[state=active]:bg-cyan-950 data-[state=active]:text-cyan-200"
+                      >
+                        Prêts
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="payments"
+                        className="data-[state=active]:bg-cyan-950 data-[state=active]:text-cyan-200"
+                      >
+                        Paiements
+                      </TabsTrigger>
+                    </TabsList>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setActiveTab("expenses")}
+                    >
+                      <Receipt className="mr-1.5 size-4" aria-hidden="true" /> Dépenses
+                    </Button>
                   </div>
-                )}
-                <div id="business-payment-history" className="overflow-x-auto">
-                  <h3 className="mb-2 font-medium">Payment history</h3>
-                  {payments.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No payments recorded.</p>
-                  ) : (
-                    <table className="w-full min-w-[700px] text-sm">
-                      <thead className="text-left text-muted-foreground">
-                        <tr className="border-b">
-                          <th className="py-2 pr-3">Date</th>
-                          <th className="py-2 pr-3">Customer</th>
-                          <th className="py-2 pr-3">Amount</th>
-                          <th className="py-2 pr-3">Method</th>
-                          <th className="py-2 pr-3">Account</th>
-                          <th className="py-2 pr-3">Reference / notes</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {payments.map((payment) => {
-                          const transaction = transactions.find(
-                            (item) => item.id === payment.customerTransactionId,
-                          );
-                          const account = accounts.find((item) => item.id === payment.accountId);
-                          return (
-                            <tr key={payment.id} className="border-b">
-                              <td className="py-2 pr-3">{payment.paymentDate}</td>
-                              <td className="py-2 pr-3">
-                                {transaction?.customerName ?? "Unknown customer"}
-                              </td>
-                              <td className="py-2 pr-3">
-                                {formatBusinessMoney(payment.amount, payment.currency)}
-                              </td>
-                              <td className="py-2 pr-3 capitalize">{payment.paymentMethod}</td>
-                              <td className="py-2 pr-3">{account?.name ?? "Unknown account"}</td>
-                              <td className="py-2 pr-3">
-                                {payment.reference ?? payment.notes ?? "—"}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Issue loan</CardTitle>
-                <CardDescription>
-                  Issuance immediately disburses principal from the selected account. Principal is
-                  an asset, not revenue; agreed interest and fees are recognized only when
-                  collected.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {customers.length === 0 || accounts.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    Create a customer and account before issuing a loan.
-                  </p>
-                ) : (
-                  <form
-                    id="business-loan-form"
-                    className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
-                    onSubmit={(event) => void onCreateLoan(event)}
-                  >
-                    <Field label="Borrower">
-                      <select
-                        name="loanCustomerId"
-                        className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-                        required
-                      >
-                        {customers.map((customer) => (
-                          <option key={customer.id} value={customer.id}>
-                            {customer.name}
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
-                    <Field label="Disbursement account">
-                      <select
-                        name="loanAccountId"
-                        className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-                        required
-                      >
-                        {accounts.map((account) => (
-                          <option key={account.id} value={account.id}>
-                            {account.name} · {account.currency}
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
-                    <Field label="Principal amount">
-                      <Input name="loanPrincipal" type="number" min="0.01" step="0.01" required />
-                    </Field>
-                    <Field label="Date issued">
-                      <Input name="loanIssuedDate" type="date" defaultValue={today()} required />
-                    </Field>
-                    <Field label="Due date (optional)">
-                      <Input name="loanDueDate" type="date" />
-                    </Field>
-                    <Field label="Agreed interest (optional)">
-                      <Input
-                        name="loanInterest"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        defaultValue="0"
-                      />
-                    </Field>
-                    <Field label="Agreed fee (optional)">
-                      <Input name="loanFee" type="number" min="0" step="0.01" defaultValue="0" />
-                    </Field>
-                    <Field label="Notes (optional)">
-                      <Input name="loanNotes" maxLength={1000} />
-                    </Field>
-                    <div className="flex items-end">
-                      <Button type="submit" disabled={isMutating}>
-                        Issue loan
-                      </Button>
+                  <TabsContent value="loans" className="mt-0 space-y-3">
+                    <Card
+                      id="business-loan-balances"
+                      className="overflow-hidden border-cyan-900/60"
+                    >
+                      <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-cyan-900/60 px-4 py-3">
+                        <div>
+                          <CardTitle className="text-sm">Portefeuille de prêts</CardTitle>
+                          <CardDescription className="text-xs">
+                            Soldes, prochaines échéances et statut des remboursements.
+                          </CardDescription>
+                        </div>
+                        <Button type="button" size="sm" onClick={() => openLoanAction("loan")}>
+                          <Plus className="mr-1 size-4" aria-hidden="true" /> Nouveau prêt
+                        </Button>
+                      </CardHeader>
+                      {loans.length === 0 ? (
+                        <CardContent className="py-9 text-center">
+                          <HandCoins
+                            className="mx-auto size-7 text-muted-foreground"
+                            aria-hidden="true"
+                          />
+                          <p className="mt-2 text-sm font-medium">Aucun prêt enregistré</p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Créez un prêt pour suivre son solde et ses échéances ici.
+                          </p>
+                        </CardContent>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full min-w-[650px] text-xs">
+                            <thead>
+                              <tr className="border-b border-cyan-900/60 text-left text-[10px] text-muted-foreground">
+                                <th className="px-4 py-2">Emprunteur</th>
+                                <th className="px-3 py-2">Date / échéance</th>
+                                <th className="px-3 py-2">Montant initial</th>
+                                <th className="px-3 py-2">Solde restant</th>
+                                <th className="px-3 py-2">Statut</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {loans.map((loan) => {
+                                const due = loanAmountsDue(loan, loanRepayments);
+                                const balance = due.principal + due.interest + due.fee;
+                                const status =
+                                  balance <= 0
+                                    ? "repaid"
+                                    : loan.dueDate && loan.dueDate < today()
+                                      ? "overdue"
+                                      : loan.status;
+                                return (
+                                  <tr
+                                    key={loan.id}
+                                    className="border-b border-cyan-950/80 last:border-0"
+                                  >
+                                    <td className="px-4 py-3 font-medium">{loan.customerName}</td>
+                                    <td className="px-3 py-3 text-muted-foreground">
+                                      {new Date(`${loan.issuedDate}T12:00:00`).toLocaleDateString(
+                                        "fr-FR",
+                                        { day: "2-digit", month: "short", year: "numeric" },
+                                      )}
+                                      <span className="block text-[10px]">
+                                        Échéance :{" "}
+                                        {loan.dueDate
+                                          ? new Date(`${loan.dueDate}T12:00:00`).toLocaleDateString(
+                                              "fr-FR",
+                                              { day: "2-digit", month: "short", year: "numeric" },
+                                            )
+                                          : "Non définie"}
+                                      </span>
+                                    </td>
+                                    <td className="whitespace-nowrap px-3 py-3">
+                                      {formatBusinessMoney(loan.principalAmount, loan.currency)}
+                                    </td>
+                                    <td className="whitespace-nowrap px-3 py-3 font-semibold">
+                                      {formatBusinessMoney(balance, loan.currency)}
+                                    </td>
+                                    <td className="px-3 py-3">
+                                      <StatusBadge
+                                        status={status}
+                                        label={frenchBusinessStatus(status)}
+                                      />
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </Card>
+
+                    <Card className="border-cyan-900/60">
+                      <CardHeader className="flex flex-row items-center justify-between gap-3 px-4 py-3">
+                        <div>
+                          <CardTitle className="text-sm">Échéances à venir</CardTitle>
+                          <CardDescription className="text-xs">
+                            Prêts dus dans les 30 prochains jours ou déjà en retard.
+                          </CardDescription>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={repaymentLoans.length === 0}
+                          onClick={() => openLoanAction("repayment")}
+                        >
+                          Enregistrer un remboursement
+                        </Button>
+                      </CardHeader>
+                      {loansDueSoon.length === 0 ? (
+                        <CardContent className="pt-0 text-xs text-muted-foreground">
+                          Aucune échéance de prêt à traiter prochainement.
+                        </CardContent>
+                      ) : (
+                        <div className="overflow-x-auto px-4 pb-3">
+                          <table className="w-full min-w-[420px] text-xs">
+                            <thead>
+                              <tr className="border-b border-cyan-900/60 text-left text-[10px] text-muted-foreground">
+                                <th className="py-2">Emprunteur</th>
+                                <th className="py-2">Échéance</th>
+                                <th className="py-2">Montant dû</th>
+                                <th className="py-2">Statut</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {loansDueSoon.map((loan) => {
+                                const due = loanAmountsDue(loan, loanRepayments);
+                                const overdue = (loan.dueDate ?? "") < today();
+                                return (
+                                  <tr
+                                    key={loan.id}
+                                    className="border-b border-cyan-950/80 last:border-0"
+                                  >
+                                    <td className="py-2.5">{loan.customerName}</td>
+                                    <td className="py-2.5">{loan.dueDate}</td>
+                                    <td className="whitespace-nowrap py-2.5">
+                                      {formatBusinessMoney(
+                                        due.principal + due.interest + due.fee,
+                                        loan.currency,
+                                      )}
+                                    </td>
+                                    <td className="py-2.5">
+                                      <StatusBadge
+                                        status={overdue ? "overdue" : "upcoming"}
+                                        label={overdue ? "En retard" : "À venir"}
+                                      />
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </Card>
+                  </TabsContent>
+
+                  <TabsContent value="payments" className="mt-0 space-y-3">
+                    <Card className="overflow-hidden border-cyan-900/60">
+                      <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-cyan-900/60 px-4 py-3">
+                        <div>
+                          <CardTitle className="text-sm">Soldes des paiements clients</CardTitle>
+                          <CardDescription className="text-xs">
+                            Montants reçus et restant à percevoir, calculés depuis les paiements
+                            enregistrés.
+                          </CardDescription>
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => openLoanAction("payment")}
+                          disabled={openTransactions.length === 0 || htgAccounts.length === 0}
+                        >
+                          <Plus className="mr-1 size-4" aria-hidden="true" /> Nouveau paiement
+                        </Button>
+                      </CardHeader>
+                      {transactions.length === 0 ? (
+                        <CardContent className="py-8 text-center text-xs text-muted-foreground">
+                          Aucune transaction client à afficher.
+                        </CardContent>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full min-w-[720px] text-xs">
+                            <thead>
+                              <tr className="border-b border-cyan-900/60 text-left text-[10px] text-muted-foreground">
+                                <th className="px-4 py-2">Client</th>
+                                <th className="px-3 py-2">Échéance</th>
+                                <th className="px-3 py-2">Dû (HTG)</th>
+                                <th className="px-3 py-2">Payé (HTG)</th>
+                                <th className="px-3 py-2">Restant (HTG)</th>
+                                <th className="px-3 py-2">Statut paiement</th>
+                                <th className="px-3 py-2">Transfert</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {transactions.map((transaction) => {
+                                const summary = calculateCustomerPaymentSummary(
+                                  transaction,
+                                  payments.filter(
+                                    (payment) => payment.customerTransactionId === transaction.id,
+                                  ),
+                                );
+                                return (
+                                  <tr
+                                    key={transaction.id}
+                                    className="border-b border-cyan-950/80 last:border-0"
+                                  >
+                                    <td className="px-4 py-2.5 font-medium">
+                                      {transaction.customerName}
+                                    </td>
+                                    <td className="px-3 py-2.5 text-muted-foreground">
+                                      {transaction.dueDate ?? "—"}
+                                    </td>
+                                    <td className="whitespace-nowrap px-3 py-2.5">
+                                      {formatBusinessMoney(transaction.htgReceived, "HTG")}
+                                    </td>
+                                    <td className="whitespace-nowrap px-3 py-2.5">
+                                      {formatBusinessMoney(summary.totalPaid, "HTG")}
+                                    </td>
+                                    <td className="whitespace-nowrap px-3 py-2.5 font-semibold">
+                                      {formatBusinessMoney(summary.outstanding, "HTG")}
+                                    </td>
+                                    <td className="px-3 py-2.5">
+                                      <StatusBadge
+                                        status={summary.status}
+                                        label={frenchBusinessStatus(summary.status)}
+                                      />
+                                    </td>
+                                    <td className="px-3 py-2.5">
+                                      <StatusBadge
+                                        status={transaction.status}
+                                        label={frenchBusinessStatus(transaction.status)}
+                                      />
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </Card>
+
+                    <Card
+                      id="business-payment-history"
+                      className="overflow-hidden border-cyan-900/60"
+                    >
+                      <CardHeader className="border-b border-cyan-900/60 px-4 py-3">
+                        <CardTitle className="text-sm">Historique des encaissements</CardTitle>
+                        <CardDescription className="text-xs">
+                          Paiements clients et remboursements de prêts.
+                        </CardDescription>
+                      </CardHeader>
+                      {paymentActivityRows.length === 0 ? (
+                        <CardContent className="py-8 text-center text-xs text-muted-foreground">
+                          Aucun paiement enregistré.
+                        </CardContent>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full min-w-[650px] text-xs">
+                            <thead>
+                              <tr className="border-b border-cyan-900/60 text-left text-[10px] text-muted-foreground">
+                                <th className="px-4 py-2">Date</th>
+                                <th className="px-3 py-2">Client / emprunteur</th>
+                                <th className="px-3 py-2">Type</th>
+                                <th className="px-3 py-2">Montant</th>
+                                <th className="px-3 py-2">Compte / mode</th>
+                                <th className="px-3 py-2">Référence</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {paymentActivityRows.map((item) => (
+                                <tr
+                                  key={item.id}
+                                  className="border-b border-cyan-950/80 last:border-0"
+                                >
+                                  <td className="whitespace-nowrap px-4 py-2.5 text-muted-foreground">
+                                    {new Date(`${item.date}T12:00:00`).toLocaleDateString("fr-FR", {
+                                      day: "2-digit",
+                                      month: "short",
+                                      year: "numeric",
+                                    })}
+                                  </td>
+                                  <td className="px-3 py-2.5">{item.person}</td>
+                                  <td className="px-3 py-2.5">
+                                    <Badge variant="secondary">{item.type}</Badge>
+                                  </td>
+                                  <td className="whitespace-nowrap px-3 py-2.5 font-medium">
+                                    {formatBusinessMoney(item.amount, item.currency)}
+                                  </td>
+                                  <td className="px-3 py-2.5">
+                                    {item.account}
+                                    <span className="block text-[10px] text-muted-foreground">
+                                      {item.method}
+                                    </span>
+                                  </td>
+                                  <td className="max-w-36 truncate px-3 py-2.5 text-muted-foreground">
+                                    {item.reference}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </Card>
+                  </TabsContent>
+                </Tabs>
+              </section>
+
+              <aside className="space-y-3">
+                <Card className="border-cyan-900/60 bg-[#061b32]">
+                  <CardHeader className="px-4 pb-2 pt-4">
+                    <CardTitle className="text-sm">Actions rapides</CardTitle>
+                    <CardDescription className="text-xs">
+                      Enregistrez une opération sans quitter le tableau de bord.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="grid gap-2 px-4 pb-4">
+                    <Button
+                      type="button"
+                      className="justify-start bg-cyan-600 text-white hover:bg-cyan-500"
+                      onClick={() => openLoanAction("loan")}
+                    >
+                      <Plus className="mr-2 size-4" aria-hidden="true" /> Accorder un prêt
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="justify-start border-cyan-900/60"
+                      onClick={() => openLoanAction("repayment")}
+                      disabled={repaymentLoans.length === 0}
+                    >
+                      <ArrowDownToLine className="mr-2 size-4" aria-hidden="true" /> Enregistrer un
+                      remboursement
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="justify-start border-cyan-900/60"
+                      onClick={() => openLoanAction("payment")}
+                      disabled={openTransactions.length === 0 || htgAccounts.length === 0}
+                    >
+                      <Wallet className="mr-2 size-4" aria-hidden="true" /> Encaisser un paiement
+                      client
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="justify-start border-cyan-900/60"
+                      onClick={() => setActiveTab("expenses")}
+                    >
+                      <Receipt className="mr-2 size-4" aria-hidden="true" /> Ajouter une dépense
+                    </Button>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-cyan-900/60">
+                  <CardHeader className="px-4 pb-2 pt-4">
+                    <CardTitle className="text-sm">Résumé financier</CardTitle>
+                    <CardDescription className="text-xs">
+                      Principal restant par devise
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3 px-4 pb-4 text-xs">
+                    {Object.entries(paymentLoanMetrics.outstandingLoanPrincipalByCurrency)
+                      .length === 0 ? (
+                      <p className="text-muted-foreground">Aucun principal restant.</p>
+                    ) : (
+                      Object.entries(paymentLoanMetrics.outstandingLoanPrincipalByCurrency).map(
+                        ([currency, amount]) => (
+                          <div key={currency} className="flex items-center justify-between gap-3">
+                            <span className="text-muted-foreground">Principal · {currency}</span>
+                            <span className="font-medium">
+                              {formatBusinessMoney(amount, currency)}
+                            </span>
+                          </div>
+                        ),
+                      )
+                    )}
+                    <div className="border-t border-cyan-900/60 pt-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-muted-foreground">À recevoir des clients</span>
+                        <span className="font-medium">
+                          {formatBusinessMoney(
+                            paymentLoanMetrics.outstandingCustomerPayments,
+                            "HTG",
+                          )}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-[10px] text-muted-foreground">
+                        {paymentLoanMetrics.upcomingLoanRepayments} prêt
+                        {paymentLoanMetrics.upcomingLoanRepayments === 1 ? "" : "s"} à échéance ·{" "}
+                        {paymentLoanMetrics.overdueLoans} en retard
+                      </p>
                     </div>
-                  </form>
-                )}
-              </CardContent>
-            </Card>
+                  </CardContent>
+                </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Record loan repayment</CardTitle>
-                <CardDescription>
-                  Repayments apply first to agreed interest, then fees, then principal. The ledger
-                  records principal and income components separately and prevents overpayment.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {repaymentLoans.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    No outstanding loans are available for repayment.
-                  </p>
-                ) : (
-                  <form
-                    className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
-                    onSubmit={(event) => void onCreateLoanRepayment(event)}
-                  >
-                    <Field label="Loan">
-                      <select
-                        name="repaymentLoanId"
-                        className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-                        required
-                      >
-                        {repaymentLoans.map((loan) => {
-                          const due = loanAmountsDue(loan, loanRepayments);
-                          return (
-                            <option key={loan.id} value={loan.id}>
-                              {loan.customerName} ·{" "}
-                              {formatBusinessMoney(
-                                due.principal + due.interest + due.fee,
-                                loan.currency,
-                              )}{" "}
-                              due
-                            </option>
-                          );
-                        })}
-                      </select>
-                    </Field>
-                    <Field label="Receiving account">
-                      <select
-                        name="repaymentAccountId"
-                        className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-                        required
-                      >
-                        {accounts.map((account) => (
-                          <option key={account.id} value={account.id}>
-                            {account.name} · {account.currency}
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
-                    <Field label="Amount received">
-                      <Input name="repaymentAmount" type="number" min="0.01" step="0.01" required />
-                    </Field>
-                    <Field label="Repayment date">
-                      <Input name="repaymentDate" type="date" defaultValue={today()} required />
-                    </Field>
-                    <Field label="Reference (optional)">
-                      <Input name="repaymentReference" maxLength={200} />
-                    </Field>
-                    <Field label="Notes (optional)">
-                      <Input name="repaymentNotes" maxLength={1000} />
-                    </Field>
-                    <div className="flex items-end">
-                      <Button type="submit" disabled={isMutating}>
-                        Record repayment
-                      </Button>
+                <Card className="border-cyan-900/60 bg-cyan-950/40">
+                  <CardContent className="flex gap-3 p-4">
+                    <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-cyan-500/15 text-cyan-300">
+                      <Zap className="size-4" aria-hidden="true" />
+                    </span>
+                    <div>
+                      <h3 className="text-xs font-semibold">Conseil de suivi</h3>
+                      <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                        Enregistrez chaque versement dès sa réception pour garder les soldes clients
+                        et les prêts à jour.
+                      </p>
                     </div>
-                  </form>
-                )}
-              </CardContent>
-            </Card>
+                  </CardContent>
+                </Card>
+              </aside>
+            </div>
 
-            <Card id="business-loan-balances">
-              <CardHeader>
-                <CardTitle>Loan balances and repayment history</CardTitle>
-                <CardDescription>
-                  Loan balances remain grouped by currency. Due dates and status update from the
-                  persisted loan and repayment records.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {loans.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No loans recorded.</p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[850px] text-sm">
-                      <thead className="text-left text-muted-foreground">
-                        <tr className="border-b">
-                          <th className="py-2 pr-3">Borrower</th>
-                          <th className="py-2 pr-3">Issued / due</th>
-                          <th className="py-2 pr-3">Principal outstanding</th>
-                          <th className="py-2 pr-3">Interest / fees outstanding</th>
-                          <th className="py-2 pr-3">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {loans.map((loan) => {
-                          const due = loanAmountsDue(loan, loanRepayments);
-                          const isPastDue =
-                            loan.dueDate !== null &&
-                            loan.dueDate < today() &&
-                            due.principal + due.interest + due.fee > 0;
-                          return (
-                            <tr key={loan.id} className="border-b">
-                              <td className="py-3 pr-3">{loan.customerName}</td>
-                              <td className="py-3 pr-3">
-                                {loan.issuedDate} / {loan.dueDate ?? "No due date"}
-                              </td>
-                              <td className="py-3 pr-3">
-                                {formatBusinessMoney(due.principal, loan.currency)}
-                              </td>
-                              <td className="py-3 pr-3">
-                                {formatBusinessMoney(due.interest + due.fee, loan.currency)}
-                              </td>
-                              <td className="py-3 pr-3">
-                                <StatusBadge
-                                  status={
-                                    due.principal + due.interest + due.fee <= 0
-                                      ? "repaid"
-                                      : isPastDue
-                                        ? "overdue"
-                                        : loan.status
-                                  }
-                                />
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-                <section className="rounded-md border p-3">
-                  <h3 className="mb-2 font-medium">Upcoming and overdue loan due dates</h3>
-                  {loansDueSoon.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      No outstanding loans are due within the next 30 days or overdue.
-                    </p>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full min-w-[500px] text-sm">
-                        <thead className="text-left text-muted-foreground">
-                          <tr className="border-b">
-                            <th className="py-2 pr-3">Borrower</th>
-                            <th className="py-2 pr-3">Due date</th>
-                            <th className="py-2 pr-3">Amount remaining</th>
-                            <th className="py-2 pr-3">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {loansDueSoon.map((loan) => {
-                            const due = loanAmountsDue(loan, loanRepayments);
-                            const isPastDue = (loan.dueDate ?? "") < today();
-                            return (
-                              <tr key={loan.id} className="border-b">
-                                <td className="py-2 pr-3">{loan.customerName}</td>
-                                <td className="py-2 pr-3">{loan.dueDate}</td>
-                                <td className="py-2 pr-3">
+            <Dialog open={loanActionDialogOpen} onOpenChange={setLoanActionDialogOpen}>
+              <DialogContent className="business-theme-dialog max-h-[92dvh] w-[calc(100vw-2rem)] max-w-3xl overflow-y-auto border-cyan-900/60 bg-background shadow-2xl sm:rounded-xl">
+                <DialogHeader>
+                  <DialogTitle>
+                    {loanAction === "loan"
+                      ? "Accorder un prêt"
+                      : loanAction === "payment"
+                        ? "Encaisser un paiement client"
+                        : "Enregistrer un remboursement"}
+                  </DialogTitle>
+                  <DialogDescription>
+                    Les opérations utilisent les comptes et règles comptables déjà configurés pour
+                    votre activité.
+                  </DialogDescription>
+                </DialogHeader>
+                <Tabs
+                  value={loanAction}
+                  onValueChange={(value) =>
+                    setLoanAction(value as "loan" | "payment" | "repayment")
+                  }
+                >
+                  <TabsList className="grid h-auto w-full grid-cols-3">
+                    <TabsTrigger value="loan">Nouveau prêt</TabsTrigger>
+                    <TabsTrigger value="repayment">Remboursement</TabsTrigger>
+                    <TabsTrigger value="payment">Paiement client</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="loan">
+                    {customers.length === 0 || accounts.length === 0 ? (
+                      <p className="py-4 text-sm text-muted-foreground">
+                        Créez un client et un compte avant d’accorder un prêt.
+                      </p>
+                    ) : (
+                      <form
+                        id="business-loan-form"
+                        className="grid gap-3 sm:grid-cols-2"
+                        onSubmit={(event) => void onCreateLoan(event)}
+                      >
+                        <Field label="Emprunteur">
+                          <select
+                            name="loanCustomerId"
+                            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                            required
+                          >
+                            {customers.map((customer) => (
+                              <option key={customer.id} value={customer.id}>
+                                {customer.name}
+                              </option>
+                            ))}
+                          </select>
+                        </Field>
+                        <Field label="Compte de décaissement">
+                          <select
+                            name="loanAccountId"
+                            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                            required
+                          >
+                            {accounts.map((account) => (
+                              <option key={account.id} value={account.id}>
+                                {account.name} · {account.currency}
+                              </option>
+                            ))}
+                          </select>
+                        </Field>
+                        <Field label="Montant du capital">
+                          <Input
+                            name="loanPrincipal"
+                            type="number"
+                            min="0.01"
+                            step="0.01"
+                            required
+                          />
+                        </Field>
+                        <Field label="Date d’octroi">
+                          <Input
+                            name="loanIssuedDate"
+                            type="date"
+                            defaultValue={today()}
+                            required
+                          />
+                        </Field>
+                        <Field label="Date d’échéance (facultatif)">
+                          <Input name="loanDueDate" type="date" />
+                        </Field>
+                        <Field label="Intérêts convenus">
+                          <Input
+                            name="loanInterest"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            defaultValue="0"
+                          />
+                        </Field>
+                        <Field label="Frais convenus">
+                          <Input
+                            name="loanFee"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            defaultValue="0"
+                          />
+                        </Field>
+                        <Field label="Notes (facultatif)">
+                          <Input name="loanNotes" maxLength={1000} />
+                        </Field>
+                        <div className="flex items-end">
+                          <Button type="submit" disabled={isMutating}>
+                            Accorder le prêt
+                          </Button>
+                        </div>
+                      </form>
+                    )}
+                  </TabsContent>
+                  <TabsContent value="repayment">
+                    {repaymentLoans.length === 0 ? (
+                      <p className="py-4 text-sm text-muted-foreground">
+                        Aucun prêt restant à rembourser.
+                      </p>
+                    ) : (
+                      <form
+                        className="grid gap-3 sm:grid-cols-2"
+                        onSubmit={(event) => void onCreateLoanRepayment(event)}
+                      >
+                        <Field label="Prêt">
+                          <select
+                            name="repaymentLoanId"
+                            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                            required
+                          >
+                            {repaymentLoans.map((loan) => {
+                              const due = loanAmountsDue(loan, loanRepayments);
+                              return (
+                                <option key={loan.id} value={loan.id}>
+                                  {loan.customerName} ·{" "}
                                   {formatBusinessMoney(
                                     due.principal + due.interest + due.fee,
                                     loan.currency,
-                                  )}
-                                </td>
-                                <td className="py-2 pr-3">
-                                  <StatusBadge status={isPastDue ? "overdue" : "upcoming"} />
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </section>
-                <div className="overflow-x-auto">
-                  <h3 className="mb-2 font-medium">Repayment history</h3>
-                  {loanRepayments.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No loan repayments recorded.</p>
-                  ) : (
-                    <table className="w-full min-w-[750px] text-sm">
-                      <thead className="text-left text-muted-foreground">
-                        <tr className="border-b">
-                          <th className="py-2 pr-3">Date</th>
-                          <th className="py-2 pr-3">Borrower</th>
-                          <th className="py-2 pr-3">Principal</th>
-                          <th className="py-2 pr-3">Interest</th>
-                          <th className="py-2 pr-3">Fee</th>
-                          <th className="py-2 pr-3">Total received</th>
-                          <th className="py-2 pr-3">Reference</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {loanRepayments.map((repayment) => {
-                          const loan = loans.find((item) => item.id === repayment.loanId);
-                          return (
-                            <tr key={repayment.id} className="border-b">
-                              <td className="py-2 pr-3">{repayment.repaymentDate}</td>
-                              <td className="py-2 pr-3">
-                                {loan?.customerName ?? "Unknown borrower"}
-                              </td>
-                              <td className="py-2 pr-3">
-                                {formatBusinessMoney(repayment.principalPaid, repayment.currency)}
-                              </td>
-                              <td className="py-2 pr-3">
-                                {formatBusinessMoney(repayment.interestPaid, repayment.currency)}
-                              </td>
-                              <td className="py-2 pr-3">
-                                {formatBusinessMoney(repayment.feePaid, repayment.currency)}
-                              </td>
-                              <td className="py-2 pr-3">
-                                {formatBusinessMoney(repayment.amount, repayment.currency)}
-                              </td>
-                              <td className="py-2 pr-3">{repayment.reference ?? "—"}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+                                  )}{" "}
+                                  dû
+                                </option>
+                              );
+                            })}
+                          </select>
+                        </Field>
+                        <Field label="Compte de réception">
+                          <select
+                            name="repaymentAccountId"
+                            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                            required
+                          >
+                            {accounts.map((account) => (
+                              <option key={account.id} value={account.id}>
+                                {account.name} · {account.currency}
+                              </option>
+                            ))}
+                          </select>
+                        </Field>
+                        <Field label="Montant reçu">
+                          <Input
+                            name="repaymentAmount"
+                            type="number"
+                            min="0.01"
+                            step="0.01"
+                            required
+                          />
+                        </Field>
+                        <Field label="Date du remboursement">
+                          <Input name="repaymentDate" type="date" defaultValue={today()} required />
+                        </Field>
+                        <Field label="Référence (facultatif)">
+                          <Input name="repaymentReference" maxLength={200} />
+                        </Field>
+                        <Field label="Notes (facultatif)">
+                          <Input name="repaymentNotes" maxLength={1000} />
+                        </Field>
+                        <div className="flex items-end">
+                          <Button type="submit" disabled={isMutating}>
+                            Enregistrer le remboursement
+                          </Button>
+                        </div>
+                      </form>
+                    )}
+                  </TabsContent>
+                  <TabsContent value="payment">
+                    {openTransactions.length === 0 || htgAccounts.length === 0 ? (
+                      <p className="py-4 text-sm text-muted-foreground">
+                        Ajoutez une transaction client et un compte HTG avant d’enregistrer un
+                        paiement.
+                      </p>
+                    ) : (
+                      <form
+                        id="business-payment-form"
+                        className="grid gap-3 sm:grid-cols-2"
+                        onSubmit={(event) => void onCreatePayment(event)}
+                      >
+                        <Field label="Transaction client">
+                          <select
+                            name="paymentTransactionId"
+                            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                            required
+                          >
+                            {openTransactions.map((transaction) => (
+                              <option key={transaction.id} value={transaction.id}>
+                                {transaction.customerName} ·{" "}
+                                {formatBusinessMoney(transaction.htgReceived, "HTG")} ·{" "}
+                                {frenchBusinessStatus(transaction.status)}
+                              </option>
+                            ))}
+                          </select>
+                        </Field>
+                        <Field label="Compte d’encaissement">
+                          <select
+                            name="paymentAccountId"
+                            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                            required
+                          >
+                            {htgAccounts.map((account) => (
+                              <option key={account.id} value={account.id}>
+                                {account.name} · HTG
+                              </option>
+                            ))}
+                          </select>
+                        </Field>
+                        <Field label="Montant reçu (HTG)">
+                          <Input
+                            name="paymentAmount"
+                            type="number"
+                            min="0.01"
+                            step="0.01"
+                            required
+                          />
+                        </Field>
+                        <Field label="Mode de paiement">
+                          <select
+                            name="paymentMethod"
+                            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                            defaultValue="cash"
+                            required
+                          >
+                            <option value="cash">Espèces</option>
+                            <option value="moncash">MonCash</option>
+                            <option value="natcash">NatCash</option>
+                            <option value="other">Autre</option>
+                          </select>
+                        </Field>
+                        <Field label="Date du paiement">
+                          <Input name="paymentDate" type="date" defaultValue={today()} required />
+                        </Field>
+                        <Field label="Référence (facultatif)">
+                          <Input name="paymentReference" maxLength={200} />
+                        </Field>
+                        <Field label="Notes (facultatif)">
+                          <Input name="paymentNotes" maxLength={1000} />
+                        </Field>
+                        <div className="flex items-end">
+                          <Button type="submit" disabled={isMutating}>
+                            Enregistrer le paiement
+                          </Button>
+                        </div>
+                      </form>
+                    )}
+                  </TabsContent>
+                </Tabs>
+              </DialogContent>
+            </Dialog>
           </TabsContent>
 
           <TabsContent value="customers" className="space-y-5">
@@ -5782,9 +6091,7 @@ function BusinessPage() {
                       variant="outline"
                       data-expense-action="loan"
                       className="h-10 w-full justify-start gap-3 border-blue-700/60 bg-blue-500/10 text-left"
-                      onClick={() =>
-                        navigateToBusinessSection("payments-loans", "business-loan-form")
-                      }
+                      onClick={() => openLoanAction("loan")}
                     >
                       <span className="grid size-7 place-items-center rounded-md bg-blue-500/20 text-blue-300">
                         <HandCoins className="size-4" aria-hidden="true" />
@@ -5797,9 +6104,7 @@ function BusinessPage() {
                       variant="outline"
                       data-expense-action="payment"
                       className="h-10 w-full justify-start gap-3 border-violet-700/60 bg-violet-500/10 text-left"
-                      onClick={() =>
-                        navigateToBusinessSection("payments-loans", "business-payment-form")
-                      }
+                      onClick={() => openLoanAction("payment")}
                     >
                       <span className="grid size-7 place-items-center rounded-md bg-violet-500/20 text-violet-300">
                         <CircleDollarSign className="size-4" aria-hidden="true" />
