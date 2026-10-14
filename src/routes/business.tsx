@@ -4668,20 +4668,33 @@ function BusinessPage() {
                       </form>
                     )}
                   </TabsContent>
-                  <TabsContent value="repayment">
+                  <TabsContent value="repayment" className="mt-5">
                     {repaymentLoans.length === 0 ? (
                       <p className="py-4 text-sm text-muted-foreground">
                         Aucun prêt restant à rembourser.
                       </p>
                     ) : (
                       <form
-                        className="grid gap-3 sm:grid-cols-2"
+                        className="grid gap-x-6 gap-y-6 rounded-2xl border border-cyan-900/70 bg-[#04172b]/60 p-4 sm:grid-cols-2 sm:p-6"
                         onSubmit={(event) => void onCreateLoanRepayment(event)}
                       >
+                        <div className="flex items-start gap-3 sm:col-span-2">
+                          <span className="grid size-10 shrink-0 place-items-center rounded-xl border border-cyan-800/70 bg-cyan-500/10 text-cyan-300">
+                            <ArrowDownToLine className="size-5" aria-hidden="true" />
+                          </span>
+                          <div>
+                            <h3 className="text-sm font-semibold text-foreground">
+                              Détails du remboursement
+                            </h3>
+                            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                              Sélectionnez le prêt et le compte qui reçoit le versement.
+                            </p>
+                          </div>
+                        </div>
                         <Field label="Prêt">
                           <select
                             name="repaymentLoanId"
-                            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                            className="h-11 w-full rounded-lg border border-input bg-background px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/60"
                             required
                           >
                             {repaymentLoans.map((loan) => {
@@ -4702,7 +4715,7 @@ function BusinessPage() {
                         <Field label="Compte de réception">
                           <select
                             name="repaymentAccountId"
-                            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                            className="h-11 w-full rounded-lg border border-input bg-background px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/60"
                             required
                           >
                             {accounts.map((account) => (
@@ -4718,27 +4731,52 @@ function BusinessPage() {
                             type="number"
                             min="0.01"
                             step="0.01"
+                            placeholder="0,00"
+                            className="h-11 rounded-lg"
                             required
                           />
                         </Field>
                         <Field label="Date du remboursement">
-                          <Input name="repaymentDate" type="date" defaultValue={today()} required />
+                          <Input
+                            name="repaymentDate"
+                            type="date"
+                            defaultValue={today()}
+                            className="h-11 rounded-lg"
+                            required
+                          />
                         </Field>
                         <Field label="Référence (facultatif)">
-                          <Input name="repaymentReference" maxLength={200} />
+                          <Input
+                            name="repaymentReference"
+                            maxLength={200}
+                            className="h-11 rounded-lg"
+                          />
                         </Field>
                         <Field label="Notes (facultatif)">
-                          <Input name="repaymentNotes" maxLength={1000} />
+                          <Input
+                            name="repaymentNotes"
+                            maxLength={1000}
+                            placeholder="Ajouter une note pour le suivi…"
+                            className="h-11 rounded-lg"
+                          />
                         </Field>
-                        <div className="flex items-end">
-                          <Button type="submit" disabled={isMutating}>
+                        <div className="flex flex-col-reverse gap-3 border-t border-cyan-900/60 pt-5 sm:col-span-2 sm:flex-row sm:items-center sm:justify-between">
+                          <p className="max-w-sm text-xs leading-relaxed text-muted-foreground">
+                            Le versement sera réparti selon les conditions du prêt.
+                          </p>
+                          <Button
+                            type="submit"
+                            size="lg"
+                            className="min-w-56 rounded-lg"
+                            disabled={isMutating}
+                          >
                             Enregistrer le remboursement
                           </Button>
                         </div>
                       </form>
                     )}
                   </TabsContent>
-                  <TabsContent value="payment">
+                  <TabsContent value="payment" className="mt-5">
                     {openTransactions.length === 0 || htgAccounts.length === 0 ? (
                       <p className="py-4 text-sm text-muted-foreground">
                         Ajoutez une transaction client et un compte HTG avant d’enregistrer un
@@ -4747,13 +4785,26 @@ function BusinessPage() {
                     ) : (
                       <form
                         id="business-payment-form"
-                        className="grid gap-3 sm:grid-cols-2"
+                        className="grid gap-x-6 gap-y-6 rounded-2xl border border-cyan-900/70 bg-[#04172b]/60 p-4 sm:grid-cols-2 sm:p-6"
                         onSubmit={(event) => void onCreatePayment(event)}
                       >
+                        <div className="flex items-start gap-3 sm:col-span-2">
+                          <span className="grid size-10 shrink-0 place-items-center rounded-xl border border-cyan-800/70 bg-cyan-500/10 text-cyan-300">
+                            <Wallet className="size-5" aria-hidden="true" />
+                          </span>
+                          <div>
+                            <h3 className="text-sm font-semibold text-foreground">
+                              Détails du paiement
+                            </h3>
+                            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                              Enregistrez le montant reçu et le compte HTG crédité.
+                            </p>
+                          </div>
+                        </div>
                         <Field label="Transaction client">
                           <select
                             name="paymentTransactionId"
-                            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                            className="h-11 w-full rounded-lg border border-input bg-background px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/60"
                             required
                           >
                             {openTransactions.map((transaction) => (
@@ -4768,7 +4819,7 @@ function BusinessPage() {
                         <Field label="Compte d’encaissement">
                           <select
                             name="paymentAccountId"
-                            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                            className="h-11 w-full rounded-lg border border-input bg-background px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/60"
                             required
                           >
                             {htgAccounts.map((account) => (
@@ -4784,13 +4835,15 @@ function BusinessPage() {
                             type="number"
                             min="0.01"
                             step="0.01"
+                            placeholder="0,00"
+                            className="h-11 rounded-lg"
                             required
                           />
                         </Field>
                         <Field label="Mode de paiement">
                           <select
                             name="paymentMethod"
-                            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                            className="h-11 w-full rounded-lg border border-input bg-background px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/60"
                             defaultValue="cash"
                             required
                           >
@@ -4801,16 +4854,39 @@ function BusinessPage() {
                           </select>
                         </Field>
                         <Field label="Date du paiement">
-                          <Input name="paymentDate" type="date" defaultValue={today()} required />
+                          <Input
+                            name="paymentDate"
+                            type="date"
+                            defaultValue={today()}
+                            className="h-11 rounded-lg"
+                            required
+                          />
                         </Field>
                         <Field label="Référence (facultatif)">
-                          <Input name="paymentReference" maxLength={200} />
+                          <Input
+                            name="paymentReference"
+                            maxLength={200}
+                            className="h-11 rounded-lg"
+                          />
                         </Field>
                         <Field label="Notes (facultatif)">
-                          <Input name="paymentNotes" maxLength={1000} />
+                          <Input
+                            name="paymentNotes"
+                            maxLength={1000}
+                            placeholder="Ajouter une note pour le suivi…"
+                            className="h-11 rounded-lg"
+                          />
                         </Field>
-                        <div className="flex items-end">
-                          <Button type="submit" disabled={isMutating}>
+                        <div className="flex flex-col-reverse gap-3 border-t border-cyan-900/60 pt-5 sm:col-span-2 sm:flex-row sm:items-center sm:justify-between">
+                          <p className="max-w-sm text-xs leading-relaxed text-muted-foreground">
+                            Le paiement sera ajouté au compte HTG sélectionné.
+                          </p>
+                          <Button
+                            type="submit"
+                            size="lg"
+                            className="min-w-48 rounded-lg"
+                            disabled={isMutating}
+                          >
                             Enregistrer le paiement
                           </Button>
                         </div>
