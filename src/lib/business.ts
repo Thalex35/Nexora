@@ -42,6 +42,7 @@ export type BusinessTransaction = {
 
 export type BusinessExpense = {
   id: string;
+  accountId?: string;
   category: string;
   amount: number;
   currency: string;
