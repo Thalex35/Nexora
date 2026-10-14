@@ -1288,7 +1288,7 @@ function BusinessPage() {
 
   return (
     <AppShell>
-      <div className="space-y-5">
+      <div className="business-theme space-y-5">
         <header className="flex items-center justify-between gap-4">
           <div className="flex min-w-0 items-center gap-3">
             <span className="grid size-11 shrink-0 place-items-center rounded-xl border border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-900 dark:bg-[#0b2540] dark:text-cyan-300">
@@ -1791,7 +1791,7 @@ function BusinessPage() {
                 </Card>
 
                 <Dialog open={entryDialogOpen} onOpenChange={setEntryDialogOpen}>
-                  <DialogContent className="max-h-[92dvh] w-[calc(100vw-2rem)] max-w-[850px] overflow-y-auto border-cyan-900/60 bg-background p-0 shadow-2xl sm:w-[84vw] sm:rounded-xl">
+                  <DialogContent className="business-theme-dialog max-h-[92dvh] w-[calc(100vw-2rem)] max-w-[850px] overflow-y-auto border-cyan-900/60 bg-background p-0 shadow-2xl sm:w-[84vw] sm:rounded-xl">
                     <div className="grid min-w-0 items-start lg:grid-cols-[minmax(0,1.7fr)_minmax(245px,0.85fr)]">
                       <section className="min-w-0 p-4 sm:p-5">
                         <DialogHeader className="mb-4 pr-8 text-left">
@@ -4832,7 +4832,7 @@ function BusinessPage() {
                     <Plus className="size-4" aria-hidden="true" />
                     <span className="hidden sm:inline">Ajouter un compte</span>
                   </Button>
-                  <DialogContent className="max-h-[90dvh] overflow-y-auto">
+                  <DialogContent className="business-theme-dialog max-h-[90dvh] overflow-y-auto">
                     <DialogHeader>
                       <DialogTitle>Ajouter un compte</DialogTitle>
                       <DialogDescription>
