@@ -215,3 +215,306 @@
   text-transform: uppercase;
   color: var(--color-muted-foreground);
 }
+
+.business-theme,
+.business-theme-dialog,
+body:has(.business-theme) {
+  color-scheme: dark;
+  --background: #031326;
+  --color-background: #031326;
+  --foreground: #e5f3ff;
+  --color-foreground: #e5f3ff;
+  --card: #061b32;
+  --color-card: #061b32;
+  --card-foreground: #e5f3ff;
+  --color-card-foreground: #e5f3ff;
+  --surface: #08213b;
+  --color-surface: #08213b;
+  --surface-foreground: #e5f3ff;
+  --color-surface-foreground: #e5f3ff;
+  --popover: #071b31;
+  --color-popover: #071b31;
+  --popover-foreground: #e5f3ff;
+  --color-popover-foreground: #e5f3ff;
+  --primary: #10cdbf;
+  --color-primary: #10cdbf;
+  --primary-foreground: #03232e;
+  --color-primary-foreground: #03232e;
+  --secondary: #0b3153;
+  --color-secondary: #0b3153;
+  --secondary-foreground: #d7ebff;
+  --color-secondary-foreground: #d7ebff;
+  --muted: #0a2038;
+  --color-muted: #0a2038;
+  --muted-foreground: #8aa9c6;
+  --color-muted-foreground: #8aa9c6;
+  --accent: #0c3653;
+  --color-accent: #0c3653;
+  --accent-foreground: #dffaff;
+  --color-accent-foreground: #dffaff;
+  --border: #104061;
+  --color-border: #104061;
+  --input: #104061;
+  --color-input: #104061;
+  --ring: #10cdbf;
+  --color-ring: #10cdbf;
+  --sidebar: #05182d;
+  --color-sidebar: #05182d;
+  --sidebar-foreground: #dceeff;
+  --color-sidebar-foreground: #dceeff;
+  --sidebar-primary: #10cdbf;
+  --color-sidebar-primary: #10cdbf;
+  --sidebar-primary-foreground: #03232e;
+  --color-sidebar-primary-foreground: #03232e;
+  --sidebar-accent: #0b3150;
+  --color-sidebar-accent: #0b3150;
+  --sidebar-accent-foreground: #e5f3ff;
+  --color-sidebar-accent-foreground: #e5f3ff;
+  --sidebar-border: #104061;
+  --color-sidebar-border: #104061;
+  --sidebar-ring: #10cdbf;
+  --color-sidebar-ring: #10cdbf;
+  color: var(--foreground);
+}
+
+body:has(.business-theme) {
+  background-color: #031326;
+}
+
+body:has(.business-theme) main {
+  background-color: #031326;
+}
+
+.business-theme [class~="bg-white"],
+.business-theme [class*="bg-slate-50"],
+.business-theme [class*="bg-slate-100"] {
+  background-color: var(--card) !important;
+}
+
+.business-theme [class*="bg-cyan-50"] {
+  background-color: #083345 !important;
+}
+
+.business-theme [class*="bg-blue-100"] {
+  background-color: #0b3153 !important;
+}
+
+.business-theme [class*="bg-cyan-100"],
+.business-theme [class*="bg-teal-100"] {
+  background-color: #073745 !important;
+}
+
+.business-theme [class*="bg-emerald-100"],
+.business-theme [class*="bg-green-100"] {
+  background-color: #0b3b36 !important;
+}
+
+.business-theme [class*="bg-rose-100"],
+.business-theme [class*="bg-red-100"] {
+  background-color: #482239 !important;
+}
+
+.business-theme [class*="bg-amber-100"],
+.business-theme [class*="bg-orange-100"] {
+  background-color: #493716 !important;
+}
+
+.business-theme [class*="bg-violet-100"],
+.business-theme [class*="bg-purple-100"] {
+  background-color: #302748 !important;
+}
+
+.business-theme [class*="text-cyan-700"],
+.business-theme [class*="text-cyan-800"] {
+  color: #4ad9e8 !important;
+}
+
+.business-theme [class*="text-blue-700"],
+.business-theme [class*="text-blue-800"] {
+  color: #53aaff !important;
+}
+
+.business-theme [class*="text-teal-700"],
+.business-theme [class*="text-teal-800"] {
+  color: #34dbc9 !important;
+}
+
+.business-theme [class*="text-emerald-700"],
+.business-theme [class*="text-emerald-800"],
+.business-theme [class*="text-green-700"],
+.business-theme [class*="text-green-800"] {
+  color: #40d6a3 !important;
+}
+
+.business-theme [class*="text-rose-700"],
+.business-theme [class*="text-rose-800"],
+.business-theme [class*="text-red-700"],
+.business-theme [class*="text-red-800"] {
+  color: #ff718d !important;
+}
+
+.business-theme [class*="text-amber-700"],
+.business-theme [class*="text-amber-800"],
+.business-theme [class*="text-orange-700"],
+.business-theme [class*="text-orange-800"] {
+  color: #f3bd4f !important;
+}
+
+.business-theme [class*="text-violet-700"],
+.business-theme [class*="text-violet-800"],
+.business-theme [class*="text-purple-700"],
+.business-theme [class*="text-purple-800"] {
+  color: #bd95ff !important;
+}
+
+.business-theme [class*="text-slate-900"],
+.business-theme [class*="text-slate-800"],
+.business-theme [class*="text-slate-700"] {
+  color: #e5f3ff !important;
+}
+
+.business-theme [class*="text-slate-600"],
+.business-theme [class*="text-slate-500"],
+.business-theme [class*="text-slate-400"] {
+  color: #8aa9c6 !important;
+}
+
+.business-theme [class*="border-slate-"],
+.business-theme [class*="border-cyan-"] {
+  border-color: #104061 !important;
+}
+
+.business-theme table thead {
+  background-color: #04172b;
+  color: #8aa9c6;
+}
+
+.business-theme table tr {
+  border-color: #103752;
+}
+
+.business-theme table tbody tr:hover {
+  background-color: #08213b;
+}
+
+.business-theme input,
+.business-theme select,
+.business-theme textarea,
+.business-theme-dialog input,
+.business-theme-dialog select,
+.business-theme-dialog textarea {
+  border-color: #155072;
+  background-color: #061b32;
+  color: #e5f3ff;
+}
+
+.business-theme input::placeholder,
+.business-theme textarea::placeholder,
+.business-theme-dialog input::placeholder,
+.business-theme-dialog textarea::placeholder {
+  color: #7595b3;
+}
+
+.business-theme button,
+.business-theme-dialog button {
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease,
+    box-shadow 150ms ease,
+    transform 150ms ease;
+}
+
+.business-theme button[data-button-variant="default"],
+.business-theme-dialog button[data-button-variant="default"] {
+  border-color: #10cdbf;
+  background-color: #10cdbf;
+  color: #03232e;
+  box-shadow: 0 3px 14px rgb(16 205 191 / 14%);
+}
+
+.business-theme button[data-button-variant="default"]:hover:not(:disabled),
+.business-theme-dialog button[data-button-variant="default"]:hover:not(:disabled) {
+  border-color: #51e7d9;
+  background-color: #31dfd1;
+  box-shadow: 0 5px 18px rgb(16 205 191 / 25%);
+  transform: translateY(-1px);
+}
+
+.business-theme button[data-button-variant="outline"],
+.business-theme-dialog button[data-button-variant="outline"] {
+  border-color: #155072;
+  background-color: #08213b;
+  color: #c7e4fb;
+}
+
+.business-theme button[data-button-variant="outline"]:hover:not(:disabled),
+.business-theme-dialog button[data-button-variant="outline"]:hover:not(:disabled) {
+  border-color: #10a99f;
+  background-color: #0b3150;
+  color: #e6ffff;
+}
+
+.business-theme button[data-button-variant="secondary"],
+.business-theme-dialog button[data-button-variant="secondary"] {
+  border-color: #123f62;
+  background-color: #0b3153;
+  color: #d7ebff;
+}
+
+.business-theme button[data-button-variant="secondary"]:hover:not(:disabled),
+.business-theme-dialog button[data-button-variant="secondary"]:hover:not(:disabled) {
+  background-color: #10436b;
+  color: #ffffff;
+}
+
+.business-theme button[data-button-variant="ghost"],
+.business-theme-dialog button[data-button-variant="ghost"] {
+  color: #9fc1dd;
+}
+
+.business-theme button[data-button-variant="ghost"]:hover:not(:disabled),
+.business-theme-dialog button[data-button-variant="ghost"]:hover:not(:disabled) {
+  background-color: #0b3150;
+  color: #e5f3ff;
+}
+
+.business-theme button[data-button-variant="destructive"],
+.business-theme-dialog button[data-button-variant="destructive"] {
+  border-color: #a73858;
+  background-color: #8f2947;
+  color: #fff1f5;
+}
+
+.business-theme button:not(:disabled):focus-visible,
+.business-theme-dialog button:not(:disabled):focus-visible {
+  outline: 2px solid #10cdbf;
+  outline-offset: 2px;
+}
+
+.business-theme [role="tablist"] {
+  border: 1px solid #104061;
+  background-color: #061b32;
+}
+
+.business-theme [role="tab"] {
+  color: #8aa9c6;
+}
+
+.business-theme [role="tab"]:hover {
+  background-color: #0b3150;
+  color: #dffaff;
+}
+
+.business-theme [role="tab"][data-state="active"] {
+  background-color: #0b3153;
+  color: #25ddcf;
+  box-shadow: inset 0 0 0 1px #155072;
+}
+
+.business-theme-dialog {
+  border: 1px solid #155072;
+  background-color: #061b32;
+  color: #e5f3ff;
+  box-shadow: 0 24px 80px rgb(0 0 0 / 55%);
+}
