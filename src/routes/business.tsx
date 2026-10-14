@@ -3717,9 +3717,9 @@ function BusinessPage() {
                   color: "text-teal-600",
                 },
                 {
-                  label: "Customer payments received",
-                  value: formatBusinessMoney(metrics.totalCustomerReceipts, "HTG"),
-                  note: "Recorded collections",
+                  label: "HTG received from customers",
+                  value: formatBusinessMoney(completedHtgTransactionTotal, "HTG"),
+                  note: "Completed transfers on the selected period",
                   color: "text-emerald-600",
                 },
                 {
