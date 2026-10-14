@@ -1495,7 +1495,7 @@ export type Database = {
         };
         Returns: string;
       };
-      update_pending_business_customer_transaction: {
+      update_business_customer_transaction: {
         Args: {
           p_transaction_id: string;
           p_customer_id: string;
