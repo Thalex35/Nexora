@@ -236,6 +236,7 @@ export function useBusinessRecords() {
         fundings: fundingRows,
         expenses: expenseRows.map((expense: ExpenseRow) => ({
           id: expense.id,
+          accountId: expense.paid_from_account_id,
           category: expense.category,
           amount: Number(expense.amount),
           currency: expense.currency as BusinessExpense["currency"],

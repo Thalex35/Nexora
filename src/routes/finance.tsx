@@ -7,6 +7,10 @@ import {
   ChevronLeft,
   ChevronRight,
   HandCoins,
+  Lightbulb,
+  Plus,
+  Receipt,
+  TrendingDown,
   Wallet,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -94,8 +98,7 @@ function FinancePage() {
   const [payingFutureExpense, setPayingFutureExpense] = useState<FutureExpense | null>(null);
   const [debtDialogOpen, setDebtDialogOpen] = useState(false);
   const [editingDebt, setEditingDebt] = useState<Debt | null>(null);
-  const monthDefaultDate =
-    month === currentFinanceMonth() ? todayISO() : `${month}-01`;
+  const monthDefaultDate = month === currentFinanceMonth() ? todayISO() : `${month}-01`;
 
   const rows = transactions.data ?? [];
   const allocationRows = allocations.data ?? [];
@@ -106,6 +109,15 @@ function FinancePage() {
   const incomes = monthTotals.incomes;
   const monthIncomeIds = new Set(incomes.map((income) => income.id));
   const monthAllocations = allocationRows.filter((item) => monthIncomeIds.has(item.income_id));
+  const recentExpenses = [...monthTotals.expenses]
+    .sort((left, right) => right.transaction_date.localeCompare(left.transaction_date))
+    .slice(0, 5);
+  const paidDebtsTotal = debtRows
+    .filter((debt) => debt.status === "paid")
+    .reduce((sum, debt) => sum + Number(debt.amount), 0);
+  const outstandingDebtsTotal = debtRows
+    .filter((debt) => debt.status === "unpaid")
+    .reduce((sum, debt) => sum + Number(debt.amount), 0);
   const upcoming = monthAllocations.filter((allocation) => !allocation.completed).slice(0, 5);
   const completedAllocations = [...monthAllocations]
     .filter((allocation) => allocation.completed)
@@ -142,10 +154,7 @@ function FinancePage() {
   }
 
   const loading =
-    transactions.isLoading ||
-    allocations.isLoading ||
-    futureExpenses.isLoading ||
-    debts.isLoading;
+    transactions.isLoading || allocations.isLoading || futureExpenses.isLoading || debts.isLoading;
   const failed =
     transactions.isError || allocations.isError || futureExpenses.isError || debts.isError;
 
@@ -155,17 +164,12 @@ function FinancePage() {
     <AppShell>
       <div className="space-y-6">
         <PageHeader
-          title="Finance"
-          description="Track money received, planned, spent, and owed — month by month."
+          title="Expenses"
+          description="Track your spending, debt, and payments in one place."
           actions={
-            <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant="outline" onClick={() => setDialogType("income")}>
-                Add income
-              </Button>
-              <Button size="sm" onClick={() => setDialogType("expense")}>
-                Add expense
-              </Button>
-            </div>
+            <Button size="sm" variant="outline" onClick={() => setDialogType("income")}>
+              Add income
+            </Button>
           }
         />
 
@@ -220,25 +224,162 @@ function FinancePage() {
             </section>
 
             <section
-              aria-label="Monthly finance summary"
-              className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3"
+              aria-label="Monthly expense summary"
+              className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
             >
-              <SummaryValue label="Total income" value={monthTotals.totalIncome} />
-              <SummaryValue label="Actual expenses" value={monthTotals.totalExpenses} />
-              <SummaryValue
-                label="Allocated to these incomes"
-                value={monthTotals.totalAllocated}
-              />
-              <SummaryValue
-                label="Future expenses planned"
-                value={monthTotals.futureExpenses}
-              />
-              <SummaryValue label="Outstanding debts" value={monthTotals.outstandingDebts} />
+              <SummaryValue label="Total expenses" value={monthTotals.totalExpenses} />
+              <SummaryValue label="Outstanding debts" value={outstandingDebtsTotal} />
+              <SummaryValue label="Debts marked paid" value={paidDebtsTotal} />
               <SummaryValue
                 label="Remaining after spending & allocations"
                 value={monthTotals.remainingBalance}
                 accent
               />
+            </section>
+
+            <section className="grid items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(280px,0.9fr)]">
+              <div className="nexora-panel min-w-0 overflow-hidden">
+                <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-5">
+                  <div>
+                    <h2 className="font-semibold text-foreground">Recent expenses</h2>
+                    <p className="text-xs text-muted-foreground">
+                      Your latest recorded expenses for this month.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setFilter("expense");
+                      document
+                        .getElementById("finance-history")
+                        ?.scrollIntoView({ behavior: "smooth" });
+                    }}
+                  >
+                    View all <ChevronRight className="ml-1 size-3.5" aria-hidden="true" />
+                  </Button>
+                </div>
+                {recentExpenses.length === 0 ? (
+                  <div className="px-5 py-10 text-center">
+                    <Receipt className="mx-auto size-7 text-muted-foreground" aria-hidden="true" />
+                    <p className="mt-2 text-sm font-medium">No expenses recorded this month</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Add an expense to see it in this list.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[620px] text-sm">
+                      <thead>
+                        <tr className="border-b text-left text-xs text-muted-foreground">
+                          <th className="px-4 py-2 sm:px-5">Date</th>
+                          <th className="px-3 py-2">Description</th>
+                          <th className="px-3 py-2">Category</th>
+                          <th className="px-3 py-2 text-right">Amount</th>
+                          <th className="px-3 py-2">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {recentExpenses.map((expense) => (
+                          <tr key={expense.id}>
+                            <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground sm:px-5">
+                              {formatFinanceDate(expense.transaction_date)}
+                            </td>
+                            <td className="max-w-44 truncate px-3 py-3 text-sm">
+                              {expense.description || expense.category || "Expense"}
+                            </td>
+                            <td className="px-3 py-3">
+                              <Badge variant="secondary" className="max-w-36 truncate">
+                                {expense.category || "Uncategorized"}
+                              </Badge>
+                            </td>
+                            <td className="whitespace-nowrap px-3 py-3 text-right font-medium">
+                              {formatMoney(Number(expense.amount))}
+                            </td>
+                            <td className="px-3 py-3">
+                              <Badge variant="outline">Recorded</Badge>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-4">
+                <section className="nexora-panel space-y-3 p-4">
+                  <h2 className="font-semibold text-foreground">Quick actions</h2>
+                  <Button
+                    type="button"
+                    className="w-full justify-start"
+                    onClick={() => setDialogType("expense")}
+                  >
+                    <Plus className="size-4" aria-hidden="true" /> Add an expense
+                    <ChevronRight className="ml-auto size-4" aria-hidden="true" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full justify-start"
+                    onClick={() => {
+                      setEditingDebt(null);
+                      setDebtDialogOpen(true);
+                    }}
+                  >
+                    <HandCoins className="size-4" aria-hidden="true" /> Record a debt
+                    <ChevronRight className="ml-auto size-4" aria-hidden="true" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full justify-start"
+                    onClick={() =>
+                      document
+                        .getElementById("finance-debts")
+                        ?.scrollIntoView({ behavior: "smooth" })
+                    }
+                  >
+                    <Wallet className="size-4" aria-hidden="true" /> Manage debt payments
+                    <ChevronRight className="ml-auto size-4" aria-hidden="true" />
+                  </Button>
+                </section>
+
+                <section className="nexora-panel space-y-4 p-4">
+                  <h2 className="flex items-center gap-2 font-semibold text-foreground">
+                    <TrendingDown className="size-4 text-primary" aria-hidden="true" />
+                    Financial summary
+                  </h2>
+                  <SummaryLine label="Total expenses" value={monthTotals.totalExpenses} />
+                  <SummaryLine label="Outstanding debts" value={outstandingDebtsTotal} />
+                  <SummaryLine label="Debts marked paid" value={paidDebtsTotal} />
+                  <div className="border-t border-border pt-3">
+                    <SummaryLine
+                      label="Remaining this month"
+                      value={monthTotals.remainingBalance}
+                      accent
+                    />
+                  </div>
+                </section>
+
+                <section className="nexora-panel flex gap-3 p-4">
+                  <Lightbulb className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden="true" />
+                  <div>
+                    <h2 className="text-sm font-semibold">Tip</h2>
+                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                      Keep actual spending separate from planned expenses. Mark a debt paid only
+                      after settling it.
+                    </p>
+                  </div>
+                </section>
+              </div>
+            </section>
+
+            <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <SummaryValue label="Total income" value={monthTotals.totalIncome} />
+              <SummaryValue label="Allocated to these incomes" value={monthTotals.totalAllocated} />
+              <SummaryValue label="Future expenses planned" value={monthTotals.futureExpenses} />
             </section>
 
             <section className="grid gap-4 lg:grid-cols-2">
@@ -371,7 +512,7 @@ function FinancePage() {
               </div>
             </section>
 
-            <section className="grid gap-4 xl:grid-cols-2">
+            <section id="finance-debts" className="grid gap-4 xl:grid-cols-2">
               <FutureExpensesPanel
                 expenses={monthTotals.monthFutureExpenses}
                 onAdd={() => {
@@ -388,7 +529,9 @@ function FinancePage() {
                     { id: expense.id, status },
                     {
                       onSuccess: () =>
-                        toast.success(status === "planned" ? "Expense reopened" : "Expense cancelled"),
+                        toast.success(
+                          status === "planned" ? "Expense reopened" : "Expense cancelled",
+                        ),
                       onError: () => toast.error("Couldn't update this planned expense"),
                     },
                   )
@@ -423,7 +566,7 @@ function FinancePage() {
               />
             </section>
 
-            <section className="space-y-3">
+            <section id="finance-history" className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h2 className="font-semibold text-foreground">Finance history</h2>
@@ -511,8 +654,7 @@ function FinancePage() {
                 toast.success("Payment recorded as an actual expense");
                 setPayingFutureExpense(null);
               },
-              onError: (error) =>
-                toast.error(error.message || "Couldn't record this payment"),
+              onError: (error) => toast.error(error.message || "Couldn't record this payment"),
             },
           );
         }}
@@ -573,9 +715,7 @@ function FutureExpensesPanel({
             <CalendarClock className="h-4 w-4 text-primary" />
             Future expenses
           </h2>
-          <p className="text-sm text-muted-foreground">
-            Plans do not reduce your actual balance.
-          </p>
+          <p className="text-sm text-muted-foreground">Plans do not reduce your actual balance.</p>
         </div>
         <Button size="sm" variant="outline" onClick={onAdd}>
           Plan expense
@@ -765,6 +905,25 @@ function SummaryValue({
       >
         {formatMoney(value)}
       </p>
+    </div>
+  );
+}
+
+function SummaryLine({
+  label,
+  value,
+  accent = false,
+}: {
+  label: string;
+  value: number;
+  accent?: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 text-sm">
+      <span className="text-muted-foreground">{label}</span>
+      <span className={`shrink-0 font-semibold ${accent ? "text-primary" : "text-foreground"}`}>
+        {formatMoney(value)}
+      </span>
     </div>
   );
 }

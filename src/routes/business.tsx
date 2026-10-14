@@ -4,6 +4,7 @@ import {
   ArrowRight,
   ArrowDownToLine,
   ArrowUpRight,
+  ChevronLeft,
   Banknote,
   BriefcaseBusiness,
   ChartNoAxesCombined,
@@ -123,6 +124,22 @@ type DashboardActivity = {
   direction: "in" | "out";
 };
 
+type BusinessActivityRow = {
+  id: string;
+  kind: "customer_transaction" | "funding" | "payment" | "loan" | "repayment" | "expense";
+  typeLabel: string;
+  date: string;
+  contact: string;
+  description: string;
+  amount: number;
+  currency: string;
+  status: string;
+  reference: string;
+  direction: "in" | "out";
+  customerId: string | null;
+  accountIds: string[];
+};
+
 function readText(data: FormData, key: string) {
   return String(data.get(key) ?? "").trim();
 }
@@ -226,6 +243,9 @@ function BusinessPage() {
   const [customerPage, setCustomerPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState("all");
   const [transactionAccountFilter, setTransactionAccountFilter] = useState("all");
+  const [transactionTypeFilter, setTransactionTypeFilter] = useState("all");
+  const [transactionSearch, setTransactionSearch] = useState("");
+  const [transactionPage, setTransactionPage] = useState(1);
   const [accountFilter, setAccountFilter] = useState("all");
   const [reportingCurrency, setReportingCurrency] = useState<BusinessCurrency>("USD");
   const [activeTab, setActiveTab] = useState("overview");
@@ -537,13 +557,140 @@ function BusinessPage() {
     },
   ].filter((item) => item.value > 0);
 
-  const visibleTransactions = periodTransactions.filter(
-    (transaction) =>
-      (customerFilter === "all" || transaction.customerId === customerFilter) &&
+  const businessActivityRows: BusinessActivityRow[] = [
+    ...periodTransactions.map((transaction) => ({
+      id: transaction.id,
+      kind: "customer_transaction" as const,
+      typeLabel: "Transfert",
+      date: transaction.transactionDate,
+      contact: transaction.customerName,
+      description: transaction.notes || "Transfert client",
+      amount: transaction.usdSent,
+      currency: "USD",
+      status: transaction.status,
+      reference: transaction.reference ?? "",
+      direction: "out" as const,
+      customerId: transaction.customerId,
+      accountIds: [transaction.receiptAccountId, transaction.payoutAccountId],
+    })),
+    ...periodFundings.map((funding) => {
+      const destination = accounts.find((account) => account.id === funding.destination_account_id);
+      const source = accounts.find((account) => account.id === funding.source_account_id);
+      return {
+        id: funding.id,
+        kind: "funding" as const,
+        typeLabel:
+          funding.funding_type === "replenishment"
+            ? "Dépôt"
+            : funding.funding_type.replaceAll("_", " "),
+        date: funding.funding_date,
+        contact: source?.name ?? "Source externe",
+        description: destination ? `Crédit vers ${destination.name}` : "Crédit de financement",
+        amount: Number(funding.credited_amount),
+        currency: destination?.currency ?? "",
+        status: funding.status,
+        reference: funding.reference_code ?? "",
+        direction: "in" as const,
+        customerId: null,
+        accountIds: [
+          funding.destination_account_id,
+          ...(funding.source_account_id ? [funding.source_account_id] : []),
+        ],
+      };
+    }),
+    ...periodPayments.map((payment) => {
+      const transaction = transactions.find((item) => item.id === payment.customerTransactionId);
+      return {
+        id: payment.id,
+        kind: "payment" as const,
+        typeLabel: "Paiement client",
+        date: payment.paymentDate,
+        contact: transaction?.customerName ?? "Client",
+        description: `Paiement ${payment.paymentMethod}`,
+        amount: payment.amount,
+        currency: payment.currency,
+        status: "completed",
+        reference: payment.reference ?? "",
+        direction: "in" as const,
+        customerId: transaction?.customerId ?? null,
+        accountIds: [payment.accountId],
+      };
+    }),
+    ...loans
+      .filter((loan) => loan.issuedDate >= startDate && loan.issuedDate <= endDate)
+      .map((loan) => ({
+        id: loan.id,
+        kind: "loan" as const,
+        typeLabel: "Prêt",
+        date: loan.issuedDate,
+        contact: loan.customerName,
+        description: "Prêt accordé",
+        amount: loan.principalAmount,
+        currency: loan.currency,
+        status: loan.status,
+        reference: "",
+        direction: "out" as const,
+        customerId: loan.customerId,
+        accountIds: [loan.accountId],
+      })),
+    ...periodLoanRepayments.map((repayment) => {
+      const loan = loans.find((item) => item.id === repayment.loanId);
+      return {
+        id: repayment.id,
+        kind: "repayment" as const,
+        typeLabel: "Remboursement",
+        date: repayment.repaymentDate,
+        contact: loan?.customerName ?? "Emprunteur",
+        description: "Remboursement de prêt",
+        amount: repayment.amount,
+        currency: repayment.currency,
+        status: "completed",
+        reference: repayment.reference ?? "",
+        direction: "in" as const,
+        customerId: loan?.customerId ?? null,
+        accountIds: [repayment.accountId],
+      };
+    }),
+    ...periodExpenses.map((expense) => ({
+      id: expense.id,
+      kind: "expense" as const,
+      typeLabel: "Dépense",
+      date: expense.date,
+      contact: expense.category,
+      description: expense.notes || expense.category,
+      amount: expense.amount,
+      currency: expense.currency,
+      status: expense.status,
+      reference: "",
+      direction: "out" as const,
+      customerId: null,
+      accountIds: expense.accountId ? [expense.accountId] : [],
+    })),
+  ].sort((left, right) => right.date.localeCompare(left.date));
+
+  const normalizedTransactionSearch = transactionSearch.trim().toLowerCase();
+  const visibleTransactions = businessActivityRows.filter(
+    (activity) =>
+      (transactionTypeFilter === "all" || activity.kind === transactionTypeFilter) &&
+      (customerFilter === "all" || activity.customerId === customerFilter) &&
       (transactionAccountFilter === "all" ||
-        transactionAccountFilter === transaction.receiptAccountId ||
-        transactionAccountFilter === transaction.payoutAccountId) &&
-      (statusFilter === "all" || transaction.status === statusFilter),
+        activity.accountIds.includes(transactionAccountFilter)) &&
+      (statusFilter === "all" || activity.status === statusFilter) &&
+      (!normalizedTransactionSearch ||
+        [activity.contact, activity.description, activity.reference, activity.typeLabel]
+          .join(" ")
+          .toLowerCase()
+          .includes(normalizedTransactionSearch)),
+  );
+  const transactionPageSize = 10;
+  const transactionPageCount = Math.max(
+    1,
+    Math.ceil(visibleTransactions.length / transactionPageSize),
+  );
+  const visibleTransactionPage = Math.min(transactionPage, transactionPageCount);
+  const paginatedTransactions = visibleTransactions.slice(
+    (visibleTransactionPage - 1) * transactionPageSize,
+    visibleTransactionPage * transactionPageSize,
   );
 
   async function onCreateCustomer(event: FormEvent<HTMLFormElement>) {
@@ -733,6 +880,7 @@ function BusinessPage() {
       });
       clearIdempotencyKey(event.currentTarget);
       event.currentTarget.reset();
+      setEntryDialogOpen(false);
       toast.success("Funding recorded as pending. Confirm it after the credit is verified.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Couldn't record funding.");
@@ -3277,32 +3425,325 @@ function BusinessPage() {
           </TabsContent>
 
           <TabsContent value="transactions" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Record customer operation</CardTitle>
-                <CardDescription>
-                  HTG amount due and USD sent are separate. Confirming a transfer only posts the USD
-                  movement; actual customer collections are recorded separately under Payments &
-                  loans.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {customers.length === 0 || htgAccounts.length === 0 || usdAccounts.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    Create a customer and an HTG receipt account and USD payout account before
-                    recording operations.
-                  </p>
-                ) : (
-                  <form
-                    className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3"
-                    onSubmit={(event) => void onCreateTransaction(event)}
-                  >
-                    <Field label="Customer">
-                      <select
-                        name="customerId"
-                        className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-                        required
+            <div className="grid gap-3 sm:grid-cols-3">
+              {[
+                {
+                  label: "Completed customer transfers",
+                  value: String(metrics.completedTransactions),
+                  note: "On the selected period",
+                  color: "text-teal-600",
+                },
+                {
+                  label: "Customer payments received",
+                  value: formatBusinessMoney(metrics.totalCustomerReceipts, "HTG"),
+                  note: "Recorded collections",
+                  color: "text-emerald-600",
+                },
+                {
+                  label: "USD sent to customers",
+                  value: formatBusinessMoney(metrics.totalUsdSentToCustomers, "USD"),
+                  note: "Completed transfers",
+                  color: "text-rose-600",
+                },
+              ].map((item) => (
+                <Card
+                  key={item.label}
+                  className="border-cyan-900/10 shadow-sm dark:border-[#173451]"
+                >
+                  <CardContent className="p-4">
+                    <p className="text-xs text-muted-foreground">{item.label}</p>
+                    <p className={`mt-1 text-xl font-semibold ${item.color}`}>{item.value}</p>
+                    <p className="mt-1 text-[10px] text-muted-foreground">{item.note}</p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(280px,0.9fr)]">
+              <Card className="min-w-0 border-cyan-900/20 shadow-sm dark:border-[#173451]">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Liste des transactions</CardTitle>
+                  <CardDescription>
+                    Activité réelle des transferts, financements, paiements, prêts et dépenses du{" "}
+                    {startDate} au {endDate}.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {visibleTransactions.length === 0 ? (
+                    <p className="py-10 text-center text-sm text-muted-foreground">
+                      Aucune transaction enregistrée ne correspond à ces filtres.
+                    </p>
+                  ) : (
+                    <>
+                      <div className="overflow-x-auto">
+                        <table className="w-full min-w-[850px] text-sm">
+                          <thead className="text-left text-xs text-muted-foreground">
+                            <tr className="border-b">
+                              <th className="py-2 pr-3">Date</th>
+                              <th className="py-2 pr-3">Type</th>
+                              <th className="py-2 pr-3">Client / source</th>
+                              <th className="py-2 pr-3">Description</th>
+                              <th className="py-2 pr-3 text-right">Montant</th>
+                              <th className="py-2 pr-3">Statut</th>
+                              <th className="py-2 pr-3">Référence</th>
+                              <th className="py-2 pr-3">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-border">
+                            {paginatedTransactions.map((activity) => (
+                              <tr key={`${activity.kind}-${activity.id}`}>
+                                <td className="whitespace-nowrap py-3 pr-3 text-xs text-muted-foreground">
+                                  {formatActivityDate(activity.date)}
+                                </td>
+                                <td className="py-3 pr-3">
+                                  <Badge
+                                    variant={
+                                      activity.kind === "customer_transaction"
+                                        ? "default"
+                                        : activity.kind === "funding"
+                                          ? "secondary"
+                                          : "outline"
+                                    }
+                                    className="whitespace-nowrap capitalize"
+                                  >
+                                    {activity.typeLabel}
+                                  </Badge>
+                                </td>
+                                <td className="max-w-36 truncate py-3 pr-3 font-medium">
+                                  {activity.contact}
+                                </td>
+                                <td className="max-w-44 truncate py-3 pr-3 text-muted-foreground">
+                                  {activity.description}
+                                </td>
+                                <td
+                                  className={`whitespace-nowrap py-3 pr-3 text-right font-semibold ${
+                                    activity.direction === "in"
+                                      ? "text-emerald-600 dark:text-emerald-300"
+                                      : "text-rose-600 dark:text-rose-300"
+                                  }`}
+                                >
+                                  {activity.direction === "in" ? "+" : "−"}
+                                  {formatBusinessMoney(activity.amount, activity.currency)}
+                                </td>
+                                <td className="py-3 pr-3">
+                                  <StatusBadge status={activity.status} />
+                                </td>
+                                <td className="max-w-32 truncate py-3 pr-3 text-xs text-muted-foreground">
+                                  {activity.reference || "—"}
+                                </td>
+                                <td className="py-3 pr-3">
+                                  {activity.kind === "customer_transaction" ? (
+                                    <OperationActions
+                                      type={activity.kind}
+                                      id={activity.id}
+                                      status={activity.status}
+                                      disabled={isMutating}
+                                      onAction={(action) =>
+                                        void changeStatus(activity.kind, activity.id, action)
+                                      }
+                                    />
+                                  ) : (
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="ghost"
+                                      className="text-xs"
+                                      onClick={() =>
+                                        setActiveTab(
+                                          activity.kind === "funding"
+                                            ? "funding"
+                                            : activity.kind === "expense"
+                                              ? "expenses"
+                                              : "payments-loans",
+                                        )
+                                      }
+                                    >
+                                      Gérer
+                                    </Button>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t pt-3 text-xs text-muted-foreground">
+                        <span>
+                          Affichage de{" "}
+                          {visibleTransactions.length === 0
+                            ? 0
+                            : (visibleTransactionPage - 1) * transactionPageSize + 1}{" "}
+                          à{" "}
+                          {Math.min(
+                            visibleTransactionPage * transactionPageSize,
+                            visibleTransactions.length,
+                          )}{" "}
+                          sur {visibleTransactions.length} transactions
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="outline"
+                            className="size-7"
+                            aria-label="Page précédente"
+                            disabled={visibleTransactionPage <= 1}
+                            onClick={() => setTransactionPage((page) => Math.max(1, page - 1))}
+                          >
+                            <ChevronLeft className="size-3.5" aria-hidden="true" />
+                          </Button>
+                          <span className="min-w-14 text-center">
+                            {visibleTransactionPage} / {transactionPageCount}
+                          </span>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="outline"
+                            className="size-7"
+                            aria-label="Page suivante"
+                            disabled={visibleTransactionPage >= transactionPageCount}
+                            onClick={() =>
+                              setTransactionPage((page) => Math.min(transactionPageCount, page + 1))
+                            }
+                          >
+                            <ChevronRight className="size-3.5" aria-hidden="true" />
+                          </Button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+
+              <div className="space-y-4">
+                <Card className="border-cyan-900/20 shadow-sm dark:border-[#173451]">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">Nouvelle transaction</CardTitle>
+                    <CardDescription>
+                      Utilisez les formulaires existants pour enregistrer une opération.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="grid grid-cols-3 gap-2">
+                    {(
+                      [
+                        ["transfer", "Transfert", ArrowRight],
+                        ["deposit", "Dépôt", ArrowDownToLine],
+                        ["loan", "Prêt", HandCoins],
+                      ] as const
+                    ).map(([type, label, Icon]) => (
+                      <Button
+                        key={type}
+                        type="button"
+                        variant="outline"
+                        className="h-auto min-h-16 flex-col gap-1 px-2 py-2 text-xs"
+                        onClick={() => openEntryForm(type)}
                       >
+                        <Icon className="size-4" aria-hidden="true" />
+                        {label}
+                      </Button>
+                    ))}
+                  </CardContent>
+                </Card>
+
+                <Card className="border-cyan-900/20 shadow-sm dark:border-[#173451]">
+                  <CardHeader className="flex flex-row items-center justify-between gap-2 pb-3">
+                    <CardTitle className="text-base">Filtres</CardTitle>
+                    <Button
+                      type="button"
+                      variant="link"
+                      size="sm"
+                      className="h-auto p-0 text-xs"
+                      onClick={() => {
+                        setTransactionSearch("");
+                        setTransactionTypeFilter("all");
+                        setCustomerFilter("all");
+                        setTransactionAccountFilter("all");
+                        setStatusFilter("all");
+                        setTransactionPage(1);
+                      }}
+                    >
+                      Réinitialiser
+                    </Button>
+                  </CardHeader>
+                  <CardContent className="space-y-3 [&_label]:text-xs">
+                    <Field label="Rechercher une transaction, un client ou une référence">
+                      <div className="relative">
+                        <Search
+                          className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                          aria-hidden="true"
+                        />
+                        <Input
+                          value={transactionSearch}
+                          onChange={(event) => {
+                            setTransactionSearch(event.target.value);
+                            setTransactionPage(1);
+                          }}
+                          className="pl-9"
+                          placeholder="Nom, description, référence…"
+                        />
+                      </div>
+                    </Field>
+                    <Field label="Type de transaction">
+                      <select
+                        value={transactionTypeFilter}
+                        onChange={(event) => {
+                          setTransactionTypeFilter(event.target.value);
+                          setTransactionPage(1);
+                        }}
+                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
+                      >
+                        <option value="all">Tous les types</option>
+                        {[
+                          ["customer_transaction", "Transferts"],
+                          ["funding", "Dépôts et financements"],
+                          ["payment", "Paiements clients"],
+                          ["loan", "Prêts"],
+                          ["repayment", "Remboursements"],
+                          ["expense", "Dépenses"],
+                        ].map(([value, label]) => (
+                          <option key={value} value={value}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Statut">
+                      <select
+                        value={statusFilter}
+                        onChange={(event) => {
+                          setStatusFilter(event.target.value);
+                          setTransactionPage(1);
+                        }}
+                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
+                      >
+                        {[
+                          "all",
+                          "pending",
+                          "completed",
+                          "active",
+                          "partially_repaid",
+                          "repaid",
+                          "overdue",
+                          "failed",
+                          "cancelled",
+                          "reversed",
+                        ].map((status) => (
+                          <option key={status} value={status}>
+                            {status === "all" ? "Tous les statuts" : status.replaceAll("_", " ")}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Client / bénéficiaire">
+                      <select
+                        value={customerFilter}
+                        onChange={(event) => {
+                          setCustomerFilter(event.target.value);
+                          setTransactionPage(1);
+                        }}
+                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
+                      >
+                        <option value="all">Tous les clients</option>
                         {customers.map((customer) => (
                           <option key={customer.id} value={customer.id}>
                             {customer.name}
@@ -3310,199 +3751,50 @@ function BusinessPage() {
                         ))}
                       </select>
                     </Field>
-                    <Field label="HTG receipt account">
+                    <Field label="Compte">
                       <select
-                        name="receiptAccountId"
-                        className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-                        required
+                        value={transactionAccountFilter}
+                        onChange={(event) => {
+                          setTransactionAccountFilter(event.target.value);
+                          setTransactionPage(1);
+                        }}
+                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
                       >
-                        {htgAccounts.map((account) => (
+                        <option value="all">Tous les comptes</option>
+                        {accounts.map((account) => (
                           <option key={account.id} value={account.id}>
                             {account.name}
                           </option>
                         ))}
                       </select>
                     </Field>
-                    <Field label="USD payout account">
-                      <select
-                        name="payoutAccountId"
-                        className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-                        required
-                      >
-                        {usdAccounts.map((account) => (
-                          <option key={account.id} value={account.id}>
-                            {account.name}
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
-                    <Field label="Date and time">
-                      <Input
-                        name="transactionDate"
-                        type="datetime-local"
-                        defaultValue={new Date().toISOString().slice(0, 16)}
-                        required
-                      />
-                    </Field>
-                    <Field label="Payment due date (optional)">
-                      <Input name="dueDate" type="date" />
-                    </Field>
-                    <Field label="HTG amount due">
-                      <Input name="htgReceived" type="number" min="0" step="0.01" required />
-                    </Field>
-                    <Field label="USD sent">
-                      <Input name="usdSent" type="number" min="0" step="0.01" required />
-                    </Field>
-                    <Field label="Exchange rate (HTG per USD)">
-                      <Input name="exchangeRate" type="number" min="0.000001" step="0.000001" />
-                    </Field>
-                    <Field label="Service fee / markup (USD)">
-                      <Input name="serviceFee" type="number" min="0" step="0.01" />
-                    </Field>
-                    <Field label="Crypto acquisition cost (USD)">
-                      <Input name="cryptoCost" type="number" min="0" step="0.01" />
-                    </Field>
-                    <Field label="Transfer fee (USD)">
-                      <Input
-                        name="transferFee"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        defaultValue="0"
-                        required
-                      />
-                    </Field>
-                    <Field label="Other operation expenses (USD)">
-                      <Input name="otherExpenses" type="number" min="0" step="0.01" />
-                    </Field>
-                    <Field label="Reference">
-                      <Input name="reference" />
-                    </Field>
-                    <Field label="Notes">
-                      <Input name="notes" />
-                    </Field>
-                    <div className="sm:col-span-2 xl:col-span-3">
-                      <Button type="submit" disabled={isMutating}>
-                        Record pending operation
-                      </Button>
-                    </div>
-                  </form>
-                )}
-              </CardContent>
-            </Card>
+                  </CardContent>
+                </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Customer transactions</CardTitle>
-                <CardDescription>
-                  {startDate} through {endDate}. Customer and status filters apply to this period.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex flex-wrap gap-3">
-                  <Field label="Customer">
-                    <select
-                      value={customerFilter}
-                      onChange={(event) => setCustomerFilter(event.target.value)}
-                      className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-                    >
-                      <option value="all">All customers</option>
-                      {customers.map((customer) => (
-                        <option key={customer.id} value={customer.id}>
-                          {customer.name}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-                  <Field label="Account">
-                    <select
-                      value={transactionAccountFilter}
-                      onChange={(event) => setTransactionAccountFilter(event.target.value)}
-                      className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-                    >
-                      <option value="all">All accounts</option>
-                      {accounts.map((account) => (
-                        <option key={account.id} value={account.id}>
-                          {account.name}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-                  <Field label="Status">
-                    <select
-                      value={statusFilter}
-                      onChange={(event) => setStatusFilter(event.target.value)}
-                      className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-                    >
-                      {["all", "pending", "completed", "failed", "cancelled", "reversed"].map(
-                        (status) => (
-                          <option key={status} value={status}>
-                            {status}
-                          </option>
-                        ),
-                      )}
-                    </select>
-                  </Field>
-                </div>
-                {visibleTransactions.length === 0 ? (
-                  <p className="py-6 text-sm text-muted-foreground">
-                    No saved customer transactions match these filters.
-                  </p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[850px] text-sm">
-                      <thead className="text-left text-muted-foreground">
-                        <tr className="border-b">
-                          <th className="py-2 pr-4">Customer / reference</th>
-                          <th className="py-2 pr-4">Date</th>
-                          <th className="py-2 pr-4">HTG amount due</th>
-                          <th className="py-2 pr-4">USD sent</th>
-                          <th className="py-2 pr-4">Status</th>
-                          <th className="py-2 pr-4">Profit estimate</th>
-                          <th className="py-2 pr-4">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {visibleTransactions.map((transaction) => (
-                          <tr key={transaction.id} className="border-b align-top last:border-0">
-                            <td className="py-3 pr-4">
-                              {transaction.customerName}
-                              <span className="block text-xs text-muted-foreground">
-                                {transaction.reference ?? "No reference"}
-                              </span>
-                            </td>
-                            <td className="py-3 pr-4">
-                              {new Date(transaction.transactionDate).toLocaleString()}
-                            </td>
-                            <td className="py-3 pr-4">
-                              {formatBusinessMoney(transaction.htgReceived, "HTG")}
-                            </td>
-                            <td className="py-3 pr-4">
-                              {formatBusinessMoney(transaction.usdSent, "USD")}
-                            </td>
-                            <td className="py-3 pr-4">
-                              <StatusBadge status={transaction.status} />
-                            </td>
-                            <td className="py-3 pr-4">{renderProfit(transaction)}</td>
-                            <td className="py-3 pr-4">
-                              <OperationActions
-                                type="customer_transaction"
-                                id={transaction.id}
-                                status={transaction.status}
-                                disabled={isMutating}
-                                onAction={(action) =>
-                                  void changeStatus("customer_transaction", transaction.id, action)
-                                }
-                              />
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                <Card className="border-cyan-900/20 shadow-sm dark:border-[#173451]">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base">Résumé rapide</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <BusinessSummaryLine
+                      label="Paiements reçus (HTG)"
+                      value={metrics.totalCustomerReceipts}
+                      currency="HTG"
+                    />
+                    <BusinessSummaryLine
+                      label="Envoyé aux clients (USD)"
+                      value={metrics.totalUsdSentToCustomers}
+                      currency="USD"
+                    />
+                    <BusinessSummaryLine
+                      label="Frais et dépenses (USD)"
+                      value={metrics.totalBusinessExpenses}
+                      currency="USD"
+                    />
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
           </TabsContent>
 
           <TabsContent value="payments-loans" className="space-y-4">
@@ -5405,6 +5697,29 @@ function renderProfit(transaction: BusinessTransaction) {
       {formatBusinessMoney(result.netProfit, "USD")}
       {result.incomplete && <span className="block text-xs text-amber-700">Incomplete</span>}
     </span>
+  );
+}
+
+function formatActivityDate(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? new Date(`${value}T00:00:00`).toLocaleDateString()
+    : new Date(value).toLocaleString();
+}
+
+function BusinessSummaryLine({
+  label,
+  value,
+  currency,
+}: {
+  label: string;
+  value: number;
+  currency: string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 text-sm">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="shrink-0 font-semibold">{formatBusinessMoney(value, currency)}</span>
+    </div>
   );
 }
 
