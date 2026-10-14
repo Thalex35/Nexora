@@ -866,7 +866,8 @@ function BusinessPage() {
 
   async function onCreateCustomer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     try {
       await createCustomer.mutateAsync({
         name: readText(form, "name"),
@@ -874,7 +875,7 @@ function BusinessPage() {
         contact: readText(form, "contact"),
         notes: readText(form, "notes"),
       });
-      event.currentTarget.reset();
+      formElement.reset();
       toast.success("Customer saved.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Couldn't save the customer.");
@@ -935,10 +936,11 @@ function BusinessPage() {
 
   async function onCreateTransaction(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     try {
       await createTransaction.mutateAsync({
-        idempotencyKey: idempotencyKey(event.currentTarget),
+        idempotencyKey: idempotencyKey(formElement),
         customerId: readText(form, "customerId"),
         receiptAccountId: readText(form, "receiptAccountId"),
         payoutAccountId: readText(form, "payoutAccountId"),
@@ -954,8 +956,8 @@ function BusinessPage() {
         reference: readText(form, "reference"),
         notes: readText(form, "notes"),
       });
-      clearIdempotencyKey(event.currentTarget);
-      event.currentTarget.reset();
+      clearIdempotencyKey(formElement);
+      formElement.reset();
       setTransferNotes("");
       setEntryDialogOpen(false);
       toast.success("Customer operation recorded as pending. Confirm it to post ledger movements.");
@@ -1050,12 +1052,13 @@ function BusinessPage() {
 
   async function onCreateFunding(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     try {
       const sourceId = readText(form, "sourceAccountId");
       const isCrypto = readText(form, "fundingType").startsWith("crypto");
       await createFunding.mutateAsync({
-        idempotencyKey: idempotencyKey(event.currentTarget),
+        idempotencyKey: idempotencyKey(formElement),
         type: readText(form, "fundingType"),
         sourceAccountId: sourceId || null,
         destinationAccountId: readText(form, "destinationAccountId"),
@@ -1069,8 +1072,8 @@ function BusinessPage() {
         reference: readText(form, "reference"),
         notes: readText(form, "notes"),
       });
-      clearIdempotencyKey(event.currentTarget);
-      event.currentTarget.reset();
+      clearIdempotencyKey(formElement);
+      formElement.reset();
       setEntryDialogOpen(false);
       toast.success("Funding recorded as pending. Confirm it after the credit is verified.");
     } catch (error) {
@@ -1080,10 +1083,11 @@ function BusinessPage() {
 
   async function onCreateExpense(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     try {
       await createExpense.mutateAsync({
-        idempotencyKey: idempotencyKey(event.currentTarget),
+        idempotencyKey: idempotencyKey(formElement),
         accountId: readText(form, "accountId"),
         category: readText(form, "category"),
         amount: readNumber(form, "amount") ?? 0,
@@ -1092,8 +1096,8 @@ function BusinessPage() {
         date: readText(form, "expenseDate"),
         notes: readText(form, "notes"),
       });
-      clearIdempotencyKey(event.currentTarget);
-      event.currentTarget.reset();
+      clearIdempotencyKey(formElement);
+      formElement.reset();
       setExpenseDialogOpen(false);
       toast.success("Expense recorded as pending.");
     } catch (error) {
@@ -1122,7 +1126,8 @@ function BusinessPage() {
 
   async function onSaveRate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     try {
       await saveRate.mutateAsync({
         currency: readText(form, "currency"),
@@ -1130,7 +1135,7 @@ function BusinessPage() {
         date: readText(form, "effectiveDate"),
         notes: readText(form, "notes"),
       });
-      event.currentTarget.reset();
+      formElement.reset();
       toast.success("Exchange rate saved.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Couldn't save the exchange rate.");
