@@ -451,7 +451,7 @@ function CardDetailsPage() {
               <p className="border-t border-border pt-3 text-xs text-muted-foreground">
                 No real card credentials are stored or shown.
               </p>
-              <dl className="grid grid-cols-3 gap-2 border-t border-border pt-3">
+              <dl className="grid grid-cols-1 gap-2 border-t border-border pt-3 min-[420px]:grid-cols-3">
                 <div className="min-w-0 rounded-lg bg-surface/80 p-2.5">
                   <dt className="text-[11px] leading-snug text-muted-foreground">Subscriptions</dt>
                   <dd className="mt-1 text-lg font-semibold text-foreground">

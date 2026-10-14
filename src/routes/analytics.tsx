@@ -258,7 +258,7 @@ function AnalyticsPage() {
                     Recorded income and actual expenses in this period.
                   </p>
                 </div>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid gap-3 sm:grid-cols-3">
                   <SmallMetric label="Income" value={formatMoney(data.income)} />
                   <SmallMetric label="Expenses" value={formatMoney(data.expenses)} />
                   <SmallMetric label="Allocated" value={formatMoney(data.allocated)} />

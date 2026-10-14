@@ -1543,11 +1543,13 @@ function BusinessPage() {
     closeOperation.isPending ||
     reverseOperation.isPending ||
     saveRate.isPending;
+  const businessTabClass =
+    "h-auto min-h-9 min-w-0 whitespace-normal px-2 py-2 text-center text-xs leading-tight sm:whitespace-nowrap sm:px-3 sm:py-1 sm:text-sm";
 
   return (
     <AppShell>
-      <div className="business-theme space-y-5">
-        <header className="flex items-center justify-between gap-4">
+      <div className="business-theme min-w-0 space-y-5">
+        <header className="flex min-w-0 flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           <div className="flex min-w-0 items-center gap-3">
             <span className="grid size-11 shrink-0 place-items-center rounded-xl border border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-900 dark:bg-[#0b2540] dark:text-cyan-300">
               {activeTab === "expenses" ? (
@@ -1566,7 +1568,7 @@ function BusinessPage() {
                     ? "Prêts et paiements"
                     : "Business"}
               </h1>
-              <p className="mt-0.5 truncate text-sm text-muted-foreground">
+              <p className="mt-0.5 text-sm leading-relaxed text-muted-foreground">
                 {activeTab === "expenses"
                   ? "Suivez et gérez vos dépenses, prêts et paiements en un seul endroit."
                   : activeTab === "payments-loans"
@@ -1575,21 +1577,21 @@ function BusinessPage() {
               </p>
             </div>
           </div>
-          <Button size="sm" variant="outline" onClick={exportReport}>
+          <Button size="sm" variant="outline" className="w-full sm:w-auto" onClick={exportReport}>
             <ArrowDownToLine aria-hidden="true" /> Export CSV
           </Button>
         </header>
 
         <details className="group rounded-xl border bg-card px-4 py-3 shadow-sm">
-          <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-medium text-foreground [&::-webkit-details-marker]:hidden">
+          <summary className="flex cursor-pointer list-none flex-wrap items-start gap-2 text-sm font-medium text-foreground [&::-webkit-details-marker]:hidden sm:items-center">
             <CalendarDays className="size-4 text-primary" aria-hidden="true" />
-            Reporting period and currency
-            <span className="ml-auto text-xs text-muted-foreground">
+            <span className="min-w-0 flex-1">Reporting period and currency</span>
+            <span className="w-full pl-6 text-xs text-muted-foreground sm:ml-auto sm:w-auto sm:pl-0 sm:text-right">
               {startDate} — {endDate} · {reportingCurrency}
             </span>
           </summary>
-          <section className="flex flex-wrap items-end gap-3 pt-4 sm:gap-4">
-            <Field label="From">
+          <section className="grid gap-3 pt-4 sm:grid-cols-2 sm:items-end sm:gap-4 lg:flex lg:flex-wrap">
+            <Field label="From" className="block min-w-0 sm:min-w-40 lg:flex-1">
               <Input
                 type="date"
                 value={startDate}
@@ -1597,7 +1599,7 @@ function BusinessPage() {
                 onChange={(event) => setStartDate(event.target.value)}
               />
             </Field>
-            <Field label="To">
+            <Field label="To" className="block min-w-0 sm:min-w-40 lg:flex-1">
               <Input
                 type="date"
                 value={endDate}
@@ -1605,9 +1607,9 @@ function BusinessPage() {
                 onChange={(event) => setEndDate(event.target.value)}
               />
             </Field>
-            <Field label="Reporting currency">
+            <Field label="Reporting currency" className="block min-w-0 sm:col-span-2 lg:col-span-1">
               <select
-                className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm lg:w-auto"
                 value={reportingCurrency}
                 onChange={(event) => setReportingCurrency(event.target.value as BusinessCurrency)}
               >
@@ -1627,17 +1629,31 @@ function BusinessPage() {
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-5">
           <TabsList
-            className={`flex h-auto w-full justify-start gap-1 overflow-x-auto rounded-xl border bg-card p-1.5 shadow-sm ${
+            className={`grid h-auto w-full grid-cols-2 gap-1 rounded-xl border bg-card p-1.5 shadow-sm sm:flex sm:justify-start sm:overflow-x-auto ${
               activeTab === "overview" ? "sr-only" : ""
             }`}
           >
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="transactions">Transactions</TabsTrigger>
-            <TabsTrigger value="payments-loans">Payments & loans</TabsTrigger>
-            <TabsTrigger value="customers">Customers</TabsTrigger>
-            <TabsTrigger value="funding">Funding & accounts</TabsTrigger>
-            <TabsTrigger value="expenses">Dépenses</TabsTrigger>
-            <TabsTrigger value="reports">Reports</TabsTrigger>
+            <TabsTrigger className={businessTabClass} value="overview">
+              Overview
+            </TabsTrigger>
+            <TabsTrigger className={businessTabClass} value="transactions">
+              Transactions
+            </TabsTrigger>
+            <TabsTrigger className={businessTabClass} value="payments-loans">
+              Payments &amp; loans
+            </TabsTrigger>
+            <TabsTrigger className={businessTabClass} value="customers">
+              Customers
+            </TabsTrigger>
+            <TabsTrigger className={businessTabClass} value="funding">
+              Funding &amp; accounts
+            </TabsTrigger>
+            <TabsTrigger className={businessTabClass} value="expenses">
+              Dépenses
+            </TabsTrigger>
+            <TabsTrigger className={businessTabClass} value="reports">
+              Reports
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-5">
@@ -1762,14 +1778,14 @@ function BusinessPage() {
                 </div>
 
                 <Card className="min-w-0 border-slate-200 bg-white shadow-sm dark:border-[#173451] dark:bg-[#091a2e]">
-                  <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0 border-b border-slate-100 pb-3 dark:border-[#142d47]">
+                  <CardHeader className="flex flex-col items-stretch gap-3 space-y-0 border-b border-slate-100 pb-3 dark:border-[#142d47] sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex min-w-0 items-center gap-3">
                       <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-blue-100 text-blue-700 dark:bg-[#102f50] dark:text-blue-300">
                         <ArrowRight className="size-4" aria-hidden="true" />
                       </span>
                       <div className="min-w-0">
                         <CardTitle className="truncate text-base">Transactions récentes</CardTitle>
-                        <CardDescription className="truncate text-xs">
+                        <CardDescription className="text-xs leading-relaxed">
                           Transferts client · montants dus et paiements enregistrés
                         </CardDescription>
                       </div>
@@ -1777,7 +1793,7 @@ function BusinessPage() {
                     <Button
                       size="sm"
                       variant="outline"
-                      className="shrink-0 border-cyan-600 text-cyan-700 hover:bg-cyan-50 dark:border-cyan-700 dark:text-cyan-300 dark:hover:bg-cyan-950"
+                      className="w-full shrink-0 border-cyan-600 text-cyan-700 hover:bg-cyan-50 dark:border-cyan-700 dark:text-cyan-300 dark:hover:bg-cyan-950 sm:w-auto"
                       onClick={() => openEntryForm("transfer")}
                     >
                       <Plus className="size-4" aria-hidden="true" /> Nouvelle transaction
@@ -3710,7 +3726,11 @@ function BusinessPage() {
                             <Field label="Reason" className="block min-w-0 [&>span]:block">
                               <Input name="reason" required maxLength={500} />
                             </Field>
-                            <Button type="submit" className="w-full self-end" disabled={isMutating}>
+                            <Button
+                              type="submit"
+                              className="w-full self-end xl:mt-[1.625rem] xl:self-start"
+                              disabled={isMutating}
+                            >
                               Record adjustment
                             </Button>
                           </form>
@@ -4121,7 +4141,7 @@ function BusinessPage() {
           </TabsContent>
 
           <TabsContent value="payments-loans" className="space-y-4">
-            <div className="grid gap-3 grid-cols-2 min-[900px]:grid-cols-4">
+            <div className="grid gap-3 grid-cols-1 min-[420px]:grid-cols-2 min-[900px]:grid-cols-4">
               {[
                 {
                   label: "Prêts en cours",
@@ -4767,7 +4787,7 @@ function BusinessPage() {
                           <Button
                             type="submit"
                             size="lg"
-                            className="min-w-48 rounded-lg"
+                            className="w-full rounded-lg sm:w-auto sm:min-w-48"
                             disabled={isMutating}
                           >
                             Accorder le prêt
@@ -4875,7 +4895,7 @@ function BusinessPage() {
                           <Button
                             type="submit"
                             size="lg"
-                            className="min-w-56 rounded-lg"
+                            className="w-full rounded-lg sm:w-auto sm:min-w-56"
                             disabled={isMutating}
                           >
                             Enregistrer le remboursement
@@ -4992,7 +5012,7 @@ function BusinessPage() {
                           <Button
                             type="submit"
                             size="lg"
-                            className="min-w-48 rounded-lg"
+                            className="w-full rounded-lg sm:w-auto sm:min-w-48"
                             disabled={isMutating}
                           >
                             Enregistrer le paiement
@@ -6005,7 +6025,7 @@ function BusinessPage() {
           <TabsContent value="expenses" className="space-y-4">
             <div className="grid items-start gap-4 min-[900px]:grid-cols-[minmax(0,2.1fr)_minmax(240px,0.9fr)]">
               <section className="min-w-0 space-y-3" aria-label="Aperçu des dépenses">
-                <div className="grid gap-3 grid-cols-2 min-[900px]:grid-cols-4">
+                <div className="grid gap-3 grid-cols-1 min-[420px]:grid-cols-2 min-[900px]:grid-cols-4">
                   {[
                     {
                       label: "Dépenses totales",
@@ -7036,7 +7056,7 @@ function BusinessPage() {
                     <Button
                       type="submit"
                       size="lg"
-                      className="min-w-40 rounded-lg"
+                      className="w-full rounded-lg sm:w-auto sm:min-w-40"
                       disabled={isMutating}
                     >
                       Enregistrer

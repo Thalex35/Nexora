@@ -214,7 +214,7 @@ function LearningDetailPage() {
                 value={item.status}
                 onValueChange={(value) => void changeStatus(value as LearningItem["status"])}
               >
-                <SelectTrigger className="w-40" aria-label="Learning status">
+                <SelectTrigger className="w-full sm:w-40" aria-label="Learning status">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
