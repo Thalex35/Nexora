@@ -4509,16 +4509,16 @@ function BusinessPage() {
             </div>
 
             <Dialog open={loanActionDialogOpen} onOpenChange={setLoanActionDialogOpen}>
-              <DialogContent className="business-theme-dialog max-h-[92dvh] w-[calc(100vw-2rem)] max-w-3xl overflow-y-auto border-cyan-900/60 bg-background shadow-2xl sm:rounded-xl">
-                <DialogHeader>
-                  <DialogTitle>
+              <DialogContent className="business-theme-dialog max-h-[92dvh] w-[calc(100vw-2rem)] max-w-4xl overflow-y-auto border-cyan-900/60 bg-background p-5 shadow-2xl sm:rounded-xl sm:p-8">
+                <DialogHeader className="mb-2 space-y-2 pr-8 text-left">
+                  <DialogTitle className="text-xl font-semibold tracking-tight sm:text-2xl">
                     {loanAction === "loan"
                       ? "Accorder un prêt"
                       : loanAction === "payment"
                         ? "Encaisser un paiement client"
                         : "Enregistrer un remboursement"}
                   </DialogTitle>
-                  <DialogDescription>
+                  <DialogDescription className="max-w-2xl text-sm leading-relaxed">
                     Les opérations utilisent les comptes et règles comptables déjà configurés pour
                     votre activité.
                   </DialogDescription>
@@ -4529,12 +4529,27 @@ function BusinessPage() {
                     setLoanAction(value as "loan" | "payment" | "repayment")
                   }
                 >
-                  <TabsList className="grid h-auto w-full grid-cols-3">
-                    <TabsTrigger value="loan">Nouveau prêt</TabsTrigger>
-                    <TabsTrigger value="repayment">Remboursement</TabsTrigger>
-                    <TabsTrigger value="payment">Paiement client</TabsTrigger>
+                  <TabsList className="grid h-auto w-full grid-cols-3 gap-1 rounded-xl p-1.5">
+                    <TabsTrigger
+                      value="loan"
+                      className="min-h-10 rounded-lg px-2 py-2.5 text-xs sm:text-sm"
+                    >
+                      Nouveau prêt
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="repayment"
+                      className="min-h-10 rounded-lg px-2 py-2.5 text-xs sm:text-sm"
+                    >
+                      Remboursement
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="payment"
+                      className="min-h-10 rounded-lg px-2 py-2.5 text-xs sm:text-sm"
+                    >
+                      Paiement client
+                    </TabsTrigger>
                   </TabsList>
-                  <TabsContent value="loan">
+                  <TabsContent value="loan" className="mt-5">
                     {customers.length === 0 || accounts.length === 0 ? (
                       <p className="py-4 text-sm text-muted-foreground">
                         Créez un client et un compte avant d’accorder un prêt.
@@ -4542,13 +4557,27 @@ function BusinessPage() {
                     ) : (
                       <form
                         id="business-loan-form"
-                        className="grid gap-3 sm:grid-cols-2"
+                        className="grid gap-x-6 gap-y-6 rounded-2xl border border-cyan-900/70 bg-[#04172b]/60 p-4 sm:grid-cols-2 sm:p-6"
                         onSubmit={(event) => void onCreateLoan(event)}
                       >
+                        <div className="flex items-start gap-3 sm:col-span-2">
+                          <span className="grid size-10 shrink-0 place-items-center rounded-xl border border-cyan-800/70 bg-cyan-500/10 text-cyan-300">
+                            <HandCoins className="size-5" aria-hidden="true" />
+                          </span>
+                          <div>
+                            <h3 className="text-sm font-semibold text-foreground">
+                              Informations du prêt
+                            </h3>
+                            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                              Choisissez l’emprunteur et le compte, puis définissez le montant et
+                              les conditions de remboursement.
+                            </p>
+                          </div>
+                        </div>
                         <Field label="Emprunteur">
                           <select
                             name="loanCustomerId"
-                            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                            className="h-11 w-full rounded-lg border border-input bg-background px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/60"
                             required
                           >
                             {customers.map((customer) => (
@@ -4561,7 +4590,7 @@ function BusinessPage() {
                         <Field label="Compte de décaissement">
                           <select
                             name="loanAccountId"
-                            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                            className="h-11 w-full rounded-lg border border-input bg-background px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/60"
                             required
                           >
                             {accounts.map((account) => (
@@ -4577,6 +4606,8 @@ function BusinessPage() {
                             type="number"
                             min="0.01"
                             step="0.01"
+                            placeholder="0,00"
+                            className="h-11 rounded-lg"
                             required
                           />
                         </Field>
@@ -4585,35 +4616,52 @@ function BusinessPage() {
                             name="loanIssuedDate"
                             type="date"
                             defaultValue={today()}
+                            className="h-11 rounded-lg"
                             required
                           />
                         </Field>
                         <Field label="Date d’échéance (facultatif)">
-                          <Input name="loanDueDate" type="date" />
+                          <Input name="loanDueDate" type="date" className="h-11 rounded-lg" />
                         </Field>
-                        <Field label="Intérêts convenus">
+                        <Field label="Intérêts convenus" hint="Montant total prévu sur ce prêt.">
                           <Input
                             name="loanInterest"
                             type="number"
                             min="0"
                             step="0.01"
                             defaultValue="0"
+                            className="h-11 rounded-lg"
                           />
                         </Field>
-                        <Field label="Frais convenus">
+                        <Field label="Frais convenus" hint="Frais additionnels à percevoir.">
                           <Input
                             name="loanFee"
                             type="number"
                             min="0"
                             step="0.01"
                             defaultValue="0"
+                            className="h-11 rounded-lg"
                           />
                         </Field>
                         <Field label="Notes (facultatif)">
-                          <Input name="loanNotes" maxLength={1000} />
+                          <Input
+                            name="loanNotes"
+                            maxLength={1000}
+                            placeholder="Ajouter un détail utile au suivi…"
+                            className="h-11 rounded-lg"
+                          />
                         </Field>
-                        <div className="flex items-end">
-                          <Button type="submit" disabled={isMutating}>
+                        <div className="flex flex-col-reverse gap-3 border-t border-cyan-900/60 pt-5 sm:col-span-2 sm:flex-row sm:items-center sm:justify-between">
+                          <p className="max-w-sm text-xs leading-relaxed text-muted-foreground">
+                            Le capital sera débité du compte choisi et suivi comme un solde à
+                            recevoir.
+                          </p>
+                          <Button
+                            type="submit"
+                            size="lg"
+                            className="min-w-48 rounded-lg"
+                            disabled={isMutating}
+                          >
                             Accorder le prêt
                           </Button>
                         </div>
