@@ -518,3 +518,36 @@ body:has(.business-theme) main {
   color: #e5f3ff;
   box-shadow: 0 24px 80px rgb(0 0 0 / 55%);
 }
+
+.business-theme button[data-expense-action="expense"] {
+  border-color: #0c7773;
+  background-color: #07514f;
+  color: #e0fffc;
+}
+
+.business-theme button[data-expense-action="expense"]:hover:not(:disabled) {
+  border-color: #10b8ad;
+  background-color: #086763;
+}
+
+.business-theme button[data-expense-action="loan"] {
+  border-color: #185a9d;
+  background-color: #103f78;
+  color: #e5f1ff;
+}
+
+.business-theme button[data-expense-action="loan"]:hover:not(:disabled) {
+  border-color: #398df7;
+  background-color: #14519a;
+}
+
+.business-theme button[data-expense-action="payment"] {
+  border-color: #5946a8;
+  background-color: #342b70;
+  color: #f1ebff;
+}
+
+.business-theme button[data-expense-action="payment"]:hover:not(:disabled) {
+  border-color: #8d6cf0;
+  background-color: #45398f;
+}
