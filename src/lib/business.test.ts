@@ -54,6 +54,13 @@ const unreverseTransactionMigration = readFileSync(
   ),
   "utf8",
 );
+const legacyReversalSupportMigration = readFileSync(
+  new URL(
+    "../../supabase/migrations/20261014170000_business_unreverse_legacy_reversal_support.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
 const businessDataSource = readFileSync(new URL("./business-data.ts", import.meta.url), "utf8");
 
 const accounts: BusinessAccount[] = [
@@ -618,6 +625,18 @@ test("reversed customer transactions can be safely restored for editing", () => 
     /GRANT EXECUTE ON FUNCTION public\.unreverse_business_customer_transaction\(UUID\) TO authenticated/,
   );
   assert.match(businessDataSource, /rpc\("unreverse_business_customer_transaction"/);
+  assert.match(
+    legacyReversalSupportMigration,
+    /FROM public\.business_audit_log[\s\S]*entity_type = 'customer_transaction'[\s\S]*action = 'reversed'/,
+  );
+  assert.match(
+    legacyReversalSupportMigration,
+    /source_type = 'reversal'[\s\S]*source_id = p_transaction_id[\s\S]*created_at = v_reversal_at/,
+  );
+  assert.doesNotMatch(
+    legacyReversalSupportMigration,
+    /strpos\(event_type, 'operation_reversal_'\)/,
+  );
 });
 
 test("non-USD expenses without a recorded rate are marked incomplete and not guessed", () => {
