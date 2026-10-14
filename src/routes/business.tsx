@@ -159,6 +159,21 @@ function readText(data: FormData, key: string) {
   return String(data.get(key) ?? "").trim();
 }
 
+function frenchBusinessStatus(status: string) {
+  const labels: Record<string, string> = {
+    active: "En cours",
+    cancelled: "Annulée",
+    completed: "Payée",
+    failed: "Échouée",
+    overdue: "En retard",
+    partially_repaid: "Partiellement remboursé",
+    pending: "En attente",
+    repaid: "Remboursé",
+    reversed: "Inversée",
+  };
+  return labels[status.toLowerCase()] ?? status.replaceAll("_", " ");
+}
+
 function readNumber(data: FormData, key: string, optional = false): number | null {
   const value = readText(data, key);
   if (optional && value === "") return null;
@@ -193,7 +208,7 @@ function Field({ label, children, hint }: { label: string; children: ReactNode; 
   );
 }
 
-function StatusBadge({ status }: { status: string }) {
+function StatusBadge({ status, label }: { status: string; label?: string }) {
   const normalizedStatus = status.toLowerCase();
   const statusClass = ["completed", "fully_paid", "repaid", "received"].includes(normalizedStatus)
     ? "border-emerald-500/20 bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"
@@ -207,7 +222,7 @@ function StatusBadge({ status }: { status: string }) {
 
   return (
     <Badge variant="outline" className={`whitespace-nowrap capitalize ${statusClass}`}>
-      {status.replaceAll("_", " ")}
+      {label ?? status.replaceAll("_", " ")}
     </Badge>
   );
 }
@@ -267,6 +282,7 @@ function BusinessPage() {
   const [reportingCurrency, setReportingCurrency] = useState<BusinessCurrency>("USD");
   const [activeTab, setActiveTab] = useState("overview");
   const [accountDialogOpen, setAccountDialogOpen] = useState(false);
+  const [expenseDialogOpen, setExpenseDialogOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<BusinessAccount | null>(null);
   const [accountToDelete, setAccountToDelete] = useState<BusinessAccount | null>(null);
   const [meruBalanceVisible, setMeruBalanceVisible] = useState(true);
@@ -297,6 +313,15 @@ function BusinessPage() {
 
   function clearIdempotencyKey(form: HTMLFormElement) {
     idempotencyKeys.current.delete(form);
+  }
+
+  function navigateToBusinessSection(tab: string, sectionId: string) {
+    setActiveTab(tab);
+    window.setTimeout(
+      () =>
+        document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" }),
+      0,
+    );
   }
 
   function openEntryForm(type: "transfer" | "deposit" | "loan") {
@@ -369,6 +394,95 @@ function BusinessPage() {
       ),
     [endDate, loanRepayments, startDate],
   );
+  const periodLoans = loans
+    .filter((loan) => loan.issuedDate >= startDate && loan.issuedDate <= endDate)
+    .sort((left, right) => right.issuedDate.localeCompare(left.issuedDate));
+  const recentExpenses = [...periodExpenses]
+    .sort((left, right) => right.date.localeCompare(left.date))
+    .slice(0, 5);
+  const expenseTotalSummary = periodExpenses
+    .filter((expense) => expense.status === "completed")
+    .reduce(
+      (summary, expense) => {
+        const value = convertToReportingCurrency(
+          expense.amount,
+          expense.currency,
+          reportingCurrency,
+          rates,
+        );
+        if (value === null) summary.incomplete = true;
+        else summary.total += value;
+        return summary;
+      },
+      { total: 0, incomplete: false },
+    );
+  const loanIssuedSummary = periodLoans.reduce(
+    (summary, loan) => {
+      const value = convertToReportingCurrency(
+        loan.principalAmount,
+        loan.currency,
+        reportingCurrency,
+        rates,
+      );
+      if (value === null) summary.incomplete = true;
+      else summary.total += value;
+      return summary;
+    },
+    { total: 0, incomplete: false },
+  );
+  const receivedPaymentSummary = [...periodPayments, ...periodLoanRepayments].reduce(
+    (summary, payment) => {
+      const value = convertToReportingCurrency(
+        payment.amount,
+        payment.currency,
+        reportingCurrency,
+        rates,
+      );
+      if (value === null) summary.incomplete = true;
+      else summary.total += value;
+      return summary;
+    },
+    { total: 0, incomplete: false },
+  );
+  const remainingLoanSummary = loans.reduce(
+    (summary, loan) => {
+      const due = loanAmountsDue(loan, loanRepayments);
+      const value = convertToReportingCurrency(
+        due.principal + due.interest + due.fee,
+        loan.currency,
+        reportingCurrency,
+        rates,
+      );
+      if (value === null) summary.incomplete = true;
+      else summary.total += value;
+      return summary;
+    },
+    { total: 0, incomplete: false },
+  );
+  const recentPayments = [
+    ...periodPayments.map((payment) => ({
+      id: payment.id,
+      date: payment.paymentDate,
+      person:
+        transactions.find((transaction) => transaction.id === payment.customerTransactionId)
+          ?.customerName ?? "Client",
+      kind: "Paiement",
+      amount: payment.amount,
+      currency: payment.currency,
+      status: "completed",
+    })),
+    ...periodLoanRepayments.map((repayment) => ({
+      id: repayment.id,
+      date: repayment.repaymentDate,
+      person: loans.find((loan) => loan.id === repayment.loanId)?.customerName ?? "Emprunteur",
+      kind: "Remboursement",
+      amount: repayment.amount,
+      currency: repayment.currency,
+      status: "completed",
+    })),
+  ]
+    .sort((left, right) => right.date.localeCompare(left.date))
+    .slice(0, 5);
   const metrics = calculateBusinessMetrics({
     accounts,
     transactions: periodTransactions,
@@ -939,6 +1053,7 @@ function BusinessPage() {
       });
       clearIdempotencyKey(event.currentTarget);
       event.currentTarget.reset();
+      setExpenseDialogOpen(false);
       toast.success("Expense recorded as pending.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Couldn't record the expense.");
@@ -1330,12 +1445,20 @@ function BusinessPage() {
         <header className="flex items-center justify-between gap-4">
           <div className="flex min-w-0 items-center gap-3">
             <span className="grid size-11 shrink-0 place-items-center rounded-xl border border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-900 dark:bg-[#0b2540] dark:text-cyan-300">
-              <BriefcaseBusiness className="size-5" aria-hidden="true" />
+              {activeTab === "expenses" ? (
+                <Receipt className="size-5" aria-hidden="true" />
+              ) : (
+                <BriefcaseBusiness className="size-5" aria-hidden="true" />
+              )}
             </span>
             <div className="min-w-0">
-              <h1 className="truncate text-2xl font-semibold text-foreground">Business</h1>
+              <h1 className="truncate text-2xl font-semibold text-foreground">
+                {activeTab === "expenses" ? "Dépenses" : "Business"}
+              </h1>
               <p className="mt-0.5 truncate text-sm text-muted-foreground">
-                Gérez vos transferts Meru, suivez vos clients, prêts et revenus.
+                {activeTab === "expenses"
+                  ? "Suivez et gérez vos dépenses, prêts et paiements en un seul endroit."
+                  : "Gérez vos transferts Meru, suivez vos clients, prêts et revenus."}
               </p>
             </div>
           </div>
@@ -1400,7 +1523,7 @@ function BusinessPage() {
             <TabsTrigger value="payments-loans">Payments & loans</TabsTrigger>
             <TabsTrigger value="customers">Customers</TabsTrigger>
             <TabsTrigger value="funding">Funding & accounts</TabsTrigger>
-            <TabsTrigger value="expenses">Expenses</TabsTrigger>
+            <TabsTrigger value="expenses">Dépenses</TabsTrigger>
             <TabsTrigger value="reports">Reports</TabsTrigger>
           </TabsList>
 
@@ -3462,7 +3585,7 @@ function BusinessPage() {
             </details>
           </TabsContent>
 
-          <TabsContent value="transactions" className="space-y-4">
+          <TabsContent id="business-transactions-panel" value="transactions" className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-3">
               {[
                 {
@@ -3854,6 +3977,7 @@ function BusinessPage() {
                   </p>
                 ) : (
                   <form
+                    id="business-payment-form"
                     className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
                     onSubmit={(event) => void onCreatePayment(event)}
                   >
@@ -3984,7 +4108,7 @@ function BusinessPage() {
                     </table>
                   </div>
                 )}
-                <div className="overflow-x-auto">
+                <div id="business-payment-history" className="overflow-x-auto">
                   <h3 className="mb-2 font-medium">Payment history</h3>
                   {payments.length === 0 ? (
                     <p className="text-sm text-muted-foreground">No payments recorded.</p>
@@ -4046,6 +4170,7 @@ function BusinessPage() {
                   </p>
                 ) : (
                   <form
+                    id="business-loan-form"
                     className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
                     onSubmit={(event) => void onCreateLoan(event)}
                   >
@@ -4183,7 +4308,7 @@ function BusinessPage() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card id="business-loan-balances">
               <CardHeader>
                 <CardTitle>Loan balances and repayment history</CardTitle>
                 <CardDescription>
@@ -5332,25 +5457,433 @@ function BusinessPage() {
           </TabsContent>
 
           <TabsContent value="expenses" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Record business expense</CardTitle>
-                <CardDescription>
-                  Choose the account and currency actually paid. Set the recorded USD-per-unit rate
-                  for non-USD expenses; missing rates remain visibly incomplete.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
+            <div className="grid items-start gap-4 min-[900px]:grid-cols-[minmax(0,2.1fr)_minmax(240px,0.9fr)]">
+              <section className="min-w-0 space-y-3" aria-label="Aperçu des dépenses">
+                <div className="grid gap-3 grid-cols-2 min-[900px]:grid-cols-4">
+                  {[
+                    {
+                      label: "Dépenses totales",
+                      value: formatBusinessMoney(expenseTotalSummary.total, reportingCurrency),
+                      detail: expenseTotalSummary.incomplete
+                        ? "Conversion incomplète"
+                        : "Dépenses confirmées",
+                      icon: Receipt,
+                      tone: "text-rose-400",
+                    },
+                    {
+                      label: "Prêts accordés",
+                      value: formatBusinessMoney(loanIssuedSummary.total, reportingCurrency),
+                      detail: `${periodLoans.length} prêt${periodLoans.length === 1 ? "" : "s"} sur la période`,
+                      icon: HandCoins,
+                      tone: "text-blue-400",
+                    },
+                    {
+                      label: "Paiements reçus",
+                      value: formatBusinessMoney(receivedPaymentSummary.total, reportingCurrency),
+                      detail: receivedPaymentSummary.incomplete
+                        ? "Conversion incomplète"
+                        : "Paiements et remboursements",
+                      icon: ArrowDownToLine,
+                      tone: "text-teal-300",
+                    },
+                    {
+                      label: "Solde restant des prêts",
+                      value: formatBusinessMoney(remainingLoanSummary.total, reportingCurrency),
+                      detail: remainingLoanSummary.incomplete
+                        ? "Conversion incomplète"
+                        : "Principal, intérêts et frais",
+                      icon: Wallet,
+                      tone: "text-cyan-300",
+                    },
+                  ].map((item) => (
+                    <Card
+                      key={item.label}
+                      className="border-cyan-900/60 bg-[#061b32] shadow-sm transition-colors hover:border-cyan-700/80"
+                    >
+                      <CardContent className="flex min-h-24 items-start gap-3 p-3">
+                        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-cyan-500/15">
+                          <item.icon className={`size-4 ${item.tone}`} aria-hidden="true" />
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-xs text-muted-foreground">{item.label}</p>
+                          <p className="mt-1 truncate text-lg font-semibold">{item.value}</p>
+                          <p className="mt-1 text-[10px] text-muted-foreground">{item.detail}</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+
+                <Card id="business-recent-expenses" className="overflow-hidden border-cyan-900/60">
+                  <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-cyan-900/60 px-4 py-3">
+                    <div>
+                      <CardTitle className="text-sm">Dépenses récentes</CardTitle>
+                      <CardDescription className="text-xs">
+                        Les dernières dépenses enregistrées sur la période.
+                      </CardDescription>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setTransactionTypeFilter("expense");
+                        navigateToBusinessSection("transactions", "business-transactions-panel");
+                      }}
+                    >
+                      Voir tout <ChevronRight className="ml-1 size-3.5" aria-hidden="true" />
+                    </Button>
+                  </CardHeader>
+                  {recentExpenses.length === 0 ? (
+                    <CardContent className="px-5 py-8 text-center">
+                      <Receipt
+                        className="mx-auto size-7 text-muted-foreground"
+                        aria-hidden="true"
+                      />
+                      <p className="mt-2 text-sm font-medium">Aucune dépense sur cette période</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Ajoutez une dépense pour la voir apparaître ici.
+                      </p>
+                    </CardContent>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[620px] text-xs">
+                        <thead>
+                          <tr className="border-b border-cyan-900/60 text-left text-[10px] text-muted-foreground">
+                            <th className="px-4 py-2">Date</th>
+                            <th className="px-3 py-2">Description</th>
+                            <th className="px-3 py-2">Catégorie</th>
+                            <th className="px-3 py-2 text-right">Montant</th>
+                            <th className="px-3 py-2">Statut</th>
+                            <th className="px-3 py-2 text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {recentExpenses.map((expense) => (
+                            <tr
+                              key={expense.id}
+                              className="border-b border-cyan-950/80 last:border-0"
+                            >
+                              <td className="whitespace-nowrap px-4 py-2.5 text-muted-foreground">
+                                {new Date(`${expense.date}T12:00:00`).toLocaleDateString("fr-FR", {
+                                  day: "2-digit",
+                                  month: "short",
+                                  year: "numeric",
+                                })}
+                              </td>
+                              <td className="max-w-40 truncate px-3 py-2.5">
+                                {expense.notes || expense.category}
+                              </td>
+                              <td className="px-3 py-2.5">
+                                <Badge variant="secondary" className="max-w-36 truncate">
+                                  {expense.category}
+                                </Badge>
+                              </td>
+                              <td className="whitespace-nowrap px-3 py-2.5 text-right font-medium">
+                                {formatBusinessMoney(expense.amount, expense.currency)}
+                              </td>
+                              <td className="px-3 py-2.5">
+                                <StatusBadge
+                                  status={expense.status}
+                                  label={frenchBusinessStatus(expense.status)}
+                                />
+                              </td>
+                              <td className="px-3 py-2.5 text-right">
+                                <OperationActions
+                                  type="expense"
+                                  id={expense.id}
+                                  status={expense.status}
+                                  disabled={isMutating}
+                                  onAction={(action) =>
+                                    void changeStatus("expense", expense.id, action)
+                                  }
+                                />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </Card>
+
+                <Card id="business-recent-loans" className="overflow-hidden border-cyan-900/60">
+                  <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-cyan-900/60 px-4 py-3">
+                    <div>
+                      <CardTitle className="text-sm">Prêts</CardTitle>
+                      <CardDescription className="text-xs">
+                        Vos prêts accordés et leur solde restant.
+                      </CardDescription>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        navigateToBusinessSection("payments-loans", "business-loan-balances")
+                      }
+                    >
+                      Voir tout <ChevronRight className="ml-1 size-3.5" aria-hidden="true" />
+                    </Button>
+                  </CardHeader>
+                  {periodLoans.length === 0 ? (
+                    <CardContent className="py-7 text-center text-xs text-muted-foreground">
+                      Aucun prêt accordé sur cette période.
+                    </CardContent>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[620px] text-xs">
+                        <thead>
+                          <tr className="border-b border-cyan-900/60 text-left text-[10px] text-muted-foreground">
+                            <th className="px-4 py-2">Date</th>
+                            <th className="px-3 py-2">Emprunteur</th>
+                            <th className="px-3 py-2">Montant du prêt</th>
+                            <th className="px-3 py-2">Solde restant</th>
+                            <th className="px-3 py-2">Statut</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {periodLoans.slice(0, 5).map((loan) => {
+                            const due = loanAmountsDue(loan, loanRepayments);
+                            const balance = due.principal + due.interest + due.fee;
+                            const loanStatus =
+                              balance <= 0
+                                ? "repaid"
+                                : loan.dueDate && loan.dueDate < today()
+                                  ? "overdue"
+                                  : loan.status;
+                            return (
+                              <tr
+                                key={loan.id}
+                                className="border-b border-cyan-950/80 last:border-0"
+                              >
+                                <td className="whitespace-nowrap px-4 py-2.5 text-muted-foreground">
+                                  {new Date(`${loan.issuedDate}T12:00:00`).toLocaleDateString(
+                                    "fr-FR",
+                                    { day: "2-digit", month: "short", year: "numeric" },
+                                  )}
+                                </td>
+                                <td className="px-3 py-2.5">{loan.customerName}</td>
+                                <td className="whitespace-nowrap px-3 py-2.5">
+                                  {formatBusinessMoney(loan.principalAmount, loan.currency)}
+                                </td>
+                                <td className="whitespace-nowrap px-3 py-2.5 font-medium">
+                                  {formatBusinessMoney(balance, loan.currency)}
+                                </td>
+                                <td className="px-3 py-2.5">
+                                  <StatusBadge
+                                    status={loanStatus}
+                                    label={frenchBusinessStatus(loanStatus)}
+                                  />
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </Card>
+
+                <Card id="business-recent-payments" className="overflow-hidden border-cyan-900/60">
+                  <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-cyan-900/60 px-4 py-3">
+                    <div>
+                      <CardTitle className="text-sm">Paiements</CardTitle>
+                      <CardDescription className="text-xs">
+                        Paiements clients reçus et remboursements de prêts.
+                      </CardDescription>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        navigateToBusinessSection("payments-loans", "business-payment-history")
+                      }
+                    >
+                      Voir tout <ChevronRight className="ml-1 size-3.5" aria-hidden="true" />
+                    </Button>
+                  </CardHeader>
+                  {recentPayments.length === 0 ? (
+                    <CardContent className="py-7 text-center text-xs text-muted-foreground">
+                      Aucun paiement enregistré sur cette période.
+                    </CardContent>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[600px] text-xs">
+                        <thead>
+                          <tr className="border-b border-cyan-900/60 text-left text-[10px] text-muted-foreground">
+                            <th className="px-4 py-2">Date</th>
+                            <th className="px-3 py-2">Bénéficiaire</th>
+                            <th className="px-3 py-2">Type</th>
+                            <th className="px-3 py-2 text-right">Montant</th>
+                            <th className="px-3 py-2">Statut</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {recentPayments.map((payment) => (
+                            <tr
+                              key={payment.id}
+                              className="border-b border-cyan-950/80 last:border-0"
+                            >
+                              <td className="whitespace-nowrap px-4 py-2.5 text-muted-foreground">
+                                {new Date(`${payment.date}T12:00:00`).toLocaleDateString("fr-FR", {
+                                  day: "2-digit",
+                                  month: "short",
+                                  year: "numeric",
+                                })}
+                              </td>
+                              <td className="px-3 py-2.5">{payment.person}</td>
+                              <td className="px-3 py-2.5">
+                                <Badge variant="secondary">{payment.kind}</Badge>
+                              </td>
+                              <td className="whitespace-nowrap px-3 py-2.5 text-right font-medium">
+                                {formatBusinessMoney(payment.amount, payment.currency)}
+                              </td>
+                              <td className="px-3 py-2.5">
+                                <StatusBadge
+                                  status={payment.status}
+                                  label={frenchBusinessStatus(payment.status)}
+                                />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </Card>
+              </section>
+
+              <aside className="space-y-3">
+                <Card className="border-cyan-900/60">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-sm">
+                      <Zap className="size-4 text-amber-300" aria-hidden="true" />
+                      Actions rapides
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      data-expense-action="expense"
+                      className="h-10 w-full justify-start gap-3 border-teal-700/60 bg-teal-500/10 text-left"
+                      onClick={() => setExpenseDialogOpen(true)}
+                    >
+                      <span className="grid size-7 place-items-center rounded-md bg-teal-500/20 text-teal-300">
+                        <Receipt className="size-4" aria-hidden="true" />
+                      </span>
+                      Ajouter une dépense
+                      <ChevronRight className="ml-auto size-4" aria-hidden="true" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      data-expense-action="loan"
+                      className="h-10 w-full justify-start gap-3 border-blue-700/60 bg-blue-500/10 text-left"
+                      onClick={() =>
+                        navigateToBusinessSection("payments-loans", "business-loan-form")
+                      }
+                    >
+                      <span className="grid size-7 place-items-center rounded-md bg-blue-500/20 text-blue-300">
+                        <HandCoins className="size-4" aria-hidden="true" />
+                      </span>
+                      Ajouter un prêt
+                      <ChevronRight className="ml-auto size-4" aria-hidden="true" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      data-expense-action="payment"
+                      className="h-10 w-full justify-start gap-3 border-violet-700/60 bg-violet-500/10 text-left"
+                      onClick={() =>
+                        navigateToBusinessSection("payments-loans", "business-payment-form")
+                      }
+                    >
+                      <span className="grid size-7 place-items-center rounded-md bg-violet-500/20 text-violet-300">
+                        <CircleDollarSign className="size-4" aria-hidden="true" />
+                      </span>
+                      Ajouter un paiement
+                      <ChevronRight className="ml-auto size-4" aria-hidden="true" />
+                    </Button>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-cyan-900/60">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-sm">
+                      <ChartNoAxesCombined className="size-4 text-teal-300" aria-hidden="true" />
+                      Résumé financier
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <BusinessSummaryLine
+                      label="Dépenses totales"
+                      value={expenseTotalSummary.total}
+                      currency={reportingCurrency}
+                    />
+                    <BusinessSummaryLine
+                      label="Prêts (solde restant)"
+                      value={remainingLoanSummary.total}
+                      currency={reportingCurrency}
+                    />
+                    <BusinessSummaryLine
+                      label="Paiements effectués"
+                      value={receivedPaymentSummary.total}
+                      currency={reportingCurrency}
+                    />
+                    <div className="border-t border-cyan-800/70 pt-3">
+                      <BusinessSummaryLine
+                        label="Net reçu − dépenses"
+                        value={receivedPaymentSummary.total - expenseTotalSummary.total}
+                        currency={reportingCurrency}
+                        accent
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="relative isolate min-h-36 overflow-hidden border-cyan-900/60">
+                  <CardContent className="relative flex gap-3 p-4">
+                    <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-cyan-500/15 text-cyan-300">
+                      <Info className="size-4" aria-hidden="true" />
+                    </span>
+                    <div>
+                      <p className="text-sm font-semibold">Conseil</p>
+                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                        Séparez les dépenses réelles des frais déjà inclus dans les opérations afin
+                        d’éviter de les compter deux fois.
+                      </p>
+                    </div>
+                  </CardContent>
+                  <div
+                    className="pointer-events-none absolute -bottom-12 -right-5 size-32 rounded-full border-[14px] border-cyan-500/10"
+                    aria-hidden="true"
+                  />
+                </Card>
+              </aside>
+            </div>
+
+            <Dialog open={expenseDialogOpen} onOpenChange={setExpenseDialogOpen}>
+              <DialogContent className="business-theme-dialog max-h-[90dvh] overflow-y-auto sm:max-w-3xl">
+                <DialogHeader>
+                  <DialogTitle>Ajouter une dépense</DialogTitle>
+                  <DialogDescription>
+                    Choisissez le compte réellement débité. Les frais déjà saisis dans une opération
+                    ne doivent pas être enregistrés une seconde fois.
+                  </DialogDescription>
+                </DialogHeader>
                 {accounts.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
-                    Create an account before recording expenses.
+                    Créez d’abord un compte dans Financement et comptes.
                   </p>
                 ) : (
                   <form
-                    className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
+                    className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3"
                     onSubmit={(event) => void onCreateExpense(event)}
                   >
-                    <Field label="Paid from">
+                    <Field label="Payé depuis">
                       <select
                         name="accountId"
                         className="h-9 rounded-md border border-input bg-background px-3 text-sm"
@@ -5363,10 +5896,10 @@ function BusinessPage() {
                         ))}
                       </select>
                     </Field>
-                    <Field label="Category">
+                    <Field label="Catégorie">
                       <Input name="category" required maxLength={100} />
                     </Field>
-                    <Field label="Amount">
+                    <Field label="Montant">
                       <Input
                         name="amount"
                         type="number"
@@ -5375,7 +5908,7 @@ function BusinessPage() {
                         required
                       />
                     </Field>
-                    <Field label="Currency">
+                    <Field label="Devise">
                       <Input
                         name="currency"
                         defaultValue="USD"
@@ -5384,69 +5917,22 @@ function BusinessPage() {
                         required
                       />
                     </Field>
-                    <Field label="USD per unit (required for non-USD)">
+                    <Field label="USD par unité (requis hors USD)">
                       <Input name="usdRate" type="number" min="0.00000001" step="0.00000001" />
                     </Field>
-                    <Field label="Expense date">
+                    <Field label="Date de dépense">
                       <Input name="expenseDate" type="date" defaultValue={today()} required />
                     </Field>
                     <Field label="Notes">
                       <Input name="notes" />
                     </Field>
-                    <Button
-                      type="submit"
-                      className="sm:col-span-2 xl:col-span-4"
-                      disabled={isMutating}
-                    >
-                      Record pending expense
+                    <Button type="submit" className="self-end" disabled={isMutating}>
+                      Enregistrer la dépense en attente
                     </Button>
                   </form>
                 )}
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle>Expenses</CardTitle>
-                <CardDescription>
-                  Operation-level fees are recorded on the customer transaction. Do not re-enter
-                  those same fees here.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {periodExpenses.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    No saved expenses in this reporting period.
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    {periodExpenses.map((expense) => {
-                      return (
-                        <div
-                          key={expense.id}
-                          className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3 text-sm"
-                        >
-                          <div>
-                            <p className="font-medium">{expense.category}</p>
-                            <p className="text-muted-foreground">
-                              {expense.date} · {expense.notes ?? ""}
-                            </p>
-                          </div>
-                          <span>{formatBusinessMoney(expense.amount, expense.currency)}</span>
-                          <StatusBadge status={expense.status} />
-                          <OperationActions
-                            type="expense"
-                            id={expense.id}
-                            status={expense.status}
-                            disabled={isMutating}
-                            onAction={(action) => void changeStatus("expense", expense.id, action)}
-                          />
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+              </DialogContent>
+            </Dialog>
           </TabsContent>
 
           <TabsContent value="reports" className="space-y-4">
@@ -5832,15 +6318,19 @@ function BusinessSummaryLine({
   label,
   value,
   currency,
+  accent = false,
 }: {
   label: string;
   value: number;
   currency: string;
+  accent?: boolean;
 }) {
   return (
     <div className="flex items-center justify-between gap-3 text-sm">
       <span className="text-muted-foreground">{label}</span>
-      <span className="shrink-0 font-semibold">{formatBusinessMoney(value, currency)}</span>
+      <span className={`shrink-0 font-semibold ${accent ? "text-primary" : ""}`}>
+        {formatBusinessMoney(value, currency)}
+      </span>
     </div>
   );
 }
