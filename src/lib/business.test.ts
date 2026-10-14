@@ -40,6 +40,13 @@ const paymentsLoansMigration = readFileSync(
   ),
   "utf8",
 );
+const transactionEditMigration = readFileSync(
+  new URL(
+    "../../supabase/migrations/20261014140000_business_customer_transaction_edit.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
 const businessDataSource = readFileSync(new URL("./business-data.ts", import.meta.url), "utf8");
 
 const accounts: BusinessAccount[] = [
@@ -555,6 +562,22 @@ test("account deletion permanently removes linked history through an owner-scope
     /GRANT EXECUTE ON FUNCTION public\.delete_business_account\(UUID\) TO authenticated/,
   );
   assert.match(accountDeletionMigration, /current_setting\('app\.business_account_delete', true\)/);
+});
+
+test("pending customer transactions can be edited without mutating posted accounting history", () => {
+  assert.match(
+    transactionEditMigration,
+    /CREATE FUNCTION public\.update_pending_business_customer_transaction\([\s\S]*SECURITY DEFINER[\s\S]*auth\.uid\(\)/,
+  );
+  assert.match(transactionEditMigration, /FOR UPDATE/);
+  assert.match(transactionEditMigration, /v_transaction\.status <> 'pending'/);
+  assert.match(transactionEditMigration, /business_customer_payments/);
+  assert.match(transactionEditMigration, /business_account_ledger/);
+  assert.match(
+    transactionEditMigration,
+    /GRANT EXECUTE ON FUNCTION public\.update_pending_business_customer_transaction[\s\S]*TO authenticated/,
+  );
+  assert.match(businessDataSource, /rpc\("update_pending_business_customer_transaction"/);
 });
 
 test("non-USD expenses without a recorded rate are marked incomplete and not guessed", () => {

@@ -431,6 +431,51 @@ export function useCreateBusinessTransaction() {
   });
 }
 
+export function useUpdateBusinessTransaction() {
+  const invalidate = useBusinessInvalidation();
+  return useMutation({
+    mutationFn: async (values: {
+      id: string;
+      customerId: string;
+      receiptAccountId: string;
+      payoutAccountId: string;
+      date: string;
+      dueDate: string | null;
+      htgReceived: number;
+      usdSent: number;
+      exchangeRate: number | null;
+      serviceFee: number | null;
+      cryptoCost: number | null;
+      transferFee: number;
+      otherExpenses: number | null;
+      reference?: string;
+      notes?: string;
+    }) => {
+      await currentUserId();
+      throwIfError(
+        await supabase.rpc("update_pending_business_customer_transaction", {
+          p_transaction_id: values.id,
+          p_customer_id: values.customerId,
+          p_receipt_account_id: values.receiptAccountId,
+          p_payout_account_id: values.payoutAccountId,
+          p_transaction_date: values.date,
+          p_htg_received: values.htgReceived,
+          p_usd_sent: values.usdSent,
+          p_exchange_rate: values.exchangeRate,
+          p_service_fee_usd: values.serviceFee,
+          p_crypto_cost_usd: values.cryptoCost,
+          p_transfer_fee_usd: values.transferFee,
+          p_other_expenses_usd: values.otherExpenses,
+          p_reference_code: values.reference?.trim() || null,
+          p_notes: values.notes?.trim() || null,
+          p_due_date: values.dueDate,
+        }),
+      );
+    },
+    onSuccess: invalidate,
+  });
+}
+
 export function useCreateBusinessCustomerPayment() {
   const invalidate = useBusinessInvalidation();
   return useMutation({

@@ -1495,6 +1495,26 @@ export type Database = {
         };
         Returns: string;
       };
+      update_pending_business_customer_transaction: {
+        Args: {
+          p_transaction_id: string;
+          p_customer_id: string;
+          p_receipt_account_id: string;
+          p_payout_account_id: string;
+          p_transaction_date: string;
+          p_htg_received: number;
+          p_usd_sent: number;
+          p_exchange_rate: number | null;
+          p_service_fee_usd: number | null;
+          p_crypto_cost_usd: number | null;
+          p_transfer_fee_usd: number;
+          p_other_expenses_usd: number | null;
+          p_reference_code: string | null;
+          p_notes: string | null;
+          p_due_date: string | null;
+        };
+        Returns: undefined;
+      };
       create_business_customer_payment: {
         Args: {
           p_idempotency_key: string;
