@@ -11,6 +11,7 @@ import {
   ChevronRight,
   CalendarDays,
   CircleDollarSign,
+  MoreHorizontal,
   Eye,
   EyeOff,
   HandCoins,
@@ -47,6 +48,12 @@ import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -1020,7 +1027,11 @@ function BusinessPage() {
       });
       setTransactionEditDialogOpen(false);
       setEditingTransaction(null);
-      toast.success("Customer transaction updated.");
+      toast.success(
+        transaction.status === "completed"
+          ? "Customer transaction corrected and accounting history updated."
+          : "Customer transaction updated.",
+      );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Couldn't update the transaction.");
     }
@@ -1863,8 +1874,9 @@ function BusinessPage() {
                                     <StatusBadge status={transaction.status} />
                                   </td>
                                   <td className="px-3 py-2.5">
-                                    <div className="flex flex-wrap items-center gap-1">
-                                      {transaction.status === "pending" &&
+                                    <div className="flex min-w-max items-center gap-1.5">
+                                      {(transaction.status === "pending" ||
+                                        transaction.status === "completed") &&
                                         !payments.some(
                                           (payment) =>
                                             payment.customerTransactionId === transaction.id,
@@ -3852,8 +3864,9 @@ function BusinessPage() {
                                 </td>
                                 <td className="py-3 pr-3">
                                   {activity.kind === "customer_transaction" ? (
-                                    <div className="flex flex-wrap items-center gap-1">
-                                      {activity.status === "pending" &&
+                                    <div className="flex min-w-max items-center gap-1.5">
+                                      {(activity.status === "pending" ||
+                                        activity.status === "completed") &&
                                         !payments.some(
                                           (payment) =>
                                             payment.customerTransactionId === activity.id,
@@ -6868,8 +6881,9 @@ function BusinessPage() {
                 Modifier la transaction
               </DialogTitle>
               <DialogDescription className="max-w-2xl text-sm leading-relaxed">
-                Modifiez les détails d’une transaction en attente. Les opérations confirmées ou
-                ayant reçu un paiement restent protégées dans le journal comptable.
+                Les transactions en attente peuvent être modifiées directement. Une correction après
+                confirmation ajoute des écritures compensatoires à l’historique comptable. Les
+                transactions liées à un paiement doivent d’abord être remboursées.
               </DialogDescription>
             </DialogHeader>
             {editingTransaction && (
@@ -7042,7 +7056,9 @@ function BusinessPage() {
                 </Field>
                 <div className="flex flex-col-reverse gap-3 border-t border-cyan-900/60 pt-5 sm:col-span-2 sm:flex-row sm:items-center sm:justify-between">
                   <p className="max-w-sm text-xs leading-relaxed text-muted-foreground">
-                    Seules les transactions en attente, sans paiement reçu, peuvent être modifiées.
+                    {editingTransaction.status === "completed"
+                      ? "La correction sera ajoutée au journal comptable. Les transactions avec un paiement lié doivent d’abord être remboursées."
+                      : "Les transactions en attente sans paiement lié peuvent être modifiées."}
                   </p>
                   <div className="flex justify-end gap-2">
                     <Button
@@ -7123,34 +7139,34 @@ function OperationActions({
   onAction: (action: "complete" | "failed" | "cancelled" | "reverse") => void;
 }) {
   return (
-    <div className="flex flex-wrap gap-1">
-      {status === "pending" && (
-        <>
-          <Button size="sm" disabled={disabled} onClick={() => onAction("complete")}>
-            Confirm
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={disabled}
-            onClick={() => onAction("failed")}
-          >
-            Fail
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={disabled}
-            onClick={() => onAction("cancelled")}
-          >
-            Cancel
-          </Button>
-        </>
-      )}
-      {status === "completed" && (
-        <Button size="sm" variant="outline" disabled={disabled} onClick={() => onAction("reverse")}>
-          Reverse
-        </Button>
+    <div className="flex min-w-max items-center gap-1">
+      {status !== "pending" && status !== "completed" ? null : (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-8 gap-1.5 px-2.5 text-xs"
+              disabled={disabled}
+              aria-label={`${status === "pending" ? "Manage pending" : "Manage completed"} ${type.replaceAll("_", " ")}`}
+            >
+              <MoreHorizontal className="size-4" aria-hidden="true" />
+              <span>{status === "pending" ? "Actions" : "More"}</span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-40">
+            {status === "pending" ? (
+              <>
+                <DropdownMenuItem onSelect={() => onAction("complete")}>Confirm</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => onAction("failed")}>Fail</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => onAction("cancelled")}>Cancel</DropdownMenuItem>
+              </>
+            ) : (
+              <DropdownMenuItem onSelect={() => onAction("reverse")}>Reverse</DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       )}
       <span className="sr-only">
         {type} {id}

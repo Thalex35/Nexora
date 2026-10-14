@@ -42,7 +42,7 @@ const paymentsLoansMigration = readFileSync(
 );
 const transactionEditMigration = readFileSync(
   new URL(
-    "../../supabase/migrations/20261014140000_business_customer_transaction_edit.sql",
+    "../../supabase/migrations/20261014150000_business_completed_transaction_edit.sql",
     import.meta.url,
   ),
   "utf8",
@@ -564,20 +564,29 @@ test("account deletion permanently removes linked history through an owner-scope
   assert.match(accountDeletionMigration, /current_setting\('app\.business_account_delete', true\)/);
 });
 
-test("pending customer transactions can be edited without mutating posted accounting history", () => {
+test("pending and completed customer transactions can be edited with auditable ledger corrections", () => {
   assert.match(
     transactionEditMigration,
-    /CREATE FUNCTION public\.update_pending_business_customer_transaction\([\s\S]*SECURITY DEFINER[\s\S]*auth\.uid\(\)/,
+    /CREATE FUNCTION public\.update_business_customer_transaction\([\s\S]*SECURITY DEFINER[\s\S]*auth\.uid\(\)/,
   );
   assert.match(transactionEditMigration, /FOR UPDATE/);
-  assert.match(transactionEditMigration, /v_transaction\.status <> 'pending'/);
-  assert.match(transactionEditMigration, /business_customer_payments/);
-  assert.match(transactionEditMigration, /business_account_ledger/);
+  assert.match(transactionEditMigration, /v_transaction\.status NOT IN \('pending', 'completed'\)/);
   assert.match(
     transactionEditMigration,
-    /GRANT EXECUTE ON FUNCTION public\.update_pending_business_customer_transaction[\s\S]*TO authenticated/,
+    /Reverse customer payments before editing this transaction/,
   );
-  assert.match(businessDataSource, /rpc\("update_pending_business_customer_transaction"/);
+  assert.match(transactionEditMigration, /transaction_edit_reversal_/);
+  assert.match(transactionEditMigration, /customer_receipt_edit_/);
+  assert.match(
+    transactionEditMigration,
+    /Editing this transaction would make an account balance negative/,
+  );
+  assert.match(
+    transactionEditMigration,
+    /GRANT EXECUTE ON FUNCTION public\.update_business_customer_transaction[\s\S]*TO authenticated/,
+  );
+  assert.match(transactionEditMigration, /source_type IN \('customer_transaction', 'reversal'\)/);
+  assert.match(businessDataSource, /rpc\("update_business_customer_transaction"/);
 });
 
 test("non-USD expenses without a recorded rate are marked incomplete and not guessed", () => {

@@ -453,7 +453,7 @@ export function useUpdateBusinessTransaction() {
     }) => {
       await currentUserId();
       throwIfError(
-        await supabase.rpc("update_pending_business_customer_transaction", {
+        await supabase.rpc("update_business_customer_transaction", {
           p_transaction_id: values.id,
           p_customer_id: values.customerId,
           p_receipt_account_id: values.receiptAccountId,
