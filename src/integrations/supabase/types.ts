@@ -1450,6 +1450,12 @@ export type Database = {
           balance: number;
         }[];
       };
+      delete_business_account: {
+        Args: {
+          p_account_id: string;
+        };
+        Returns: undefined;
+      };
       create_business_customer_transaction: {
         Args: {
           p_idempotency_key: string;

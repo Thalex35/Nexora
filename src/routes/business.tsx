@@ -5032,7 +5032,7 @@ function BusinessPage() {
                     <AlertDialogTitle>Supprimer ce compte ?</AlertDialogTitle>
                     <AlertDialogDescription>
                       {accountToDelete
-                        ? `Le compte « ${accountToDelete.name} » sera supprimé. Les comptes liés à des opérations ou à l’historique financier ne peuvent pas être supprimés.`
+                        ? `Le compte « ${accountToDelete.name} » et tout son historique financier associé (opérations, paiements, prêts et écritures) seront définitivement supprimés. Cette action peut aussi retirer l’impact de ces opérations des soldes d’autres comptes et ne peut pas être annulée.`
                         : ""}
                     </AlertDialogDescription>
                   </AlertDialogHeader>
