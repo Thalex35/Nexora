@@ -1760,7 +1760,7 @@ function BusinessPage() {
                       <div className="min-w-0">
                         <CardTitle className="truncate text-base">Transactions récentes</CardTitle>
                         <CardDescription className="truncate text-xs">
-                          Transferts client · montants collectés depuis le registre de paiements
+                          Transferts client · montants dus et paiements enregistrés
                         </CardDescription>
                       </div>
                     </div>
@@ -1788,7 +1788,7 @@ function BusinessPage() {
                               <th className="px-3 py-2.5 font-medium">Client</th>
                               <th className="px-3 py-2.5 text-right font-medium">USD envoyé</th>
                               <th className="px-3 py-2.5 text-right font-medium">Frais/coûts</th>
-                              <th className="px-3 py-2.5 text-right font-medium">HTG reçu</th>
+                              <th className="px-3 py-2.5 text-right font-medium">HTG dû / payé</th>
                               <th className="px-3 py-2.5 font-medium">Statut</th>
                               <th className="px-3 py-2.5 font-medium">Actions</th>
                             </tr>
@@ -1826,7 +1826,12 @@ function BusinessPage() {
                                     {formatBusinessMoney(transactionCosts, "USD")}
                                   </td>
                                   <td className="whitespace-nowrap px-3 py-2.5 text-right text-emerald-700 dark:text-emerald-300">
-                                    {formatBusinessMoney(paymentSummary.totalPaid, "HTG")}
+                                    <div>
+                                      Dû: {formatBusinessMoney(transaction.htgReceived, "HTG")}
+                                    </div>
+                                    <div className="text-[10px] text-muted-foreground">
+                                      Payé: {formatBusinessMoney(paymentSummary.totalPaid, "HTG")}
+                                    </div>
                                   </td>
                                   <td className="px-3 py-2.5">
                                     <StatusBadge status={transaction.status} />
@@ -3717,7 +3722,7 @@ function BusinessPage() {
                   color: "text-teal-600",
                 },
                 {
-                  label: "HTG received from customers",
+                  label: "HTG amount on completed transfers",
                   value: formatBusinessMoney(completedHtgTransactionTotal, "HTG"),
                   note: "Completed transfers on the selected period",
                   color: "text-emerald-600",
