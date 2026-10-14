@@ -96,6 +96,7 @@ import {
   useReverseBusinessOperation,
   useSaveBusinessExchangeRate,
   useUpdateBusinessAccount,
+  useUpdateBusinessTransaction,
   useUpdateBusinessCustomer,
 } from "@/lib/business-data";
 
@@ -119,6 +120,10 @@ export const Route = createFileRoute("/business")({
 });
 
 const today = () => new Date().toISOString().slice(0, 10);
+const toLocalDateTimeInput = (value: string) => {
+  const date = new Date(value);
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+};
 const firstOfMonth = () => `${today().slice(0, 7)}-01`;
 const EMPTY_TRANSACTIONS: BusinessRecords["transactions"] = [];
 const EMPTY_PAYMENTS: BusinessRecords["payments"] = [];
@@ -255,6 +260,7 @@ function BusinessPage() {
   const updateAccount = useUpdateBusinessAccount();
   const deleteAccount = useDeleteBusinessAccount();
   const createTransaction = useCreateBusinessTransaction();
+  const updateTransaction = useUpdateBusinessTransaction();
   const createPayment = useCreateBusinessCustomerPayment();
   const createLoan = useCreateBusinessLoan();
   const createLoanRepayment = useCreateBusinessLoanRepayment();
@@ -291,6 +297,8 @@ function BusinessPage() {
   const [meruBalanceVisible, setMeruBalanceVisible] = useState(true);
   const [entryType, setEntryType] = useState<"transfer" | "deposit" | "loan">("transfer");
   const [entryDialogOpen, setEntryDialogOpen] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState<BusinessTransaction | null>(null);
+  const [transactionEditDialogOpen, setTransactionEditDialogOpen] = useState(false);
   const [selectedTransactionCustomerId, setSelectedTransactionCustomerId] = useState("");
   const [selectedFundingAccountId, setSelectedFundingAccountId] = useState("");
   const [selectedLoanAccountId, setSelectedLoanAccountId] = useState("");
@@ -351,6 +359,11 @@ function BusinessPage() {
     setLoanInterestAmount("0");
     setLoanFeeAmount("0");
     setEntryDialogOpen(true);
+  }
+
+  function openTransactionEdit(transaction: BusinessTransaction) {
+    setEditingTransaction(transaction);
+    setTransactionEditDialogOpen(true);
   }
 
   const records = recordsQuery.data;
@@ -968,6 +981,41 @@ function BusinessPage() {
     }
   }
 
+  async function onUpdateTransaction(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formElement = event.currentTarget;
+    const values = new FormData(formElement);
+    const transaction = editingTransaction;
+    if (!transaction) {
+      toast.error("Choose a customer transaction to edit.");
+      return;
+    }
+    try {
+      await updateTransaction.mutateAsync({
+        id: transaction.id,
+        customerId: readText(values, "editCustomerId"),
+        receiptAccountId: readText(values, "editReceiptAccountId"),
+        payoutAccountId: readText(values, "editPayoutAccountId"),
+        date: dateTimeValue(readText(values, "editTransactionDate")),
+        dueDate: readText(values, "editDueDate") || null,
+        htgReceived: readNumber(values, "editHtgReceived") ?? 0,
+        usdSent: readNumber(values, "editUsdSent") ?? 0,
+        exchangeRate: readNumber(values, "editExchangeRate", true),
+        serviceFee: readNumber(values, "editServiceFee", true),
+        cryptoCost: readNumber(values, "editCryptoCost", true),
+        transferFee: readNumber(values, "editTransferFee") ?? 0,
+        otherExpenses: readNumber(values, "editOtherExpenses", true),
+        reference: readText(values, "editReference"),
+        notes: readText(values, "editNotes"),
+      });
+      setTransactionEditDialogOpen(false);
+      setEditingTransaction(null);
+      toast.success("Customer transaction updated.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Couldn't update the transaction.");
+    }
+  }
+
   async function onCreatePayment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -1474,6 +1522,7 @@ function BusinessPage() {
     updateAccount.isPending ||
     deleteAccount.isPending ||
     createTransaction.isPending ||
+    updateTransaction.isPending ||
     createPayment.isPending ||
     createLoan.isPending ||
     createLoanRepayment.isPending ||
@@ -1783,19 +1832,38 @@ function BusinessPage() {
                                     <StatusBadge status={transaction.status} />
                                   </td>
                                   <td className="px-3 py-2.5">
-                                    <OperationActions
-                                      type="customer_transaction"
-                                      id={transaction.id}
-                                      status={transaction.status}
-                                      disabled={isMutating}
-                                      onAction={(action) =>
-                                        void changeStatus(
-                                          "customer_transaction",
-                                          transaction.id,
-                                          action,
-                                        )
-                                      }
-                                    />
+                                    <div className="flex flex-wrap items-center gap-1">
+                                      {transaction.status === "pending" &&
+                                        !payments.some(
+                                          (payment) =>
+                                            payment.customerTransactionId === transaction.id,
+                                        ) && (
+                                          <Button
+                                            type="button"
+                                            size="icon"
+                                            variant="ghost"
+                                            aria-label={`Modifier la transaction de ${transaction.customerName}`}
+                                            title="Modifier la transaction"
+                                            disabled={isMutating}
+                                            onClick={() => openTransactionEdit(transaction)}
+                                          >
+                                            <Pencil className="size-4" aria-hidden="true" />
+                                          </Button>
+                                        )}
+                                      <OperationActions
+                                        type="customer_transaction"
+                                        id={transaction.id}
+                                        status={transaction.status}
+                                        disabled={isMutating}
+                                        onAction={(action) =>
+                                          void changeStatus(
+                                            "customer_transaction",
+                                            transaction.id,
+                                            action,
+                                          )
+                                        }
+                                      />
+                                    </div>
                                   </td>
                                 </tr>
                               );
@@ -3748,15 +3816,39 @@ function BusinessPage() {
                                 </td>
                                 <td className="py-3 pr-3">
                                   {activity.kind === "customer_transaction" ? (
-                                    <OperationActions
-                                      type={activity.kind}
-                                      id={activity.id}
-                                      status={activity.status}
-                                      disabled={isMutating}
-                                      onAction={(action) =>
-                                        void changeStatus(activity.kind, activity.id, action)
-                                      }
-                                    />
+                                    <div className="flex flex-wrap items-center gap-1">
+                                      {activity.status === "pending" &&
+                                        !payments.some(
+                                          (payment) =>
+                                            payment.customerTransactionId === activity.id,
+                                        ) && (
+                                          <Button
+                                            type="button"
+                                            size="icon"
+                                            variant="ghost"
+                                            aria-label={`Modifier la transaction de ${activity.contact}`}
+                                            title="Modifier la transaction"
+                                            disabled={isMutating}
+                                            onClick={() => {
+                                              const transaction = transactions.find(
+                                                (item) => item.id === activity.id,
+                                              );
+                                              if (transaction) openTransactionEdit(transaction);
+                                            }}
+                                          >
+                                            <Pencil className="size-4" aria-hidden="true" />
+                                          </Button>
+                                        )}
+                                      <OperationActions
+                                        type={activity.kind}
+                                        id={activity.id}
+                                        status={activity.status}
+                                        disabled={isMutating}
+                                        onAction={(action) =>
+                                          void changeStatus(activity.kind, activity.id, action)
+                                        }
+                                      />
+                                    </div>
                                   ) : (
                                     <Button
                                       type="button"
@@ -6727,6 +6819,218 @@ function BusinessPage() {
             </details>
           </TabsContent>
         </Tabs>
+        <Dialog
+          open={transactionEditDialogOpen}
+          onOpenChange={(open) => {
+            setTransactionEditDialogOpen(open);
+            if (!open) setEditingTransaction(null);
+          }}
+        >
+          <DialogContent className="business-theme-dialog max-h-[92dvh] w-[calc(100vw-2rem)] max-w-4xl overflow-y-auto border-cyan-900/60 bg-background p-5 shadow-2xl sm:rounded-xl sm:p-8">
+            <DialogHeader className="mb-2 space-y-2 pr-8 text-left">
+              <DialogTitle className="text-xl font-semibold tracking-tight sm:text-2xl">
+                Modifier la transaction
+              </DialogTitle>
+              <DialogDescription className="max-w-2xl text-sm leading-relaxed">
+                Modifiez les détails d’une transaction en attente. Les opérations confirmées ou
+                ayant reçu un paiement restent protégées dans le journal comptable.
+              </DialogDescription>
+            </DialogHeader>
+            {editingTransaction && (
+              <form
+                className="grid gap-x-6 gap-y-6 rounded-2xl border border-cyan-900/70 bg-[#04172b]/60 p-4 sm:grid-cols-2 sm:p-6"
+                onSubmit={(event) => void onUpdateTransaction(event)}
+              >
+                <div className="flex items-start gap-3 sm:col-span-2">
+                  <span className="grid size-10 shrink-0 place-items-center rounded-xl border border-cyan-800/70 bg-cyan-500/10 text-cyan-300">
+                    <Pencil className="size-5" aria-hidden="true" />
+                  </span>
+                  <div>
+                    <h3 className="text-sm font-semibold text-foreground">
+                      Détails de la transaction
+                    </h3>
+                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                      Les modifications seront conservées dans l’historique d’audit.
+                    </p>
+                  </div>
+                </div>
+                <Field label="Client">
+                  <select
+                    name="editCustomerId"
+                    defaultValue={editingTransaction.customerId}
+                    className="h-11 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/60"
+                    required
+                  >
+                    {customers.map((customer) => (
+                      <option key={customer.id} value={customer.id}>
+                        {customer.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Date et heure">
+                  <Input
+                    name="editTransactionDate"
+                    type="datetime-local"
+                    defaultValue={toLocalDateTimeInput(editingTransaction.transactionDate)}
+                    className="h-11 rounded-lg"
+                    required
+                  />
+                </Field>
+                <Field label="Montant reçu (HTG)">
+                  <Input
+                    name="editHtgReceived"
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    defaultValue={editingTransaction.htgReceived}
+                    className="h-11 rounded-lg"
+                    required
+                  />
+                </Field>
+                <Field label="Montant envoyé (USD)">
+                  <Input
+                    name="editUsdSent"
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    defaultValue={editingTransaction.usdSent}
+                    className="h-11 rounded-lg"
+                    required
+                  />
+                </Field>
+                <Field label="Compte de réception (HTG)">
+                  <select
+                    name="editReceiptAccountId"
+                    defaultValue={editingTransaction.receiptAccountId}
+                    className="h-11 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/60"
+                    required
+                  >
+                    {htgAccounts.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Compte de sortie (USD)">
+                  <select
+                    name="editPayoutAccountId"
+                    defaultValue={editingTransaction.payoutAccountId}
+                    className="h-11 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/60"
+                    required
+                  >
+                    {usdAccounts.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Date limite (facultatif)">
+                  <Input
+                    name="editDueDate"
+                    type="date"
+                    defaultValue={editingTransaction.dueDate ?? ""}
+                    className="h-11 rounded-lg"
+                  />
+                </Field>
+                <Field label="Taux HTG par USD (facultatif)">
+                  <Input
+                    name="editExchangeRate"
+                    type="number"
+                    min="0.000001"
+                    step="0.000001"
+                    defaultValue={editingTransaction.exchangeRate ?? ""}
+                    className="h-11 rounded-lg"
+                  />
+                </Field>
+                <Field label="Frais de service (USD)">
+                  <Input
+                    name="editServiceFee"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    defaultValue={editingTransaction.serviceFee ?? ""}
+                    className="h-11 rounded-lg"
+                  />
+                </Field>
+                <Field label="Coût crypto (USD)">
+                  <Input
+                    name="editCryptoCost"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    defaultValue={editingTransaction.cryptoCost ?? ""}
+                    className="h-11 rounded-lg"
+                  />
+                </Field>
+                <Field label="Frais de transfert (USD)">
+                  <Input
+                    name="editTransferFee"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    defaultValue={editingTransaction.transferFee}
+                    className="h-11 rounded-lg"
+                    required
+                  />
+                </Field>
+                <Field label="Autres dépenses (USD)">
+                  <Input
+                    name="editOtherExpenses"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    defaultValue={editingTransaction.otherExpenses ?? ""}
+                    className="h-11 rounded-lg"
+                  />
+                </Field>
+                <Field label="Référence (facultatif)">
+                  <Input
+                    name="editReference"
+                    maxLength={200}
+                    defaultValue={editingTransaction.reference ?? ""}
+                    className="h-11 rounded-lg"
+                  />
+                </Field>
+                <Field label="Notes (facultatif)">
+                  <textarea
+                    name="editNotes"
+                    rows={3}
+                    maxLength={200}
+                    defaultValue={editingTransaction.notes ?? ""}
+                    placeholder="Ajouter une note sur cette transaction…"
+                    className="w-full resize-y rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/60"
+                  />
+                </Field>
+                <div className="flex flex-col-reverse gap-3 border-t border-cyan-900/60 pt-5 sm:col-span-2 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="max-w-sm text-xs leading-relaxed text-muted-foreground">
+                    Seules les transactions en attente, sans paiement reçu, peuvent être modifiées.
+                  </p>
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="lg"
+                      onClick={() => setTransactionEditDialogOpen(false)}
+                    >
+                      Annuler
+                    </Button>
+                    <Button
+                      type="submit"
+                      size="lg"
+                      className="min-w-40 rounded-lg"
+                      disabled={isMutating}
+                    >
+                      Enregistrer
+                    </Button>
+                  </div>
+                </div>
+              </form>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </AppShell>
   );
