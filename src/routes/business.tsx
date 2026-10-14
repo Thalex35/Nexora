@@ -203,9 +203,19 @@ function dateTimeValue(value: string) {
   return date.toISOString();
 }
 
-function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
+function Field({
+  label,
+  children,
+  hint,
+  className,
+}: {
+  label: string;
+  children: ReactNode;
+  hint?: string;
+  className?: string;
+}) {
   return (
-    <label className="space-y-1.5 text-sm">
+    <label className={`space-y-1.5 text-sm ${className ?? ""}`}>
       <span className="font-medium">{label}</span>
       {children}
       {hint && <span className="block text-xs text-muted-foreground">{hint}</span>}
@@ -3674,13 +3684,13 @@ function BusinessPage() {
                         </CardHeader>
                         <CardContent>
                           <form
-                            className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
+                            className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
                             onSubmit={(event) => void onCreateAdjustment(event)}
                           >
-                            <Field label="Account">
+                            <Field label="Account" className="block min-w-0 [&>span]:block">
                               <select
                                 name="accountId"
-                                className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                                className="h-9 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm"
                                 required
                               >
                                 {accounts.map((account) => (
@@ -3693,13 +3703,14 @@ function BusinessPage() {
                             <Field
                               label="Signed amount"
                               hint="Positive adds to balance; negative reduces it."
+                              className="block min-w-0 [&>span]:block"
                             >
                               <Input name="amount" type="number" step="0.00000001" required />
                             </Field>
-                            <Field label="Reason">
+                            <Field label="Reason" className="block min-w-0 [&>span]:block">
                               <Input name="reason" required maxLength={500} />
                             </Field>
-                            <Button type="submit" disabled={isMutating}>
+                            <Button type="submit" className="w-full self-end" disabled={isMutating}>
                               Record adjustment
                             </Button>
                           </form>
