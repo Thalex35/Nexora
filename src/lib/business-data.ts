@@ -719,6 +719,21 @@ export function useReverseBusinessOperation() {
   });
 }
 
+export function useUnreverseBusinessCustomerTransaction() {
+  const invalidate = useBusinessInvalidation();
+  return useMutation({
+    mutationFn: async (transactionId: string) => {
+      await currentUserId();
+      throwIfError(
+        await supabase.rpc("unreverse_business_customer_transaction", {
+          p_transaction_id: transactionId,
+        }),
+      );
+    },
+    onSuccess: invalidate,
+  });
+}
+
 export function useSaveBusinessExchangeRate() {
   const invalidate = useBusinessInvalidation();
   return useMutation({

@@ -1617,6 +1617,10 @@ export type Database = {
         Args: { p_operation_type: string; p_operation_id: string };
         Returns: undefined;
       };
+      unreverse_business_customer_transaction: {
+        Args: { p_transaction_id: string };
+        Returns: undefined;
+      };
       pay_future_expense: {
         Args: {
           p_future_expense_id: string;

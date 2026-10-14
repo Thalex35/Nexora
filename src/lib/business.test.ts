@@ -47,6 +47,13 @@ const transactionEditMigration = readFileSync(
   ),
   "utf8",
 );
+const unreverseTransactionMigration = readFileSync(
+  new URL(
+    "../../supabase/migrations/20261014160000_business_unreverse_customer_transaction.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
 const businessDataSource = readFileSync(new URL("./business-data.ts", import.meta.url), "utf8");
 
 const accounts: BusinessAccount[] = [
@@ -587,6 +594,30 @@ test("pending and completed customer transactions can be edited with auditable l
   );
   assert.match(transactionEditMigration, /source_type IN \('customer_transaction', 'reversal'\)/);
   assert.match(businessDataSource, /rpc\("update_business_customer_transaction"/);
+});
+
+test("reversed customer transactions can be safely restored for editing", () => {
+  assert.match(
+    unreverseTransactionMigration,
+    /CREATE FUNCTION public\.unreverse_business_customer_transaction\(p_transaction_id UUID\)[\s\S]*SECURITY DEFINER[\s\S]*auth\.uid\(\)/,
+  );
+  assert.match(unreverseTransactionMigration, /v_status <> 'reversed'/);
+  assert.match(
+    unreverseTransactionMigration,
+    /Reverse customer payments before restoring this transaction/,
+  );
+  assert.match(unreverseTransactionMigration, /strpos\(event_type, 'operation_reversal_'\) = 1/);
+  assert.match(
+    unreverseTransactionMigration,
+    /Restoring this transaction would make an account balance negative/,
+  );
+  assert.match(unreverseTransactionMigration, /SET status = 'completed'/);
+  assert.match(unreverseTransactionMigration, /'restored_for_editing'/);
+  assert.match(
+    unreverseTransactionMigration,
+    /GRANT EXECUTE ON FUNCTION public\.unreverse_business_customer_transaction\(UUID\) TO authenticated/,
+  );
+  assert.match(businessDataSource, /rpc\("unreverse_business_customer_transaction"/);
 });
 
 test("non-USD expenses without a recorded rate are marked incomplete and not guessed", () => {

@@ -101,6 +101,7 @@ import {
   useCreateBusinessTransaction,
   useDeleteBusinessAccount,
   useReverseBusinessOperation,
+  useUnreverseBusinessCustomerTransaction,
   useSaveBusinessExchangeRate,
   useUpdateBusinessAccount,
   useUpdateBusinessTransaction,
@@ -288,6 +289,7 @@ function BusinessPage() {
   const completeOperation = useCompleteBusinessOperation();
   const closeOperation = useCloseBusinessOperation();
   const reverseOperation = useReverseBusinessOperation();
+  const unreverseTransaction = useUnreverseBusinessCustomerTransaction();
   const saveRate = useSaveBusinessExchangeRate();
   const [startDate, setStartDate] = useState(firstOfMonth);
   const [endDate, setEndDate] = useState(today);
@@ -1214,7 +1216,7 @@ function BusinessPage() {
   async function changeStatus(
     type: string,
     id: string,
-    action: "complete" | "failed" | "cancelled" | "reverse",
+    action: "complete" | "failed" | "cancelled" | "reverse" | "unreverse",
   ) {
     try {
       if (action === "complete") {
@@ -1228,11 +1230,24 @@ function BusinessPage() {
           return;
         }
         await reverseOperation.mutateAsync({ type, id });
+      } else if (action === "unreverse") {
+        if (
+          !window.confirm(
+            "Restore this transaction's account balances so you can edit it? This adds ledger entries and keeps the reversal history. Linked payments must be reversed first.",
+          )
+        ) {
+          return;
+        }
+        await unreverseTransaction.mutateAsync(id);
       } else {
         await closeOperation.mutateAsync({ type, id, status: action });
       }
       toast.success(
-        action === "complete" ? "Operation confirmed and ledger updated." : `Operation ${action}.`,
+        action === "complete"
+          ? "Operation confirmed and ledger updated."
+          : action === "unreverse"
+            ? "Transaction restored. You can now edit it."
+            : `Operation ${action}.`,
       );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Couldn't update the operation.");
@@ -1898,6 +1913,12 @@ function BusinessPage() {
                                         id={transaction.id}
                                         status={transaction.status}
                                         disabled={isMutating}
+                                        canUnreverse={
+                                          !payments.some(
+                                            (payment) =>
+                                              payment.customerTransactionId === transaction.id,
+                                          )
+                                        }
                                         onAction={(action) =>
                                           void changeStatus(
                                             "customer_transaction",
@@ -3893,6 +3914,13 @@ function BusinessPage() {
                                         id={activity.id}
                                         status={activity.status}
                                         disabled={isMutating}
+                                        canUnreverse={
+                                          activity.kind === "customer_transaction" &&
+                                          !payments.some(
+                                            (payment) =>
+                                              payment.customerTransactionId === activity.id,
+                                          )
+                                        }
                                         onAction={(action) =>
                                           void changeStatus(activity.kind, activity.id, action)
                                         }
@@ -7130,17 +7158,19 @@ function OperationActions({
   id,
   status,
   disabled,
+  canUnreverse = false,
   onAction,
 }: {
   type: string;
   id: string;
   status: string;
   disabled: boolean;
-  onAction: (action: "complete" | "failed" | "cancelled" | "reverse") => void;
+  canUnreverse?: boolean;
+  onAction: (action: "complete" | "failed" | "cancelled" | "reverse" | "unreverse") => void;
 }) {
   return (
     <div className="flex min-w-max items-center gap-1">
-      {status !== "pending" && status !== "completed" ? null : (
+      {status !== "pending" && status !== "completed" && status !== "reversed" ? null : (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
@@ -7149,10 +7179,12 @@ function OperationActions({
               variant="outline"
               className="h-8 gap-1.5 px-2.5 text-xs"
               disabled={disabled}
-              aria-label={`${status === "pending" ? "Manage pending" : "Manage completed"} ${type.replaceAll("_", " ")}`}
+              aria-label={`${status === "pending" ? "Manage pending" : status === "reversed" ? "Manage reversed" : "Manage completed"} ${type.replaceAll("_", " ")}`}
             >
               <MoreHorizontal className="size-4" aria-hidden="true" />
-              <span>{status === "pending" ? "Actions" : "More"}</span>
+              <span>
+                {status === "pending" ? "Actions" : status === "reversed" ? "Restore" : "More"}
+              </span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="min-w-40">
@@ -7162,9 +7194,13 @@ function OperationActions({
                 <DropdownMenuItem onSelect={() => onAction("failed")}>Fail</DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => onAction("cancelled")}>Cancel</DropdownMenuItem>
               </>
-            ) : (
+            ) : status === "reversed" && type === "customer_transaction" && canUnreverse ? (
+              <DropdownMenuItem onSelect={() => onAction("unreverse")}>
+                Restore for editing
+              </DropdownMenuItem>
+            ) : status === "completed" ? (
               <DropdownMenuItem onSelect={() => onAction("reverse")}>Reverse</DropdownMenuItem>
-            )}
+            ) : null}
           </DropdownMenuContent>
         </DropdownMenu>
       )}
