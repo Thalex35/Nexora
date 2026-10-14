@@ -26,6 +26,13 @@ const accountManagementMigration = readFileSync(
   ),
   "utf8",
 );
+const accountDeletionMigration = readFileSync(
+  new URL(
+    "../../supabase/migrations/20261014130000_business_account_permanent_delete.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
 const paymentsLoansMigration = readFileSync(
   new URL(
     "../../supabase/migrations/20261014000000_business_customer_payments_and_loans.sql",
@@ -514,7 +521,7 @@ test("migration scopes records to owners and makes ledger/status changes RPC-onl
   );
 });
 
-test("account deletion is granted to authenticated users and remains owner-scoped by RLS", () => {
+test("account deletion permanently removes linked history through an owner-scoped RPC", () => {
   assert.match(
     accountManagementMigration,
     /GRANT DELETE ON public\.business_accounts TO authenticated/,
@@ -523,6 +530,31 @@ test("account deletion is granted to authenticated users and remains owner-scope
     businessMigration,
     /CREATE POLICY "Users manage their own business accounts" ON public\.business_accounts[\s\S]*FOR ALL TO authenticated USING \(auth\.uid\(\) = user_id\)/,
   );
+  assert.match(
+    accountDeletionMigration,
+    /CREATE FUNCTION public\.delete_business_account\(p_account_id UUID\)[\s\S]*SECURITY DEFINER[\s\S]*auth\.uid\(\)/,
+  );
+  for (const table of [
+    "business_customer_payments",
+    "business_loan_repayments",
+    "business_loans",
+    "business_customer_transactions",
+    "business_fundings",
+    "business_expenses",
+    "business_adjustments",
+    "business_account_ledger",
+  ]) {
+    assert.match(accountDeletionMigration, new RegExp(`DELETE FROM public\\.${table}`));
+  }
+  assert.match(
+    accountDeletionMigration,
+    /REVOKE DELETE ON public\.business_accounts FROM authenticated/,
+  );
+  assert.match(
+    accountDeletionMigration,
+    /GRANT EXECUTE ON FUNCTION public\.delete_business_account\(UUID\) TO authenticated/,
+  );
+  assert.match(accountDeletionMigration, /current_setting\('app\.business_account_delete', true\)/);
 });
 
 test("non-USD expenses without a recorded rate are marked incomplete and not guessed", () => {

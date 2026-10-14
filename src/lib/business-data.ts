@@ -376,18 +376,11 @@ export function useDeleteBusinessAccount() {
   const invalidate = useBusinessInvalidation();
   return useMutation({
     mutationFn: async (id: string) => {
-      const userId = await currentUserId();
-      const { data, error } = await supabase
-        .from("business_accounts")
-        .delete()
-        .eq("id", id)
-        .eq("user_id", userId)
-        .select("id")
-        .single();
-      if (error?.code === "23503") {
-        throw new Error("This account has recorded activity and can't be deleted.");
-      }
-      return unwrap({ data, error });
+      await currentUserId();
+      const { error } = await supabase.rpc("delete_business_account", {
+        p_account_id: id,
+      });
+      throwIfError({ error });
     },
     onSuccess: invalidate,
   });
