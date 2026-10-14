@@ -65,9 +65,9 @@ function LifeHistoryPage() {
               identified on the event.
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex w-full flex-wrap gap-2 sm:w-auto">
             <Select value={source} onValueChange={setSource}>
-              <SelectTrigger className="w-40" aria-label="Filter timeline source">
+              <SelectTrigger className="w-full sm:w-40" aria-label="Filter timeline source">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

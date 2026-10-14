@@ -55,12 +55,12 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="flex min-h-screen w-full bg-background">
         <AppSidebar />
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-border bg-card/95 px-4 backdrop-blur sm:px-6">
+          <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b border-border bg-card/95 px-3 backdrop-blur sm:gap-3 sm:px-6">
             <SidebarTrigger />
             <div className="min-w-0 flex-1 md:hidden">
               <NexoraLogo size={22} />
             </div>
-            <div className="ml-auto flex items-center gap-2">
+            <div className="ml-auto flex items-center gap-1 sm:gap-2">
               <ThemeToggle />
               <NotificationCenter />
               <QuickAdd />
@@ -78,7 +78,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               </Link>
             </div>
           </header>
-          <main className="mx-auto w-full max-w-[1440px] flex-1 px-4 py-6 sm:px-6 sm:py-7 xl:px-8">
+          <main className="mx-auto w-full min-w-0 max-w-[1440px] flex-1 px-3 py-5 min-[400px]:px-4 sm:px-6 sm:py-7 xl:px-8">
             {children}
           </main>
         </div>
