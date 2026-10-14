@@ -19,6 +19,13 @@ const businessMigration = readFileSync(
   new URL("../../supabase/migrations/20261013000000_business_accounting.sql", import.meta.url),
   "utf8",
 );
+const accountManagementMigration = readFileSync(
+  new URL(
+    "../../supabase/migrations/20261014120000_business_account_delete_permission.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
 const paymentsLoansMigration = readFileSync(
   new URL(
     "../../supabase/migrations/20261014000000_business_customer_payments_and_loans.sql",
@@ -504,6 +511,17 @@ test("migration scopes records to owners and makes ledger/status changes RPC-onl
   assert.doesNotMatch(
     businessMigration,
     /GRANT SELECT, INSERT, UPDATE, DELETE ON public\.business_account_ledger TO authenticated/,
+  );
+});
+
+test("account deletion is granted to authenticated users and remains owner-scoped by RLS", () => {
+  assert.match(
+    accountManagementMigration,
+    /GRANT DELETE ON public\.business_accounts TO authenticated/,
+  );
+  assert.match(
+    businessMigration,
+    /CREATE POLICY "Users manage their own business accounts" ON public\.business_accounts[\s\S]*FOR ALL TO authenticated USING \(auth\.uid\(\) = user_id\)/,
   );
 });
 
