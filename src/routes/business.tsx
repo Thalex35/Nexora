@@ -15,12 +15,14 @@ import {
   EyeOff,
   HandCoins,
   Info,
+  Pencil,
   PiggyBank,
   Plus,
   Quote,
   Receipt,
   Search,
   TrendingUp,
+  Trash2,
   UsersRound,
   Wallet,
   Zap,
@@ -46,6 +48,16 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -62,6 +74,7 @@ import {
   calculateLoanSummary,
   calculateTransactionProfit,
   formatBusinessMoney,
+  type BusinessAccount,
   type BusinessCurrency,
   type BusinessTransaction,
 } from "@/lib/business";
@@ -79,8 +92,10 @@ import {
   useCreateBusinessLoan,
   useCreateBusinessLoanRepayment,
   useCreateBusinessTransaction,
+  useDeleteBusinessAccount,
   useReverseBusinessOperation,
   useSaveBusinessExchangeRate,
+  useUpdateBusinessAccount,
   useUpdateBusinessCustomer,
 } from "@/lib/business-data";
 
@@ -222,6 +237,8 @@ function BusinessPage() {
   const recordsQuery = useBusinessRecords();
   const createCustomer = useCreateBusinessCustomer();
   const createAccount = useCreateBusinessAccount();
+  const updateAccount = useUpdateBusinessAccount();
+  const deleteAccount = useDeleteBusinessAccount();
   const createTransaction = useCreateBusinessTransaction();
   const createPayment = useCreateBusinessCustomerPayment();
   const createLoan = useCreateBusinessLoan();
@@ -250,6 +267,8 @@ function BusinessPage() {
   const [reportingCurrency, setReportingCurrency] = useState<BusinessCurrency>("USD");
   const [activeTab, setActiveTab] = useState("overview");
   const [accountDialogOpen, setAccountDialogOpen] = useState(false);
+  const [editingAccount, setEditingAccount] = useState<BusinessAccount | null>(null);
+  const [accountToDelete, setAccountToDelete] = useState<BusinessAccount | null>(null);
   const [meruBalanceVisible, setMeruBalanceVisible] = useState(true);
   const [entryType, setEntryType] = useState<"transfer" | "deposit" | "loan">("transfer");
   const [entryDialogOpen, setEntryDialogOpen] = useState(false);
@@ -727,21 +746,38 @@ function BusinessPage() {
     }
   }
 
-  async function onCreateAccount(event: FormEvent<HTMLFormElement>) {
+  async function onSaveAccount(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     try {
-      await createAccount.mutateAsync({
-        name: readText(form, "name"),
-        type: readText(form, "type") as "meru" | "cash" | "crypto" | "other",
-        currency: readText(form, "currency").toUpperCase(),
-        openingBalance: readNumber(form, "openingBalance") ?? 0,
-      });
-      event.currentTarget.reset();
+      const name = readText(form, "name");
+      if (editingAccount) {
+        await updateAccount.mutateAsync({ id: editingAccount.id, name });
+        toast.success("Account name updated.");
+      } else {
+        await createAccount.mutateAsync({
+          name,
+          type: readText(form, "type") as "meru" | "cash" | "crypto" | "other",
+          currency: readText(form, "currency").toUpperCase(),
+          openingBalance: readNumber(form, "openingBalance") ?? 0,
+        });
+        toast.success("Account saved with its opening balance.");
+      }
+      setEditingAccount(null);
       setAccountDialogOpen(false);
-      toast.success("Account saved with its opening balance.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Couldn't save the account.");
+    }
+  }
+
+  async function onDeleteAccount() {
+    if (!accountToDelete) return;
+    try {
+      await deleteAccount.mutateAsync(accountToDelete.id);
+      toast.success("Account deleted.");
+      setAccountToDelete(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Couldn't delete the account.");
     }
   }
 
@@ -1274,6 +1310,8 @@ function BusinessPage() {
     createCustomer.isPending ||
     updateCustomer.isPending ||
     createAccount.isPending ||
+    updateAccount.isPending ||
+    deleteAccount.isPending ||
     createTransaction.isPending ||
     createPayment.isPending ||
     createLoan.isPending ||
@@ -4821,68 +4859,91 @@ function BusinessPage() {
                   <CardTitle className="text-base">Mes comptes</CardTitle>
                   <CardDescription>Suivez vos comptes et leurs soldes.</CardDescription>
                 </div>
-                <Dialog open={accountDialogOpen} onOpenChange={setAccountDialogOpen}>
+                <Dialog
+                  open={accountDialogOpen}
+                  onOpenChange={(open) => {
+                    setAccountDialogOpen(open);
+                    if (!open) setEditingAccount(null);
+                  }}
+                >
                   <Button
                     type="button"
                     size="sm"
                     aria-label="Ajouter un compte"
                     className="shrink-0 bg-teal-500 text-[#041521] hover:bg-teal-400"
-                    onClick={() => setAccountDialogOpen(true)}
+                    onClick={() => {
+                      setEditingAccount(null);
+                      setAccountDialogOpen(true);
+                    }}
                   >
                     <Plus className="size-4" aria-hidden="true" />
                     <span className="hidden sm:inline">Ajouter un compte</span>
                   </Button>
                   <DialogContent className="business-theme-dialog max-h-[90dvh] overflow-y-auto">
                     <DialogHeader>
-                      <DialogTitle>Ajouter un compte</DialogTitle>
+                      <DialogTitle>
+                        {editingAccount ? "Modifier le compte" : "Ajouter un compte"}
+                      </DialogTitle>
                       <DialogDescription>
-                        Enregistrez un nouveau compte et son solde d’ouverture.
+                        {editingAccount
+                          ? "Modifiez le nom du compte. Le type, la devise et le solde d’ouverture sont conservés pour protéger l’historique financier."
+                          : "Enregistrez un nouveau compte et son solde d’ouverture."}
                       </DialogDescription>
                     </DialogHeader>
                     <form
+                      key={editingAccount?.id ?? "new-account"}
                       id="business-account-form"
                       className="space-y-4"
-                      onSubmit={(event) => void onCreateAccount(event)}
+                      onSubmit={(event) => void onSaveAccount(event)}
                     >
                       <Field label="Nom du compte">
-                        <Input name="name" required maxLength={100} />
-                      </Field>
-                      <Field label="Type de compte">
-                        <select
-                          name="type"
-                          className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                        >
-                          <option value="meru">Portefeuille Meru</option>
-                          <option value="cash">Espèces</option>
-                          <option value="crypto">Cryptomonnaie</option>
-                          <option value="other">Autre</option>
-                        </select>
-                      </Field>
-                      <Field
-                        label="Devise / code de l’actif"
-                        hint="Exemple : USD, HTG, EUR ou BTC."
-                      >
                         <Input
-                          name="currency"
-                          defaultValue="USD"
+                          name="name"
                           required
-                          minLength={3}
-                          maxLength={8}
-                          pattern="[A-Za-z0-9]{3,8}"
+                          maxLength={100}
+                          defaultValue={editingAccount?.name}
                         />
                       </Field>
-                      <Field label="Solde d’ouverture">
-                        <Input
-                          name="openingBalance"
-                          type="number"
-                          min="0"
-                          step="0.00000001"
-                          defaultValue="0"
-                          required
-                        />
-                      </Field>
+                      {!editingAccount && (
+                        <>
+                          <Field label="Type de compte">
+                            <select
+                              name="type"
+                              className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                            >
+                              <option value="meru">Portefeuille Meru</option>
+                              <option value="cash">Espèces</option>
+                              <option value="crypto">Cryptomonnaie</option>
+                              <option value="other">Autre</option>
+                            </select>
+                          </Field>
+                          <Field
+                            label="Devise / code de l’actif"
+                            hint="Exemple : USD, HTG, EUR ou BTC."
+                          >
+                            <Input
+                              name="currency"
+                              defaultValue="USD"
+                              required
+                              minLength={3}
+                              maxLength={8}
+                              pattern="[A-Za-z0-9]{3,8}"
+                            />
+                          </Field>
+                          <Field label="Solde d’ouverture">
+                            <Input
+                              name="openingBalance"
+                              type="number"
+                              min="0"
+                              step="0.00000001"
+                              defaultValue="0"
+                              required
+                            />
+                          </Field>
+                        </>
+                      )}
                       <Button type="submit" className="w-full" disabled={isMutating}>
-                        Créer le compte
+                        {editingAccount ? "Enregistrer les modifications" : "Créer le compte"}
                       </Button>
                     </form>
                   </DialogContent>
@@ -4903,6 +4964,7 @@ function BusinessPage() {
                           <th className="py-2 pr-4">Solde d’ouverture</th>
                           <th className="py-2 pr-4">Solde actuel</th>
                           <th className="py-2 pr-3">Crédits confirmés</th>
+                          <th className="py-2 text-right">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -4924,6 +4986,34 @@ function BusinessPage() {
                                 account.currency,
                               )}
                             </td>
+                            <td className="py-2 text-right">
+                              <div className="flex justify-end gap-1">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  aria-label={`Modifier ${account.name}`}
+                                  disabled={isMutating}
+                                  onClick={() => {
+                                    setEditingAccount(account);
+                                    setAccountDialogOpen(true);
+                                  }}
+                                >
+                                  <Pencil className="size-4" aria-hidden="true" />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  aria-label={`Supprimer ${account.name}`}
+                                  disabled={isMutating}
+                                  className="text-rose-600 hover:text-rose-700 dark:text-rose-400"
+                                  onClick={() => setAccountToDelete(account)}
+                                >
+                                  <Trash2 className="size-4" aria-hidden="true" />
+                                </Button>
+                              </div>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -4931,6 +5021,38 @@ function BusinessPage() {
                   </div>
                 )}
               </CardContent>
+              <AlertDialog
+                open={accountToDelete !== null}
+                onOpenChange={(open) => {
+                  if (!open && !deleteAccount.isPending) setAccountToDelete(null);
+                }}
+              >
+                <AlertDialogContent className="business-theme-dialog">
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Supprimer ce compte ?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      {accountToDelete
+                        ? `Le compte « ${accountToDelete.name} » sera supprimé. Les comptes liés à des opérations ou à l’historique financier ne peuvent pas être supprimés.`
+                        : ""}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel disabled={deleteAccount.isPending}>
+                      Annuler
+                    </AlertDialogCancel>
+                    <AlertDialogAction
+                      disabled={deleteAccount.isPending}
+                      className="bg-rose-700 text-white hover:bg-rose-600"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        void onDeleteAccount();
+                      }}
+                    >
+                      {deleteAccount.isPending ? "Suppression…" : "Supprimer"}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </Card>
 
             <Card className="border-cyan-900/20 shadow-sm dark:border-[#173451] xl:col-start-2 xl:row-span-4 xl:row-start-1">
