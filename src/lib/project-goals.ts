@@ -1,6 +1,7 @@
 export type GoalForProject = {
   id: string;
   status: string;
+  parent_goal_id?: string | null;
   project_id?: string | null;
   subproject_id?: string | null;
   target_date?: string | null;
@@ -17,13 +18,42 @@ export type ProjectForGoal = {
 };
 
 export function calculateProjectGoalProgress(goals: GoalForProject[]) {
-  if (goals.length === 0) return { total: 0, completed: 0, progress: 0, isComplete: false };
-  const completed = goals.filter((goal) => goal.status === "completed").length;
+  const parentIds = new Set(goals.map((goal) => goal.parent_goal_id).filter(Boolean));
+  const leafGoals = goals.filter((goal) => !parentIds.has(goal.id));
+  if (leafGoals.length === 0) {
+    return { total: 0, completed: 0, progress: 0, isComplete: false };
+  }
+  const completed = leafGoals.filter((goal) => goal.status === "completed").length;
   return {
-    total: goals.length,
+    total: leafGoals.length,
     completed,
-    progress: Math.round((completed * 100) / goals.length),
-    isComplete: completed === goals.length,
+    progress: Math.round((completed * 100) / leafGoals.length),
+    isComplete: completed === leafGoals.length,
+  };
+}
+
+export function getGoalDisplayState(goal: GoalForProject, goals: GoalForProject[]) {
+  const children = goals.filter((candidate) => candidate.parent_goal_id === goal.id);
+  if (children.length === 0) {
+    return {
+      status: goal.status,
+      progress: goal.progress ?? 0,
+      completedChildren: 0,
+      totalChildren: 0,
+    };
+  }
+
+  const progress = calculateProjectGoalProgress(children);
+  return {
+    status:
+      goal.status === "paused" || goal.status === "archived"
+        ? goal.status
+        : progress.isComplete
+          ? "completed"
+          : "active",
+    progress: progress.progress,
+    completedChildren: progress.completed,
+    totalChildren: progress.total,
   };
 }
 

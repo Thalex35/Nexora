@@ -7,6 +7,7 @@ import {
   filterGoalsByProject,
   filterGoalsByProjectState,
   filterGoalsBySubproject,
+  getGoalDisplayState,
   goalProjectId,
   sortGoalsChronologically,
 } from "./project-goals.ts";
@@ -48,6 +49,47 @@ test("project progress is zero, partial, and complete by equal goal weighting", 
   assert.equal(calculateProjectGoalProgress(goals).progress, 67);
   assert.equal(calculateProjectGoalProgress([goals[1]!, goals[2]!]).progress, 100);
   assert.equal(calculateProjectGoalProgress([goals[1]!, goals[2]!]).isComplete, true);
+});
+
+test("hierarchical progress counts leaf goals rather than completed parent goals", () => {
+  const hierarchy = [
+    { id: "parent", parent_goal_id: null, status: "completed" },
+    { id: "child-1", parent_goal_id: "parent", status: "active" },
+    { id: "child-2", parent_goal_id: "parent", status: "active" },
+    { id: "child-3", parent_goal_id: "parent", status: "completed" },
+  ];
+  assert.deepEqual(calculateProjectGoalProgress(hierarchy), {
+    total: 3,
+    completed: 1,
+    progress: 33,
+    isComplete: false,
+  });
+  assert.equal(
+    calculateProjectGoalProgress(hierarchy.map((goal) => ({ ...goal, status: "completed" })))
+      .isComplete,
+    true,
+  );
+});
+
+test("parent goal status and progress follow the completion of child goals", () => {
+  const hierarchy = [
+    { id: "parent", parent_goal_id: null, status: "completed", progress: 100 },
+    { id: "child-1", parent_goal_id: "parent", status: "active", progress: 0 },
+    { id: "child-2", parent_goal_id: "parent", status: "completed", progress: 100 },
+  ];
+  assert.deepEqual(getGoalDisplayState(hierarchy[0]!, hierarchy), {
+    status: "active",
+    progress: 50,
+    completedChildren: 1,
+    totalChildren: 2,
+  });
+  const completedHierarchy = hierarchy.map((goal) => ({ ...goal, status: "completed" }));
+  assert.deepEqual(getGoalDisplayState(completedHierarchy[0]!, completedHierarchy), {
+    status: "completed",
+    progress: 100,
+    completedChildren: 2,
+    totalChildren: 2,
+  });
 });
 
 test("adding, completing, reopening, and removing goals changes the project aggregate", () => {
