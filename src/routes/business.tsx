@@ -4451,7 +4451,7 @@ function BusinessPage() {
                   <CardContent className="grid gap-2 px-4 pb-4">
                     <Button
                       type="button"
-                      className="justify-start bg-cyan-600 text-white hover:bg-cyan-500"
+                      className="justify-start border-sky-500/60 bg-sky-500/15 text-sky-50 hover:bg-sky-500/20"
                       onClick={() => openLoanAction("loan")}
                     >
                       <Plus className="mr-2 size-4" aria-hidden="true" /> Accorder un prêt
@@ -4459,7 +4459,7 @@ function BusinessPage() {
                     <Button
                       type="button"
                       variant="outline"
-                      className="justify-start border-cyan-900/60"
+                      className="justify-start border-sky-500/60 bg-sky-500/15 text-sky-50 hover:bg-sky-500/20"
                       onClick={() => openLoanAction("repayment")}
                       disabled={repaymentLoans.length === 0}
                     >
@@ -4469,7 +4469,7 @@ function BusinessPage() {
                     <Button
                       type="button"
                       variant="outline"
-                      className="justify-start border-cyan-900/60"
+                      className="justify-start border-sky-500/60 bg-sky-500/15 text-sky-50 hover:bg-sky-500/20"
                       onClick={() => openLoanAction("payment")}
                       disabled={openTransactions.length === 0 || htgAccounts.length === 0}
                     >
@@ -4479,7 +4479,7 @@ function BusinessPage() {
                     <Button
                       type="button"
                       variant="outline"
-                      className="justify-start border-cyan-900/60"
+                      className="justify-start border-sky-500/60 bg-sky-500/15 text-sky-50 hover:bg-sky-500/20"
                       onClick={() => setActiveTab("expenses")}
                     >
                       <Receipt className="mr-2 size-4" aria-hidden="true" /> Ajouter une dépense
@@ -6224,10 +6224,10 @@ function BusinessPage() {
                       type="button"
                       variant="outline"
                       data-expense-action="expense"
-                      className="h-10 w-full justify-start gap-3 border-teal-700/60 bg-teal-500/10 text-left"
+                      className="h-10 w-full justify-start gap-3 border-sky-500/60 bg-sky-500/15 text-left text-sky-50 hover:bg-sky-500/20"
                       onClick={() => setExpenseDialogOpen(true)}
                     >
-                      <span className="grid size-7 place-items-center rounded-md bg-teal-500/20 text-teal-300">
+                      <span className="grid size-7 place-items-center rounded-md bg-sky-500/20 text-sky-200">
                         <Receipt className="size-4" aria-hidden="true" />
                       </span>
                       Ajouter une dépense
@@ -6237,10 +6237,10 @@ function BusinessPage() {
                       type="button"
                       variant="outline"
                       data-expense-action="loan"
-                      className="h-10 w-full justify-start gap-3 border-blue-700/60 bg-blue-500/10 text-left"
+                      className="h-10 w-full justify-start gap-3 border-sky-500/60 bg-sky-500/15 text-left text-sky-50 hover:bg-sky-500/20"
                       onClick={() => openLoanAction("loan")}
                     >
-                      <span className="grid size-7 place-items-center rounded-md bg-blue-500/20 text-blue-300">
+                      <span className="grid size-7 place-items-center rounded-md bg-sky-500/20 text-sky-200">
                         <HandCoins className="size-4" aria-hidden="true" />
                       </span>
                       Ajouter un prêt
@@ -6250,10 +6250,10 @@ function BusinessPage() {
                       type="button"
                       variant="outline"
                       data-expense-action="payment"
-                      className="h-10 w-full justify-start gap-3 border-violet-700/60 bg-violet-500/10 text-left"
+                      className="h-10 w-full justify-start gap-3 border-sky-500/60 bg-sky-500/15 text-left text-sky-50 hover:bg-sky-500/20"
                       onClick={() => openLoanAction("payment")}
                     >
-                      <span className="grid size-7 place-items-center rounded-md bg-violet-500/20 text-violet-300">
+                      <span className="grid size-7 place-items-center rounded-md bg-sky-500/20 text-sky-200">
                         <CircleDollarSign className="size-4" aria-hidden="true" />
                       </span>
                       Ajouter un paiement
