@@ -28,6 +28,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
   useCreateTask,
+  useGoals,
   useProjects,
   useTasks,
   useUpdateTask,
@@ -169,6 +170,7 @@ function TaskDialog({
   const createTask = useCreateTask();
   const updateTask = useUpdateTask();
   const projects = useProjects();
+  const goals = useGoals();
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -176,6 +178,7 @@ function TaskDialog({
   const [status, setStatus] = useState<TaskStatus>("todo");
   const [dueDate, setDueDate] = useState("");
   const [projectId, setProjectId] = useState("__no_project__");
+  const [goalId, setGoalId] = useState("__no_goal__");
   const [hydratedFor, setHydratedFor] = useState<string | null>(null);
 
   const key = task?.id ?? "new";
@@ -186,9 +189,16 @@ function TaskDialog({
     setStatus(task?.status ?? "todo");
     setDueDate(task?.due_date ?? "");
     setProjectId(task?.project_id ?? "__no_project__");
+    setGoalId(task?.goal_id ?? "__no_goal__");
     setHydratedFor(key);
   }
   if (!open && hydratedFor !== null) setHydratedFor(null);
+  const selectedProject = (projects.data ?? []).find((project) => project.id === projectId);
+  const availableGoals = (goals.data ?? []).filter((goal) =>
+    projectId === "__no_project__"
+      ? goal.project_id === null
+      : goal.project_id === projectId || goal.id === selectedProject?.goal_id,
+  );
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -199,6 +209,7 @@ function TaskDialog({
       status,
       due_date: dueDate || null,
       project_id: projectId === "__no_project__" ? null : projectId,
+      goal_id: goalId === "__no_goal__" ? null : goalId,
     };
     try {
       if (task) {
@@ -271,7 +282,21 @@ function TaskDialog({
             </div>
             <div className="space-y-2">
               <Label htmlFor="task-project">Project (optional)</Label>
-              <Select value={projectId} onValueChange={setProjectId}>
+              <Select
+                value={projectId}
+                onValueChange={(value) => {
+                  setProjectId(value);
+                  const nextProject = (projects.data ?? []).find((project) => project.id === value);
+                  const goalStillMatches = (goals.data ?? []).some(
+                    (goal) =>
+                      goal.id === goalId &&
+                      (value === "__no_project__"
+                        ? goal.project_id === null
+                        : goal.project_id === value || goal.id === nextProject?.goal_id),
+                  );
+                  if (!goalStillMatches) setGoalId("__no_goal__");
+                }}
+              >
                 <SelectTrigger id="task-project">
                   <SelectValue />
                 </SelectTrigger>
@@ -288,6 +313,29 @@ function TaskDialog({
                         {project.name}
                       </SelectItem>
                     ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="task-goal">Goal (optional)</Label>
+              <Select
+                value={goalId}
+                onValueChange={setGoalId}
+                disabled={goals.isLoading || availableGoals.length === 0}
+              >
+                <SelectTrigger id="task-goal">
+                  <SelectValue placeholder="Choose a goal" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__no_goal__">No goal</SelectItem>
+                  {availableGoals.map((goal) => (
+                    <SelectItem key={goal.id} value={goal.id}>
+                      {goal.parent_goal_id
+                        ? `${(goals.data ?? []).find((parent) => parent.id === goal.parent_goal_id)?.title ?? "Goal"} / `
+                        : ""}
+                      {goal.title}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

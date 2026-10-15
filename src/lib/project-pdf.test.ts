@@ -71,6 +71,7 @@ const subprojectGoal: Goal = {
   user_id: "user-1",
   project_id: project.id,
   subproject_id: subproject.id,
+  parent_goal_id: null,
   title: "Complete onboarding",
   description: "Implement account setup.",
   status: "active",

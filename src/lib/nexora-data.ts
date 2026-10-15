@@ -129,6 +129,7 @@ export function useTasks() {
 export type TaskInput = {
   title: string;
   description?: string | null;
+  goal_id?: string | null;
   priority?: TaskPriority;
   status?: TaskStatus;
   due_date?: string | null;
@@ -339,6 +340,7 @@ export function useGoals() {
 export type GoalInput = {
   title: string;
   description?: string | null;
+  parent_goal_id?: string | null;
   status?: GoalStatus;
   target_date?: string | null;
   progress?: number;
@@ -584,6 +586,85 @@ export function useDeleteProjectSubproject() {
         qc.invalidateQueries({ queryKey: ["project_subprojects"] }),
         qc.invalidateQueries({ queryKey: ["goals"] }),
         qc.invalidateQueries({ queryKey: ["projects"] }),
+      ]),
+  });
+}
+
+export type ProjectStructureImportPayload = {
+  projectId: string;
+  subprojects: {
+    id: string;
+    title: string;
+    description: string | null;
+    objective: string | null;
+    start_date: string | null;
+    deadline: string | null;
+    status: ProjectStatus;
+    priority: TaskPriority;
+  }[];
+  goals: {
+    id: string;
+    subproject_id: string | null;
+    parent_goal_id: string | null;
+    title: string;
+    description: string | null;
+    status: GoalStatus;
+    target_date: string | null;
+  }[];
+  tasks: {
+    id: string;
+    goal_id: string;
+    title: string;
+    description: string | null;
+    status: TaskStatus;
+    priority: TaskPriority;
+    due_date: string | null;
+  }[];
+};
+
+export type ProjectStructureImportResult = {
+  subprojects: number;
+  goals: number;
+  objectives: number;
+};
+
+export function useImportProjectStructure() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: ProjectStructureImportPayload) => {
+      await currentUserId();
+      const result = unwrap(
+        await supabase.rpc("import_project_structure", {
+          p_project_id: input.projectId,
+          p_subprojects: input.subprojects,
+          p_goals: input.goals,
+          p_tasks: input.tasks,
+        }),
+      );
+      if (
+        !result ||
+        typeof result !== "object" ||
+        !("subprojects" in result) ||
+        !("goals" in result) ||
+        !("objectives" in result) ||
+        typeof result["subprojects"] !== "number" ||
+        typeof result["goals"] !== "number" ||
+        typeof result["objectives"] !== "number"
+      ) {
+        throw new Error("The server returned an invalid project import summary.");
+      }
+      return {
+        subprojects: result["subprojects"],
+        goals: result["goals"],
+        objectives: result["objectives"],
+      };
+    },
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: ["projects"] }),
+        qc.invalidateQueries({ queryKey: ["goals"] }),
+        qc.invalidateQueries({ queryKey: ["tasks"] }),
+        qc.invalidateQueries({ queryKey: ["project_subprojects"] }),
       ]),
   });
 }
