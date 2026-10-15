@@ -20,7 +20,11 @@ import {
   useUpdateGoal,
   type Goal,
 } from "@/lib/nexora-data";
-import { calculateProjectGoalProgress, sortGoalsChronologically } from "@/lib/project-goals";
+import {
+  calculateProjectGoalProgress,
+  getGoalDisplayState,
+  sortGoalsChronologically,
+} from "@/lib/project-goals";
 
 export const Route = createFileRoute("/subprojects/$subprojectId")({
   head: () => ({
@@ -87,7 +91,11 @@ function SubprojectDetailPage() {
     );
   }
 
-  const { completed: completedGoals, progress } = calculateProjectGoalProgress(projectGoals);
+  const {
+    completed: completedGoals,
+    total: trackedGoals,
+    progress,
+  } = calculateProjectGoalProgress(projectGoals);
 
   function openGoalDialog(goal: Goal | null = null) {
     setEditingGoal(goal);
@@ -171,12 +179,12 @@ function SubprojectDetailPage() {
           <div className="space-y-2">
             <div className="flex justify-between text-sm text-muted-foreground">
               <span>
-                Progress ({completedGoals}/{projectGoals.length} goals completed)
+                Progress ({completedGoals}/{trackedGoals} goals completed)
               </span>
               <span>{progress}%</span>
             </div>
             <Progress value={progress} aria-label={`${progress}% complete`} />
-            {projectGoals.length === 0 && (
+            {trackedGoals === 0 && (
               <p className="text-xs text-muted-foreground">
                 Add a goal to start tracking progress. An empty subproject is not considered
                 complete.
@@ -233,73 +241,27 @@ function SubprojectDetailPage() {
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
               {rootGoals.map((goal) => (
-                <article key={goal.id} className="nexora-panel min-w-0 space-y-3 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <Link
-                      to="/goals/$goalId"
-                      params={{ goalId: goal.id }}
-                      className="break-words font-medium text-foreground hover:text-primary"
-                    >
-                      {goal.title}
-                    </Link>
-                    <Badge variant="outline" className="shrink-0 capitalize">
-                      {goal.status}
-                    </Badge>
-                  </div>
-                  {goal.description && (
-                    <p className="break-words text-sm text-muted-foreground">{goal.description}</p>
-                  )}
-                  <div className="space-y-1.5">
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>Goal progress</span>
-                      <span>{goal.progress}%</span>
-                    </div>
-                    <Progress value={goal.progress} />
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {goal.target_date
-                      ? `Due ${new Date(`${goal.target_date}T00:00:00`).toLocaleDateString()}`
-                      : "No due date"}
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    <Button size="sm" variant="outline" onClick={() => openGoalDialog(goal)}>
-                      Edit
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={updateGoal.isPending}
-                      onClick={() =>
-                        updateGoal.mutate(
-                          goal.status === "completed"
-                            ? { id: goal.id, status: "active", progress: 0 }
-                            : { id: goal.id, status: "completed", progress: 100 },
-                          {
-                            onSuccess: () =>
-                              toast.success(
-                                goal.status === "completed" ? "Goal reopened" : "Goal completed",
-                              ),
-                            onError: () => toast.error("Couldn't update that goal"),
-                          },
-                        )
-                      }
-                    >
-                      {goal.status === "completed" ? "Reopen" : "Mark complete"}
-                    </Button>
-                  </div>
-                  {projectGoals
-                    .filter((child) => child.parent_goal_id === goal.id)
-                    .map((child) => (
-                      <Link
-                        key={child.id}
-                        to="/goals/$goalId"
-                        params={{ goalId: child.id }}
-                        className="block border-l-2 border-primary/20 pl-3 text-sm text-muted-foreground hover:text-primary"
-                      >
-                        {child.title}
-                      </Link>
-                    ))}
-                </article>
+                <GoalCard
+                  key={goal.id}
+                  goal={goal}
+                  children={projectGoals.filter((child) => child.parent_goal_id === goal.id)}
+                  onEdit={() => openGoalDialog(goal)}
+                  onUpdate={(child, completed) =>
+                    updateGoal.mutate(
+                      {
+                        id: child.id,
+                        status: completed ? "completed" : "active",
+                        progress: completed ? 100 : 0,
+                      },
+                      {
+                        onSuccess: () =>
+                          toast.success(completed ? "Goal completed" : "Goal reopened"),
+                        onError: () => toast.error("Couldn't update that goal"),
+                      },
+                    )
+                  }
+                  updatePending={updateGoal.isPending}
+                />
               ))}
             </div>
           )}
@@ -345,5 +307,101 @@ function SubprojectDetailPage() {
         }}
       />
     </AppShell>
+  );
+}
+
+function GoalCard({
+  goal,
+  children,
+  onEdit,
+  onUpdate,
+  updatePending,
+}: {
+  goal: Goal;
+  children: Goal[];
+  onEdit: () => void;
+  onUpdate: (goal: Goal, completed: boolean) => void;
+  updatePending: boolean;
+}) {
+  const state = getGoalDisplayState(goal, [goal, ...children]);
+
+  return (
+    <article className="nexora-panel min-w-0 space-y-3 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <Link
+          to="/goals/$goalId"
+          params={{ goalId: goal.id }}
+          className="break-words font-medium text-foreground hover:text-primary"
+        >
+          {goal.title}
+        </Link>
+        <Badge variant="outline" className="shrink-0 capitalize">
+          {state.status === "active" ? "In progress" : state.status}
+        </Badge>
+      </div>
+      {goal.description && (
+        <p className="break-words text-sm text-muted-foreground">{goal.description}</p>
+      )}
+      <div className="space-y-1.5">
+        <div className="flex justify-between text-xs text-muted-foreground">
+          <span>{children.length > 0 ? "Child goal progress" : "Goal progress"}</span>
+          <span>{state.progress}%</span>
+        </div>
+        <Progress value={state.progress} />
+      </div>
+      {children.length > 0 && (
+        <p className="text-xs text-muted-foreground">
+          {state.completedChildren}/{state.totalChildren} child goals completed; parent status
+          follows its children.
+        </p>
+      )}
+      <p className="text-xs text-muted-foreground">
+        {goal.target_date
+          ? `Due ${new Date(`${goal.target_date}T00:00:00`).toLocaleDateString()}`
+          : "No due date"}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" variant="outline" onClick={onEdit}>
+          Edit
+        </Button>
+        {children.length === 0 && (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={updatePending}
+            onClick={() => onUpdate(goal, goal.status !== "completed")}
+          >
+            {goal.status === "completed" ? "Reopen" : "Mark complete"}
+          </Button>
+        )}
+      </div>
+      {children.map((child) => (
+        <div
+          key={child.id}
+          className="flex flex-wrap items-center justify-between gap-2 border-l-2 border-primary/20 pl-3"
+        >
+          <div className="flex min-w-0 items-center gap-2">
+            <Link
+              to="/goals/$goalId"
+              params={{ goalId: child.id }}
+              className="break-words text-sm text-muted-foreground hover:text-primary"
+            >
+              {child.title}
+            </Link>
+            <Badge variant="outline" className="shrink-0 capitalize">
+              {child.status === "active" ? "In progress" : child.status}
+            </Badge>
+          </div>
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={updatePending}
+            onClick={() => onUpdate(child, child.status !== "completed")}
+          >
+            {child.status === "completed" ? "Reopen" : "Mark complete"}
+          </Button>
+        </div>
+      ))}
+    </article>
   );
 }

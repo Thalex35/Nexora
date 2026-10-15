@@ -26,6 +26,7 @@ import {
   filterGoalsByProjectState,
   filterGoalsBySubproject,
   goalProjectId,
+  getGoalDisplayState,
 } from "@/lib/project-goals";
 import {
   Select,
@@ -76,12 +77,13 @@ function GoalsPage() {
   const [editing, setEditing] = useState<Goal | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Goal | null>(null);
   const statusFiltered = (goals.data ?? []).filter((goal) => {
+    const status = getGoalDisplayState(goal, goals.data ?? []).status;
     if (filter === "all") return true;
     if (filter === "without-project" || filter === "with-project") return true;
-    if (filter === "in-progress") return goal.status === "active";
+    if (filter === "in-progress") return status === "active";
     if (filter === "paused" || filter === "archived" || filter === "completed")
-      return goal.status === filter;
-    return goal.status === "active";
+      return status === filter;
+    return status === "active";
   });
   const projectFiltered =
     selectedProjectId === "all"
@@ -205,124 +207,134 @@ function GoalsPage() {
           />
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
-            {visible.map((goal) => (
-              <article key={goal.id} className="nexora-panel min-w-0 space-y-4 p-4 sm:p-5">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <Link
-                      to="/goals/$goalId"
-                      params={{ goalId: goal.id }}
-                      className="break-words font-semibold text-foreground hover:text-primary"
-                    >
-                      {goal.title}
-                    </Link>
-                    {goal.description && (
-                      <p className="mt-1 line-clamp-2 break-words text-sm text-muted-foreground">
-                        {goal.description}
+            {visible.map((goal) => {
+              const state = getGoalDisplayState(goal, goals.data ?? []);
+              return (
+                <article key={goal.id} className="nexora-panel min-w-0 space-y-4 p-4 sm:p-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <Link
+                        to="/goals/$goalId"
+                        params={{ goalId: goal.id }}
+                        className="break-words font-semibold text-foreground hover:text-primary"
+                      >
+                        {goal.title}
+                      </Link>
+                      {goal.description && (
+                        <p className="mt-1 line-clamp-2 break-words text-sm text-muted-foreground">
+                          {goal.description}
+                        </p>
+                      )}
+                      <GoalProjectLink
+                        goal={goal}
+                        projects={projects.data ?? []}
+                        subprojects={subprojects.data ?? []}
+                      />
+                    </div>
+                    <Badge variant="outline" className="shrink-0 capitalize">
+                      {state.status === "active" ? "In progress" : state.status}
+                    </Badge>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>Progress</span>
+                      <span>{state.progress}%</span>
+                    </div>
+                    <Progress value={state.progress} aria-label={`${state.progress}% complete`} />
+                    {state.totalChildren > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        {state.completedChildren}/{state.totalChildren} child goals completed.
                       </p>
                     )}
-                    <GoalProjectLink
-                      goal={goal}
-                      projects={projects.data ?? []}
-                      subprojects={subprojects.data ?? []}
-                    />
-                  </div>
-                  <Badge variant="outline" className="shrink-0 capitalize">
-                    {goal.status}
-                  </Badge>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>Progress</span>
-                    <span>{goal.progress}%</span>
-                  </div>
-                  <Progress value={goal.progress} aria-label={`${goal.progress}% complete`} />
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="truncate text-xs text-muted-foreground">
-                      {goal.target_date
-                        ? `Target ${new Date(`${goal.target_date}T00:00:00`).toLocaleDateString()}`
-                        : "No target date"}
-                    </span>
-                    <div className="flex shrink-0 items-center">
-                      {filter === "archived" ? (
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="truncate text-xs text-muted-foreground">
+                        {goal.target_date
+                          ? `Target ${new Date(`${goal.target_date}T00:00:00`).toLocaleDateString()}`
+                          : "No target date"}
+                      </span>
+                      <div className="flex shrink-0 items-center">
+                        {filter === "archived" ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={updateGoal.isPending}
+                            onClick={() =>
+                              updateGoal.mutate(
+                                { id: goal.id, status: "active" },
+                                {
+                                  onSuccess: () => toast.success("Goal restored"),
+                                  onError: () => toast.error("Couldn't restore that goal"),
+                                },
+                              )
+                            }
+                          >
+                            <ArchiveRestore className="mr-1 h-4 w-4" />
+                            Restore
+                          </Button>
+                        ) : goal.status !== "archived" ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={updateGoal.isPending}
+                            onClick={() =>
+                              updateGoal.mutate(
+                                { id: goal.id, status: "archived" },
+                                {
+                                  onSuccess: () => toast.success("Goal archived"),
+                                  onError: () => toast.error("Couldn't archive that goal"),
+                                },
+                              )
+                            }
+                          >
+                            <Archive className="mr-1 h-4 w-4" />
+                            Archive
+                          </Button>
+                        ) : null}
                         <Button
                           variant="ghost"
                           size="sm"
-                          disabled={updateGoal.isPending}
-                          onClick={() =>
-                            updateGoal.mutate(
-                              { id: goal.id, status: "active" },
-                              {
-                                onSuccess: () => toast.success("Goal restored"),
-                                onError: () => toast.error("Couldn't restore that goal"),
-                              },
-                            )
-                          }
+                          onClick={() => {
+                            setEditing(goal);
+                            setOpen(true);
+                          }}
                         >
-                          <ArchiveRestore className="mr-1 h-4 w-4" />
-                          Restore
+                          Edit
                         </Button>
-                      ) : goal.status !== "archived" ? (
                         <Button
                           variant="ghost"
-                          size="sm"
-                          disabled={updateGoal.isPending}
-                          onClick={() =>
-                            updateGoal.mutate(
-                              { id: goal.id, status: "archived" },
-                              {
-                                onSuccess: () => toast.success("Goal archived"),
-                                onError: () => toast.error("Couldn't archive that goal"),
-                              },
-                            )
-                          }
+                          size="icon"
+                          aria-label={`Delete ${goal.title}`}
+                          className="text-muted-foreground hover:text-destructive"
+                          onClick={() => setPendingDelete(goal)}
                         >
-                          <Archive className="mr-1 h-4 w-4" />
-                          Archive
+                          <Trash2 className="h-4 w-4" />
                         </Button>
-                      ) : null}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setEditing(goal);
-                          setOpen(true);
-                        }}
-                      >
-                        Edit
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label={`Delete ${goal.title}`}
-                        className="text-muted-foreground hover:text-destructive"
-                        onClick={() => setPendingDelete(goal)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      </div>
                     </div>
+                    {state.totalChildren === 0 &&
+                      goal.status === "active" &&
+                      goal.progress < 100 && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full"
+                          disabled={updateGoal.isPending}
+                          onClick={() =>
+                            updateGoal.mutate(
+                              { id: goal.id, progress: Math.min(100, goal.progress + 10) },
+                              {
+                                onError: () => toast.error("Couldn't update goal progress"),
+                              },
+                            )
+                          }
+                        >
+                          Update progress +10%
+                        </Button>
+                      )}
                   </div>
-                  {goal.status === "active" && goal.progress < 100 && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full"
-                      disabled={updateGoal.isPending}
-                      onClick={() =>
-                        updateGoal.mutate(
-                          { id: goal.id, progress: Math.min(100, goal.progress + 10) },
-                          {
-                            onError: () => toast.error("Couldn't update goal progress"),
-                          },
-                        )
-                      }
-                    >
-                      Update progress +10%
-                    </Button>
-                  )}
-                </div>
-              </article>
-            ))}
+                </article>
+              );
+            })}
           </div>
         )}
       </div>

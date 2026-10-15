@@ -12,6 +12,7 @@ import { ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { getGoalDisplayState } from "@/lib/project-goals";
 import { useDeleteGoal, useGoals, useProjects, useTasks, type Goal } from "@/lib/nexora-data";
 
 export const Route = createFileRoute("/goals/$goalId")({
@@ -69,6 +70,8 @@ function GoalDetailPage() {
     );
   }
 
+  const goalState = getGoalDisplayState(goal, goals.data ?? []);
+
   return (
     <AppShell>
       <div className="space-y-6">
@@ -88,7 +91,7 @@ function GoalDetailPage() {
         <section className="nexora-panel space-y-5 p-5 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <Badge variant="outline" className="capitalize">
-              {goal.status}
+              {goalState.status === "active" ? "In progress" : goalState.status}
             </Badge>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
@@ -108,9 +111,15 @@ function GoalDetailPage() {
           <div className="space-y-2">
             <div className="flex justify-between text-sm text-muted-foreground">
               <span>Progress</span>
-              <span>{goal.progress}%</span>
+              <span>{goalState.progress}%</span>
             </div>
-            <Progress value={goal.progress} aria-label={`${goal.progress}% complete`} />
+            <Progress value={goalState.progress} aria-label={`${goalState.progress}% complete`} />
+            {childGoals.length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                {goalState.completedChildren}/{goalState.totalChildren} child goals completed;
+                parent status and progress follow its children.
+              </p>
+            )}
           </div>
           <dl className="grid gap-4 border-t border-border pt-4 text-sm sm:grid-cols-3">
             <div>
@@ -154,7 +163,7 @@ function GoalDetailPage() {
             {childGoals.length > 0 && (
               <ul className="space-y-2 border-l-2 border-primary/20 pl-4">
                 {childGoals.map((child) => (
-                  <li key={child.id}>
+                  <li key={child.id} className="flex flex-wrap items-center gap-2">
                     <Link
                       to="/goals/$goalId"
                       params={{ goalId: child.id }}
@@ -162,6 +171,9 @@ function GoalDetailPage() {
                     >
                       {child.title}
                     </Link>
+                    <Badge variant="outline" className="capitalize">
+                      {child.status === "active" ? "In progress" : child.status}
+                    </Badge>
                   </li>
                 ))}
               </ul>
