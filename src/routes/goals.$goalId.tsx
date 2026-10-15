@@ -7,11 +7,12 @@ import { AppShell } from "@/components/app-shell";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { GoalDialog } from "@/components/goal-dialog";
 import { PageHeader } from "@/components/page-header";
+import { TaskRow } from "@/components/task-row";
 import { ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { useDeleteGoal, useGoals, useProjects, type Goal } from "@/lib/nexora-data";
+import { useDeleteGoal, useGoals, useProjects, useTasks, type Goal } from "@/lib/nexora-data";
 
 export const Route = createFileRoute("/goals/$goalId")({
   head: () => ({
@@ -27,6 +28,7 @@ function GoalDetailPage() {
   const { goalId } = Route.useParams();
   const goals = useGoals();
   const projects = useProjects();
+  const tasks = useTasks();
   const deleteGoal = useDeleteGoal();
   const [editing, setEditing] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<Goal | null>(null);
@@ -34,18 +36,23 @@ function GoalDetailPage() {
   const relatedProjects = (projects.data ?? []).filter(
     (project) => project.goal_id === goalId || project.id === goal?.project_id,
   );
+  const parentGoal = (goals.data ?? []).find((item) => item.id === goal?.parent_goal_id);
+  const childGoals = (goals.data ?? []).filter((item) => item.parent_goal_id === goalId);
+  const objectiveTasks = (tasks.data ?? []).filter((task) => task.goal_id === goalId);
 
-  if (goals.isLoading || projects.isLoading) {
+  if (goals.isLoading || projects.isLoading || tasks.isLoading) {
     return (
       <AppShell>
         <LoadingState rows={3} />
       </AppShell>
     );
   }
-  if (goals.isError || projects.isError) {
+  if (goals.isError || projects.isError || tasks.isError) {
     return (
       <AppShell>
-        <ErrorState onRetry={() => void Promise.all([goals.refetch(), projects.refetch()])} />
+        <ErrorState
+          onRetry={() => void Promise.all([goals.refetch(), projects.refetch(), tasks.refetch()])}
+        />
       </AppShell>
     );
   }
@@ -127,6 +134,62 @@ function GoalDetailPage() {
               </dd>
             </div>
           </dl>
+        </section>
+
+        {(parentGoal || childGoals.length > 0) && (
+          <section className="nexora-panel space-y-3 p-4">
+            <h2 className="font-semibold">Goal hierarchy</h2>
+            {parentGoal && (
+              <p className="text-sm text-muted-foreground">
+                Main goal:{" "}
+                <Link
+                  to="/goals/$goalId"
+                  params={{ goalId: parentGoal.id }}
+                  className="text-primary hover:underline"
+                >
+                  {parentGoal.title}
+                </Link>
+              </p>
+            )}
+            {childGoals.length > 0 && (
+              <ul className="space-y-2 border-l-2 border-primary/20 pl-4">
+                {childGoals.map((child) => (
+                  <li key={child.id}>
+                    <Link
+                      to="/goals/$goalId"
+                      params={{ goalId: child.id }}
+                      className="text-sm text-primary hover:underline"
+                    >
+                      {child.title}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
+
+        <section className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-lg font-semibold text-foreground">Objectives</h2>
+              <p className="text-sm text-muted-foreground">Tasks linked to this goal.</p>
+            </div>
+            <Button variant="outline" size="sm" asChild>
+              <Link to="/tasks">Manage tasks</Link>
+            </Button>
+          </div>
+          {objectiveTasks.length === 0 ? (
+            <p className="nexora-panel p-4 text-sm text-muted-foreground">
+              No objectives are linked to this goal yet.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {objectiveTasks.map((task) => (
+                <TaskRow key={task.id} task={task} showDelete />
+              ))}
+            </div>
+          )}
         </section>
 
         <section className="space-y-3">

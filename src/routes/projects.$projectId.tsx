@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, FolderKanban, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, FileSpreadsheet, FolderKanban, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/app-shell";
@@ -10,6 +10,7 @@ import { PageHeader } from "@/components/page-header";
 import { ProjectBudgetSection } from "@/components/project-budget-section";
 import { ProjectDialog } from "@/components/project-dialog";
 import { ProjectSubprojectDialog } from "@/components/project-subproject-dialog";
+import { ProjectStructureImportDialog } from "@/components/project-structure-import-dialog";
 import { TaskRow } from "@/components/task-row";
 import { ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
@@ -68,6 +69,7 @@ function ProjectDetailPage() {
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Project | null>(null);
   const [subprojectDialogOpen, setSubprojectDialogOpen] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [editingSubproject, setEditingSubproject] = useState<ProjectSubproject | null>(null);
   const [pendingSubprojectDelete, setPendingSubprojectDelete] = useState<ProjectSubproject | null>(
     null,
@@ -87,7 +89,9 @@ function ProjectDetailPage() {
   const unassignedGoals = sortGoalsChronologically(
     (goals.data ?? []).filter(
       (item) =>
-        (item.project_id === projectId || item.id === project?.goal_id) && !item.subproject_id,
+        (item.project_id === projectId || item.id === project?.goal_id) &&
+        !item.subproject_id &&
+        !item.parent_goal_id,
     ),
   );
   const loading =
@@ -192,12 +196,18 @@ function ProjectDetailPage() {
           title={project.name}
           description={project.description || "A focused body of work, supported by tasks."}
           actions={
-            <Button variant="ghost" size="sm" asChild>
-              <Link to="/projects" search={{ goalId: undefined }}>
-                <ArrowLeft className="mr-1 h-4 w-4" />
-                Projects
-              </Link>
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" onClick={() => setImportDialogOpen(true)}>
+                <FileSpreadsheet className="mr-1 size-4" aria-hidden="true" />
+                Import project structure
+              </Button>
+              <Button variant="ghost" size="sm" asChild>
+                <Link to="/projects" search={{ goalId: undefined }}>
+                  <ArrowLeft className="mr-1 h-4 w-4" />
+                  Projects
+                </Link>
+              </Button>
+            </div>
           }
         />
 
@@ -418,28 +428,39 @@ function ProjectDetailPage() {
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               {unassignedGoals.map((legacyGoal) => (
-                <article
-                  key={legacyGoal.id}
-                  className="nexora-panel flex min-w-0 items-start justify-between gap-3 p-4"
-                >
-                  <div className="min-w-0">
-                    <Link
-                      to="/goals/$goalId"
-                      params={{ goalId: legacyGoal.id }}
-                      className="break-words font-medium text-foreground hover:text-primary"
-                    >
-                      {legacyGoal.title}
-                    </Link>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {legacyGoal.target_date
-                        ? `Due ${new Date(`${legacyGoal.target_date}T00:00:00`).toLocaleDateString()}`
-                        : "No due date"}{" "}
-                      · {legacyGoal.status}
-                    </p>
+                <article key={legacyGoal.id} className="nexora-panel min-w-0 space-y-3 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <Link
+                        to="/goals/$goalId"
+                        params={{ goalId: legacyGoal.id }}
+                        className="break-words font-medium text-foreground hover:text-primary"
+                      >
+                        {legacyGoal.title}
+                      </Link>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {legacyGoal.target_date
+                          ? `Due ${new Date(`${legacyGoal.target_date}T00:00:00`).toLocaleDateString()}`
+                          : "No due date"}{" "}
+                        · {legacyGoal.status}
+                      </p>
+                    </div>
+                    <Button size="sm" variant="outline" onClick={() => openGoalDialog(legacyGoal)}>
+                      Organize
+                    </Button>
                   </div>
-                  <Button size="sm" variant="outline" onClick={() => openGoalDialog(legacyGoal)}>
-                    Organize
-                  </Button>
+                  {projectGoals
+                    .filter((child) => child.parent_goal_id === legacyGoal.id)
+                    .map((child) => (
+                      <Link
+                        key={child.id}
+                        to="/goals/$goalId"
+                        params={{ goalId: child.id }}
+                        className="block border-l-2 border-primary/20 pl-3 text-sm text-muted-foreground hover:text-primary"
+                      >
+                        {child.title}
+                      </Link>
+                    ))}
                 </article>
               ))}
             </div>
@@ -526,12 +547,22 @@ function ProjectDetailPage() {
         goal={editingGoal}
         projectId={projectId}
         subprojects={projectSubprojects}
+        parentGoals={projectGoals}
       />
       <ProjectSubprojectDialog
         open={subprojectDialogOpen}
         onOpenChange={setSubprojectDialogOpen}
         projectId={projectId}
         subproject={editingSubproject}
+      />
+      <ProjectStructureImportDialog
+        open={importDialogOpen}
+        onOpenChange={setImportDialogOpen}
+        project={project}
+        goals={(goals.data ?? []).filter(
+          (item) => item.project_id === project.id || item.id === project.goal_id,
+        )}
+        subprojects={projectSubprojects}
       />
       <ConfirmDialog
         open={pendingSubprojectDelete !== null}

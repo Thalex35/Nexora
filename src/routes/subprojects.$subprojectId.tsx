@@ -49,6 +49,7 @@ function SubprojectDetailPage() {
   const projectGoals = sortGoalsChronologically(
     (goals.data ?? []).filter((goal) => goal.subproject_id === subprojectId),
   );
+  const rootGoals = projectGoals.filter((goal) => goal.parent_goal_id === null);
   const loading = projects.isLoading || goals.isLoading || subprojects.isLoading;
 
   if (loading) {
@@ -231,7 +232,7 @@ function SubprojectDetailPage() {
             />
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
-              {projectGoals.map((goal) => (
+              {rootGoals.map((goal) => (
                 <article key={goal.id} className="nexora-panel min-w-0 space-y-3 p-4">
                   <div className="flex items-start justify-between gap-3">
                     <Link
@@ -286,6 +287,18 @@ function SubprojectDetailPage() {
                       {goal.status === "completed" ? "Reopen" : "Mark complete"}
                     </Button>
                   </div>
+                  {projectGoals
+                    .filter((child) => child.parent_goal_id === goal.id)
+                    .map((child) => (
+                      <Link
+                        key={child.id}
+                        to="/goals/$goalId"
+                        params={{ goalId: child.id }}
+                        className="block border-l-2 border-primary/20 pl-3 text-sm text-muted-foreground hover:text-primary"
+                      >
+                        {child.title}
+                      </Link>
+                    ))}
                 </article>
               ))}
             </div>
@@ -299,6 +312,7 @@ function SubprojectDetailPage() {
         goal={editingGoal}
         projectId={project.id}
         subprojectId={subproject.id}
+        parentGoals={projectGoals}
       />
       <ProjectSubprojectDialog
         open={editDialogOpen}

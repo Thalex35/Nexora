@@ -28,6 +28,7 @@ import {
 } from "@/lib/nexora-data";
 
 const NO_SUBPROJECT = "__no_subproject__";
+const NO_PARENT_GOAL = "__no_parent_goal__";
 export function GoalDialog({
   open,
   onOpenChange,
@@ -35,6 +36,7 @@ export function GoalDialog({
   projectId = null,
   subprojectId = null,
   subprojects = [],
+  parentGoals,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -42,6 +44,7 @@ export function GoalDialog({
   projectId?: string | null;
   subprojectId?: string | null;
   subprojects?: ProjectSubproject[];
+  parentGoals?: Goal[];
 }) {
   const createGoal = useCreateGoal();
   const updateGoal = useUpdateGoal();
@@ -51,6 +54,16 @@ export function GoalDialog({
   const [targetDate, setTargetDate] = useState("");
   const [progress, setProgress] = useState("0");
   const [selectedSubprojectId, setSelectedSubprojectId] = useState(NO_SUBPROJECT);
+  const [selectedParentGoalId, setSelectedParentGoalId] = useState(NO_PARENT_GOAL);
+
+  function changeSubproject(value: string) {
+    setSelectedSubprojectId(value);
+    const parent = parentGoals?.find((candidate) => candidate.id === selectedParentGoalId);
+    const targetSubprojectId = value === NO_SUBPROJECT ? null : value;
+    if (parent && parent.subproject_id !== targetSubprojectId) {
+      setSelectedParentGoalId(NO_PARENT_GOAL);
+    }
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -60,6 +73,7 @@ export function GoalDialog({
     setTargetDate(goal?.target_date ?? "");
     setProgress(String(goal?.progress ?? 0));
     setSelectedSubprojectId(subprojectId ?? goal?.subproject_id ?? NO_SUBPROJECT);
+    setSelectedParentGoalId(goal?.parent_goal_id ?? NO_PARENT_GOAL);
   }, [goal, open, subprojectId]);
 
   async function submit(event: React.FormEvent) {
@@ -79,6 +93,11 @@ export function GoalDialog({
               subproject_id: selectedSubprojectId === NO_SUBPROJECT ? null : selectedSubprojectId,
             }
           : {}),
+      ...(parentGoals
+        ? {
+            parent_goal_id: selectedParentGoalId === NO_PARENT_GOAL ? null : selectedParentGoalId,
+          }
+        : {}),
     };
     try {
       if (goal) {
@@ -146,7 +165,7 @@ export function GoalDialog({
             {!subprojectId && subprojects.length > 0 && (
               <div className="space-y-2">
                 <Label htmlFor="goal-subproject">Subproject</Label>
-                <Select value={selectedSubprojectId} onValueChange={setSelectedSubprojectId}>
+                <Select value={selectedSubprojectId} onValueChange={changeSubproject}>
                   <SelectTrigger id="goal-subproject">
                     <SelectValue />
                   </SelectTrigger>
@@ -157,6 +176,35 @@ export function GoalDialog({
                         {subproject.title}
                       </SelectItem>
                     ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {parentGoals && parentGoals.length > 0 && (
+              <div className="space-y-2">
+                <Label htmlFor="goal-parent">Parent goal</Label>
+                <Select value={selectedParentGoalId} onValueChange={setSelectedParentGoalId}>
+                  <SelectTrigger id="goal-parent">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NO_PARENT_GOAL}>No parent goal</SelectItem>
+                    {parentGoals
+                      .filter(
+                        (candidate) =>
+                          candidate.id !== goal?.id &&
+                          candidate.parent_goal_id === null &&
+                          candidate.subproject_id ===
+                            (subprojectId ??
+                              (selectedSubprojectId === NO_SUBPROJECT
+                                ? null
+                                : selectedSubprojectId)),
+                      )
+                      .map((candidate) => (
+                        <SelectItem key={candidate.id} value={candidate.id}>
+                          {candidate.title}
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </div>

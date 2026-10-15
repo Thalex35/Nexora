@@ -693,6 +693,7 @@ export type Database = {
           created_at: string;
           description: string | null;
           id: string;
+          parent_goal_id: string | null;
           project_id: string | null;
           subproject_id: string | null;
           progress: number;
@@ -706,6 +707,7 @@ export type Database = {
           created_at?: string;
           description?: string | null;
           id?: string;
+          parent_goal_id?: string | null;
           project_id?: string | null;
           subproject_id?: string | null;
           progress?: number;
@@ -719,6 +721,7 @@ export type Database = {
           created_at?: string;
           description?: string | null;
           id?: string;
+          parent_goal_id?: string | null;
           project_id?: string | null;
           subproject_id?: string | null;
           progress?: number;
@@ -741,6 +744,13 @@ export type Database = {
             columns: ["subproject_id"];
             isOneToOne: false;
             referencedRelation: "project_subprojects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "goals_parent_goal_id_fkey";
+            columns: ["parent_goal_id"];
+            isOneToOne: false;
+            referencedRelation: "goals";
             referencedColumns: ["id"];
           },
         ];
@@ -1345,6 +1355,7 @@ export type Database = {
           created_at: string;
           description: string | null;
           due_date: string | null;
+          goal_id: string | null;
           id: string;
           priority: Database["public"]["Enums"]["task_priority"];
           project_id: string | null;
@@ -1357,6 +1368,7 @@ export type Database = {
           created_at?: string;
           description?: string | null;
           due_date?: string | null;
+          goal_id?: string | null;
           id?: string;
           priority?: Database["public"]["Enums"]["task_priority"];
           project_id?: string | null;
@@ -1369,6 +1381,7 @@ export type Database = {
           created_at?: string;
           description?: string | null;
           due_date?: string | null;
+          goal_id?: string | null;
           id?: string;
           priority?: Database["public"]["Enums"]["task_priority"];
           project_id?: string | null;
@@ -1383,6 +1396,13 @@ export type Database = {
             columns: ["project_id"];
             isOneToOne: false;
             referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "tasks_goal_id_fkey";
+            columns: ["goal_id"];
+            isOneToOne: false;
+            referencedRelation: "goals";
             referencedColumns: ["id"];
           },
         ];
@@ -1439,6 +1459,15 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      import_project_structure: {
+        Args: {
+          p_project_id: string;
+          p_subprojects: Json;
+          p_goals: Json;
+          p_tasks: Json;
+        };
+        Returns: Json;
+      };
       business_account_balances: {
         Args: Record<PropertyKey, never>;
         Returns: {
