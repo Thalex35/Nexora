@@ -313,7 +313,7 @@ function BusinessPage() {
   const [loansPaymentsTab, setLoansPaymentsTab] = useState("loans");
   const [editingAccount, setEditingAccount] = useState<BusinessAccount | null>(null);
   const [accountToDelete, setAccountToDelete] = useState<BusinessAccount | null>(null);
-  const [meruBalanceVisible, setMeruBalanceVisible] = useState(true);
+  const [accountBalancesVisible, setAccountBalancesVisible] = useState(true);
   const [entryType, setEntryType] = useState<"transfer" | "deposit" | "loan">("transfer");
   const [entryDialogOpen, setEntryDialogOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<BusinessTransaction | null>(null);
@@ -1353,9 +1353,6 @@ function BusinessPage() {
     );
   }
 
-  const hasMeruAccount = accounts.some(
-    (account) => account.type === "meru" && account.currency === "USD",
-  );
   const htgAccounts = accounts.filter((account) => account.currency === "HTG");
   const usdAccounts = accounts.filter((account) => account.currency === "USD");
   const activeLoans = loans.filter((loan) => loan.status !== "repaid");
@@ -1685,62 +1682,79 @@ function BusinessPage() {
           <TabsContent value="overview" className="space-y-5">
             <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,2.1fr)_minmax(290px,0.95fr)]">
               <section aria-label="Aperçu Business" className="min-w-0 space-y-4">
-                <Card className="relative isolate overflow-hidden border-cyan-900/70 bg-gradient-to-br from-[#061527] via-[#052b3a] to-[#073d43] text-white shadow-lg dark:from-[#061323] dark:via-[#06232f] dark:to-[#063b3e]">
-                  <div
-                    className="pointer-events-none absolute -right-5 -top-20 size-64 rounded-full border-[28px] border-cyan-400/10"
-                    aria-hidden="true"
-                  />
-                  <div
-                    className="pointer-events-none absolute -right-16 -top-28 size-72 rounded-full border-[18px] border-teal-300/10"
-                    aria-hidden="true"
-                  />
-                  <CardContent className="relative flex min-h-36 items-center justify-between gap-5 p-5 sm:p-6">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium text-slate-200">Solde global Meru</p>
-                        <span
-                          title="Solde disponible du compte Meru USD, calculé à partir du grand livre et des mouvements confirmés."
-                          aria-label="À propos du solde Meru"
-                          role="img"
-                        >
-                          <Info className="size-4 text-cyan-200" aria-hidden="true" />
-                        </span>
-                      </div>
-                      <div className="mt-1 flex flex-wrap items-center gap-3">
-                        <p className="text-4xl font-bold tracking-tight text-teal-300 sm:text-5xl">
-                          {!hasMeruAccount
-                            ? "Non configuré"
-                            : meruBalanceVisible
-                              ? formatBusinessMoney(metrics.meruWalletBalance, "USD")
-                              : "••••••"}
-                        </p>
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="text-sm font-semibold text-foreground">Soldes des comptes</h2>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label={
+                      accountBalancesVisible ? "Masquer les soldes" : "Afficher les soldes"
+                    }
+                    onClick={() => setAccountBalancesVisible((visible) => !visible)}
+                  >
+                    {accountBalancesVisible ? (
+                      <Eye className="size-4" aria-hidden="true" />
+                    ) : (
+                      <EyeOff className="size-4" aria-hidden="true" />
+                    )}
+                  </Button>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {accounts.length === 0 ? (
+                    <Card className="border-dashed border-cyan-900/70 bg-[#061527] text-white sm:col-span-2">
+                      <CardContent className="flex min-h-36 flex-col items-start justify-center gap-3 p-5 sm:p-6">
+                        <div>
+                          <p className="text-sm font-semibold">Aucun compte configuré</p>
+                          <p className="mt-1 text-xs text-cyan-100/80">
+                            Ajoutez un compte pour suivre son solde ici.
+                          </p>
+                        </div>
                         <Button
                           type="button"
+                          size="sm"
                           variant="outline"
-                          size="icon"
-                          aria-label={meruBalanceVisible ? "Masquer le solde" : "Afficher le solde"}
-                          className="size-8 rounded-full border-slate-500/50 bg-slate-950/30 text-white hover:bg-slate-800/70 hover:text-white"
-                          onClick={() => setMeruBalanceVisible((visible) => !visible)}
+                          onClick={() => setActiveTab("funding")}
                         >
-                          {meruBalanceVisible ? (
-                            <Eye className="size-4" aria-hidden="true" />
-                          ) : (
-                            <EyeOff className="size-4" aria-hidden="true" />
-                          )}
+                          <Plus className="size-4" aria-hidden="true" /> Ajouter un compte
                         </Button>
-                      </div>
-                      <p className="mt-2 max-w-xl text-xs text-cyan-100/80">
-                        {hasMeruAccount
-                          ? "Montant disponible après les transferts confirmés et frais enregistrés. Les opérations en attente ne sont pas incluses."
-                          : "Créez un compte Meru USD dans Financement & comptes pour afficher son solde."}
-                      </p>
-                    </div>
-                    <div className="hidden shrink-0 text-right sm:block" aria-hidden="true">
-                      <span className="text-3xl font-bold tracking-tight text-white/90">meru</span>
-                      <p className="text-[10px] text-cyan-100/70">USD · ledger</p>
-                    </div>
-                  </CardContent>
-                </Card>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    accounts.map((account) => (
+                      <Card
+                        key={account.id}
+                        className="relative isolate min-w-0 overflow-hidden border-cyan-900/70 bg-gradient-to-br from-[#061527] via-[#052b3a] to-[#073d43] text-white shadow-lg dark:from-[#061323] dark:via-[#06232f] dark:to-[#063b3e]"
+                      >
+                        <div
+                          className="pointer-events-none absolute -right-8 -top-14 size-40 rounded-full border-[18px] border-cyan-400/10"
+                          aria-hidden="true"
+                        />
+                        <CardContent className="relative flex min-h-36 items-start justify-between gap-3 p-4 sm:p-5">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-slate-100">
+                              {account.name}
+                            </p>
+                            <p className="mt-0.5 text-[10px] uppercase tracking-wide text-cyan-100/70">
+                              {account.type} · {account.currency}
+                            </p>
+                            <p className="mt-3 break-words text-3xl font-bold tracking-tight text-teal-300">
+                              {accountBalancesVisible
+                                ? formatBusinessMoney(account.balance, account.currency)
+                                : "••••••"}
+                            </p>
+                            <p className="mt-1 text-[10px] text-cyan-100/70">
+                              Solde confirmé du grand livre
+                            </p>
+                          </div>
+                          <span className="grid size-9 shrink-0 place-items-center rounded-xl border border-white/15 bg-white/10 text-cyan-100">
+                            <Wallet className="size-4" aria-hidden="true" />
+                          </span>
+                        </CardContent>
+                      </Card>
+                    ))
+                  )}
+                </div>
 
                 <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
                   {[
@@ -2906,92 +2920,6 @@ function BusinessPage() {
                 Ouvrir la vue comptable détaillée
               </summary>
               <div className="space-y-5 pt-5">
-                <div className="grid gap-4 xl:grid-cols-[1.45fr_0.85fr]">
-                  <Card className="overflow-hidden border-emerald-200 bg-gradient-to-br from-emerald-700 via-emerald-700 to-teal-700 text-white shadow-lg dark:border-emerald-900 dark:from-[#07110e] dark:via-[#101b17] dark:to-[#101c1a]">
-                    <CardContent className="flex min-h-52 flex-col justify-between gap-8 p-6 sm:p-8">
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <p className="text-sm font-medium text-emerald-50/80">
-                            Available Meru balance
-                          </p>
-                          <p className="mt-1 text-xs text-emerald-50/70">
-                            Confirmed USD funds · ledger balance
-                          </p>
-                        </div>
-                        <span className="grid size-11 place-items-center rounded-xl border border-white/15 bg-white/10 text-emerald-50">
-                          <Wallet className="size-5" aria-hidden="true" />
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap items-end justify-between gap-4">
-                        <div>
-                          <p className="text-3xl font-bold tracking-tight sm:text-4xl">
-                            {!hasMeruAccount
-                              ? "Not set up"
-                              : meruBalanceVisible
-                                ? formatBusinessMoney(metrics.meruWalletBalance, "USD")
-                                : "••••••"}
-                          </p>
-                          <p className="mt-2 text-sm text-emerald-50/75">
-                            {hasMeruAccount
-                              ? "Pending operations are not included"
-                              : "Add a Meru USD account to show its balance"}
-                          </p>
-                        </div>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="icon"
-                          aria-label={meruBalanceVisible ? "Hide balance" : "Show balance"}
-                          className="border-white/25 bg-white/10 text-white hover:bg-white/20 hover:text-white"
-                          onClick={() => setMeruBalanceVisible((visible) => !visible)}
-                        >
-                          {meruBalanceVisible ? (
-                            <Eye className="size-4" aria-hidden="true" />
-                          ) : (
-                            <EyeOff className="size-4" aria-hidden="true" />
-                          )}
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="border-border bg-card">
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-base">Quick actions</CardTitle>
-                      <CardDescription>Go directly to an existing workflow</CardDescription>
-                    </CardHeader>
-                    <CardContent className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
-                      <Button
-                        className="justify-start bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-500 dark:text-[#07110e] dark:hover:bg-emerald-400"
-                        onClick={() => setActiveTab("transactions")}
-                      >
-                        <Plus className="size-4" /> Record customer transfer
-                      </Button>
-                      <Button
-                        variant="outline"
-                        className="justify-start"
-                        onClick={() => setActiveTab("payments-loans")}
-                      >
-                        <Plus className="size-4" /> Collect payment or manage loan
-                      </Button>
-                      <Button
-                        variant="outline"
-                        className="justify-start"
-                        onClick={() => setActiveTab("funding")}
-                      >
-                        <Plus className="size-4" /> Add funding or account
-                      </Button>
-                      <Button
-                        variant="outline"
-                        className="justify-start"
-                        onClick={() => setActiveTab("expenses")}
-                      >
-                        <Plus className="size-4" /> Record expense
-                      </Button>
-                    </CardContent>
-                  </Card>
-                </div>
-
                 <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
                   {[
                     {
@@ -3273,28 +3201,6 @@ function BusinessPage() {
                     <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
                       {[
                         {
-                          label: "Available Meru balance",
-                          value: hasMeruAccount
-                            ? formatBusinessMoney(metrics.meruWalletBalance, "USD")
-                            : "Not set up",
-                          currency: "USD",
-                          icon: Wallet,
-                          cardClass:
-                            "border-emerald-200/80 bg-emerald-50/70 dark:border-emerald-900/70 dark:bg-emerald-950/35",
-                          iconClass:
-                            "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/70 dark:text-emerald-200",
-                        },
-                        {
-                          label: "Available cash balance",
-                          value: formatBusinessMoney(metrics.cashOnHand, "HTG"),
-                          currency: "HTG",
-                          icon: PiggyBank,
-                          cardClass:
-                            "border-violet-200/80 bg-violet-50/70 dark:border-violet-900/70 dark:bg-violet-950/35",
-                          iconClass:
-                            "bg-violet-100 text-violet-700 dark:bg-violet-900/70 dark:text-violet-200",
-                        },
-                        {
                           label: "Customer payments received",
                           value: formatBusinessMoney(metrics.totalCustomerReceipts, "HTG"),
                           currency: "HTG",
@@ -3337,7 +3243,7 @@ function BusinessPage() {
                         </Card>
                       ))}
                     </div>
-                    <div className="grid gap-4 xl:grid-cols-[1fr_0.85fr_1.1fr]">
+                    <div className="grid gap-4 xl:grid-cols-[1fr_0.85fr]">
                       <Card>
                         <CardHeader className="pb-3">
                           <div className="flex items-center justify-between gap-3">
@@ -3615,43 +3521,6 @@ function BusinessPage() {
                             {paymentLoanMetrics.overdueCustomerPayments} overdue payments ·{" "}
                             {paymentLoanMetrics.overdueLoans} overdue loans
                           </p>
-                        </CardContent>
-                      </Card>
-
-                      <Card>
-                        <CardHeader className="pb-3">
-                          <CardTitle className="text-base">Quick actions</CardTitle>
-                          <CardDescription className="mt-1">
-                            Jump to an existing workflow
-                          </CardDescription>
-                        </CardHeader>
-                        <CardContent className="grid gap-2">
-                          <Button
-                            className="justify-start bg-emerald-600 text-white hover:bg-emerald-700"
-                            onClick={() => setActiveTab("payments-loans")}
-                          >
-                            <Plus className="size-4" /> Record customer payment
-                          </Button>
-                          <Button
-                            className="justify-start"
-                            onClick={() => setActiveTab("payments-loans")}
-                          >
-                            <Plus className="size-4" /> Issue a loan or record repayment
-                          </Button>
-                          <Button
-                            variant="outline"
-                            className="justify-start"
-                            onClick={() => setActiveTab("expenses")}
-                          >
-                            <Plus className="size-4" /> Add expense
-                          </Button>
-                          <Button
-                            variant="outline"
-                            className="justify-start"
-                            onClick={() => setActiveTab("funding")}
-                          >
-                            <Plus className="size-4" /> Add funding
-                          </Button>
                         </CardContent>
                       </Card>
                     </div>
@@ -5512,27 +5381,7 @@ function BusinessPage() {
             value="funding"
             className="grid items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(320px,0.95fr)]"
           >
-            <Card className="relative overflow-hidden border-0 bg-gradient-to-r from-[#071b35] via-[#0b3150] to-[#0b655f] text-white shadow-lg xl:col-start-1 xl:row-start-1">
-              <div
-                className="pointer-events-none absolute -right-10 -top-14 size-56 rounded-full border-[32px] border-white/5"
-                aria-hidden="true"
-              />
-              <CardContent className="relative flex flex-wrap items-end justify-between gap-5 p-6">
-                <div>
-                  <p className="flex items-center gap-2 text-sm text-cyan-100">
-                    <Wallet className="size-4" aria-hidden="true" /> Solde du portefeuille Meru
-                  </p>
-                  <p className="mt-2 text-3xl font-semibold tracking-tight">
-                    {formatBusinessMoney(metrics.meruWalletBalance, "USD")}
-                  </p>
-                  <p className="mt-2 text-xs text-cyan-100/80">
-                    Solde actuel basé sur les écritures confirmées des comptes Meru
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-
-            <div className="grid gap-3 sm:grid-cols-2 xl:col-start-1 xl:row-start-2 xl:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2 xl:col-start-1 xl:row-start-1 xl:grid-cols-2">
               {[
                 {
                   label: "Fonds disponibles",
@@ -5585,7 +5434,7 @@ function BusinessPage() {
               ))}
             </div>
 
-            <Card className="border-cyan-900/20 shadow-sm dark:border-[#173451] xl:col-start-1 xl:row-start-3">
+            <Card className="border-cyan-900/20 shadow-sm dark:border-[#173451] xl:col-start-1 xl:row-start-2">
               <CardHeader className="flex flex-row items-center justify-between gap-3 pb-3">
                 <div>
                   <CardTitle className="text-base">Mes comptes</CardTitle>
@@ -5787,7 +5636,7 @@ function BusinessPage() {
               </AlertDialog>
             </Card>
 
-            <Card className="border-cyan-900/20 shadow-sm dark:border-[#173451] xl:col-start-2 xl:row-span-4 xl:row-start-1">
+            <Card className="border-cyan-900/20 shadow-sm dark:border-[#173451] xl:col-start-2 xl:row-span-3 xl:row-start-1">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
                   <span className="grid size-8 place-items-center rounded-lg bg-teal-500/15 text-teal-600 dark:text-teal-300">
@@ -5983,7 +5832,7 @@ function BusinessPage() {
             </Card>
             <Card
               id="business-funding-history"
-              className="border-cyan-900/20 shadow-sm dark:border-[#173451] xl:col-start-1 xl:row-start-4"
+              className="border-cyan-900/20 shadow-sm dark:border-[#173451] xl:col-start-1 xl:row-start-3"
             >
               <CardHeader>
                 <CardTitle>Historique des financements et grand livre</CardTitle>
