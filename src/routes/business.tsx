@@ -2110,30 +2110,24 @@ function BusinessPage() {
                         description: "Transfert, dépôt ou prêt",
                         icon: BriefcaseBusiness,
                         action: () => openEntryForm("transfer"),
-                        style:
-                          "border-teal-500/60 bg-gradient-to-r from-teal-600 to-cyan-600 text-white hover:from-teal-500 hover:to-cyan-500",
                       },
                       {
                         title: "Voir tous les clients",
                         description: "Gérer les profils et soldes",
                         icon: UsersRound,
                         action: () => setActiveTab("customers"),
-                        style:
-                          "border-blue-900/20 bg-blue-50 text-blue-950 hover:bg-blue-100 dark:border-blue-900 dark:bg-[#102b4b] dark:text-blue-100 dark:hover:bg-[#16365b]",
                       },
                       {
                         title: "Voir les rapports",
                         description: "Statistiques et historique",
                         icon: ChartNoAxesCombined,
                         action: () => setActiveTab("reports"),
-                        style:
-                          "border-violet-900/20 bg-violet-50 text-violet-950 hover:bg-violet-100 dark:border-violet-900 dark:bg-[#241f49] dark:text-violet-100 dark:hover:bg-[#30295d]",
                       },
-                    ].map(({ title, description, icon: Icon, action, style }) => (
+                    ].map(({ title, description, icon: Icon, action }) => (
                       <Button
                         key={title}
                         variant="outline"
-                        className={`h-auto w-full justify-start gap-3 rounded-xl px-3 py-2.5 text-left ${style}`}
+                        className="h-auto w-full justify-start gap-3 rounded-xl border-teal-500/60 bg-gradient-to-r from-teal-600 to-cyan-600 px-3 py-2.5 text-left text-white hover:from-teal-500 hover:to-cyan-500"
                         onClick={action}
                       >
                         <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-black/5 dark:bg-black/15">
