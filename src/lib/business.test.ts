@@ -75,6 +75,13 @@ const reverseCustomerTransactionWithPaymentsMigration = readFileSync(
   ),
   "utf8",
 );
+const reversedPaymentBalanceMigration = readFileSync(
+  new URL(
+    "../../supabase/migrations/20261020300000_business_payment_balance_excludes_reversed.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
 const businessDataSource = readFileSync(new URL("./business-data.ts", import.meta.url), "utf8");
 
 const accounts: BusinessAccount[] = [
@@ -519,6 +526,13 @@ test("customer payment reversals are owner-scoped and correct account balances",
   );
   assert.ok(businessDataSource.includes('rpc("reverse_business_customer_payments"'));
   assert.ok(businessDataSource.includes('from("business_customer_payment_reversals")'));
+});
+
+test("customer payment validation excludes reversed payments from the outstanding balance", () => {
+  assert.match(
+    reversedPaymentBalanceMigration,
+    /SELECT COALESCE\(sum\(payment\.amount\), 0\) INTO v_paid[\s\S]*business_customer_payment_reversals[\s\S]*reversal\.customer_payment_id = payment\.id[\s\S]*reversal\.user_id = v_user_id/,
+  );
 });
 
 test("reversing a customer transaction reverses active payments atomically first", () => {
