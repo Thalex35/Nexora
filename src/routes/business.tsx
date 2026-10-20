@@ -158,6 +158,16 @@ type DashboardActivity = {
 type BusinessActivityRow = {
   id: string;
   kind: "customer_transaction" | "funding" | "payment" | "loan" | "repayment" | "expense";
+  filterType:
+    | "customer_transaction"
+    | "replenishment"
+    | "crypto_purchase"
+    | "crypto_transfer"
+    | "asset_transfer"
+    | "payment"
+    | "loan"
+    | "repayment"
+    | "expense";
   typeLabel: string;
   date: string;
   contact: string;
@@ -170,6 +180,21 @@ type BusinessActivityRow = {
   customerId: string | null;
   accountIds: string[];
 };
+
+function getFundingActivityType(fundingType: string) {
+  switch (fundingType) {
+    case "replenishment":
+      return { filterType: "replenishment", typeLabel: "Dépôt" } as const;
+    case "crypto_purchase":
+      return { filterType: "crypto_purchase", typeLabel: "Achat crypto" } as const;
+    case "crypto_transfer":
+      return { filterType: "crypto_transfer", typeLabel: "Transfert crypto" } as const;
+    case "asset_transfer":
+      return { filterType: "asset_transfer", typeLabel: "Transfert interne" } as const;
+    default:
+      throw new Error(`Type de financement non pris en charge : ${fundingType}`);
+  }
+}
 
 function readText(data: FormData, key: string) {
   return String(data.get(key) ?? "").trim();
@@ -780,6 +805,7 @@ function BusinessPage() {
     ...periodTransactions.map((transaction) => ({
       id: transaction.id,
       kind: "customer_transaction" as const,
+      filterType: "customer_transaction" as const,
       typeLabel: "Transfert",
       date: transaction.transactionDate,
       contact: transaction.customerName,
@@ -795,13 +821,12 @@ function BusinessPage() {
     ...periodFundings.map((funding) => {
       const destination = accounts.find((account) => account.id === funding.destination_account_id);
       const source = accounts.find((account) => account.id === funding.source_account_id);
+      const activityType = getFundingActivityType(funding.funding_type);
       return {
         id: funding.id,
         kind: "funding" as const,
-        typeLabel:
-          funding.funding_type === "replenishment"
-            ? "Dépôt"
-            : funding.funding_type.replaceAll("_", " "),
+        filterType: activityType.filterType,
+        typeLabel: activityType.typeLabel,
         date: funding.funding_date,
         contact: source?.name ?? "Source externe",
         description: destination ? `Crédit vers ${destination.name}` : "Crédit de financement",
@@ -822,6 +847,7 @@ function BusinessPage() {
       return {
         id: payment.id,
         kind: "payment" as const,
+        filterType: "payment" as const,
         typeLabel: "Paiement client",
         date: payment.paymentDate,
         contact: transaction?.customerName ?? "Client",
@@ -840,6 +866,7 @@ function BusinessPage() {
       .map((loan) => ({
         id: loan.id,
         kind: "loan" as const,
+        filterType: "loan" as const,
         typeLabel: "Prêt",
         date: loan.issuedDate,
         contact: loan.customerName,
@@ -857,6 +884,7 @@ function BusinessPage() {
       return {
         id: repayment.id,
         kind: "repayment" as const,
+        filterType: "repayment" as const,
         typeLabel: "Remboursement",
         date: repayment.repaymentDate,
         contact: loan?.customerName ?? "Emprunteur",
@@ -873,6 +901,7 @@ function BusinessPage() {
     ...periodExpenses.map((expense) => ({
       id: expense.id,
       kind: "expense" as const,
+      filterType: "expense" as const,
       typeLabel: "Dépense",
       date: expense.date,
       contact: expense.category,
@@ -890,7 +919,7 @@ function BusinessPage() {
   const normalizedTransactionSearch = transactionSearch.trim().toLowerCase();
   const visibleTransactions = businessActivityRows.filter(
     (activity) =>
-      (transactionTypeFilter === "all" || activity.kind === transactionTypeFilter) &&
+      (transactionTypeFilter === "all" || activity.filterType === transactionTypeFilter) &&
       (customerFilter === "all" || activity.customerId === customerFilter) &&
       (transactionAccountFilter === "all" ||
         activity.accountIds.includes(transactionAccountFilter)) &&
@@ -3775,12 +3804,35 @@ function BusinessPage() {
 
             <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(280px,0.9fr)]">
               <Card className="min-w-0 border-cyan-900/20 shadow-sm dark:border-[#173451]">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Liste des transactions</CardTitle>
-                  <CardDescription>
-                    Activité réelle des transferts, financements, paiements, prêts et dépenses du{" "}
-                    {startDate} au {endDate}.
-                  </CardDescription>
+                <CardHeader className="flex flex-row flex-wrap items-end justify-between gap-3 pb-3">
+                  <div className="space-y-1.5">
+                    <CardTitle className="text-base">Liste des transactions</CardTitle>
+                    <CardDescription>
+                      Activité réelle des transferts, financements, paiements, prêts et dépenses du{" "}
+                      {startDate} au {endDate}.
+                    </CardDescription>
+                  </div>
+                  <Field label="Afficher par type">
+                    <select
+                      value={transactionTypeFilter}
+                      onChange={(event) => {
+                        setTransactionTypeFilter(event.target.value);
+                        setTransactionPage(1);
+                      }}
+                      className="h-9 min-w-48 rounded-md border border-input bg-background px-3 text-xs"
+                    >
+                      <option value="all">Toutes les opérations</option>
+                      <option value="customer_transaction">Transferts clients</option>
+                      <option value="replenishment">Dépôts</option>
+                      <option value="crypto_purchase">Achats de crypto</option>
+                      <option value="crypto_transfer">Transferts crypto</option>
+                      <option value="asset_transfer">Transferts internes</option>
+                      <option value="payment">Paiements clients</option>
+                      <option value="loan">Prêts accordés</option>
+                      <option value="repayment">Remboursements de prêts</option>
+                      <option value="expense">Dépenses</option>
+                    </select>
+                  </Field>
                 </CardHeader>
                 <CardContent>
                   {visibleTransactions.length === 0 ? (
@@ -4026,30 +4078,6 @@ function BusinessPage() {
                           placeholder="Nom, description, référence…"
                         />
                       </div>
-                    </Field>
-                    <Field label="Type de transaction">
-                      <select
-                        value={transactionTypeFilter}
-                        onChange={(event) => {
-                          setTransactionTypeFilter(event.target.value);
-                          setTransactionPage(1);
-                        }}
-                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
-                      >
-                        <option value="all">Tous les types</option>
-                        {[
-                          ["customer_transaction", "Transferts"],
-                          ["funding", "Dépôts et financements"],
-                          ["payment", "Paiements clients"],
-                          ["loan", "Prêts"],
-                          ["repayment", "Remboursements"],
-                          ["expense", "Dépenses"],
-                        ].map(([value, label]) => (
-                          <option key={value} value={value}>
-                            {label}
-                          </option>
-                        ))}
-                      </select>
                     </Field>
                     <Field label="Statut">
                       <select
