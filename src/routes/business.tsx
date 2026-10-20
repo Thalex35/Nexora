@@ -178,11 +178,14 @@ function frenchBusinessStatus(status: string) {
     cancelled: "Annulée",
     completed: "Payée",
     failed: "Échouée",
+    fully_paid: "Payée",
     overdue: "En retard",
     partially_repaid: "Partiellement remboursé",
+    partially_paid: "Partiellement payée",
     pending: "En attente",
     repaid: "Remboursé",
     reversed: "Inversée",
+    unpaid: "Impayée",
   };
   return labels[status.toLowerCase()] ?? status.replaceAll("_", " ");
 }
@@ -310,6 +313,11 @@ function BusinessPage() {
   const [expenseDialogOpen, setExpenseDialogOpen] = useState(false);
   const [loanActionDialogOpen, setLoanActionDialogOpen] = useState(false);
   const [loanAction, setLoanAction] = useState<"loan" | "payment" | "repayment">("loan");
+  const [quickPaymentTarget, setQuickPaymentTarget] = useState<{
+    transaction: BusinessTransaction;
+    idempotencyKey: string;
+  } | null>(null);
+  const [quickPaymentAccountId, setQuickPaymentAccountId] = useState("");
   const [loansPaymentsTab, setLoansPaymentsTab] = useState("loans");
   const [editingAccount, setEditingAccount] = useState<BusinessAccount | null>(null);
   const [accountToDelete, setAccountToDelete] = useState<BusinessAccount | null>(null);
@@ -1354,6 +1362,9 @@ function BusinessPage() {
   }
 
   const htgAccounts = accounts.filter((account) => account.currency === "HTG");
+  const cashHtgAccounts = accounts.filter(
+    (account) => account.type === "cash" && account.currency === "HTG",
+  );
   const usdAccounts = accounts.filter((account) => account.currency === "USD");
   const activeLoans = loans.filter((loan) => loan.status !== "repaid");
   const repaymentLoans = activeLoans.filter((loan) => {
@@ -1370,6 +1381,61 @@ function BusinessPage() {
       transaction.status !== "cancelled" &&
       transaction.status !== "reversed",
   );
+  function requestCashPayment(transaction: BusinessTransaction) {
+    if (cashHtgAccounts.length === 0) {
+      toast.error("Ajoutez un compte Cash en HTG avant d’enregistrer le paiement.");
+      return;
+    }
+    const preferredAccount =
+      cashHtgAccounts.find((account) => account.name.trim().toLocaleLowerCase() === "cash") ??
+      cashHtgAccounts[0];
+    if (!preferredAccount) {
+      toast.error("Aucun compte Cash en HTG n’est disponible.");
+      return;
+    }
+    setQuickPaymentAccountId(preferredAccount.id);
+    setQuickPaymentTarget({ transaction, idempotencyKey: crypto.randomUUID() });
+  }
+
+  async function confirmCashPayment() {
+    if (!quickPaymentTarget) return;
+    const account = cashHtgAccounts.find((item) => item.id === quickPaymentAccountId);
+    if (!account) {
+      toast.error("Choisissez un compte Cash en HTG valide.");
+      return;
+    }
+    const summary = calculateCustomerPaymentSummary(
+      quickPaymentTarget.transaction,
+      payments.filter(
+        (payment) => payment.customerTransactionId === quickPaymentTarget.transaction.id,
+      ),
+    );
+    if (summary.outstanding <= 0) {
+      setQuickPaymentTarget(null);
+      toast.error("Cette transaction ne présente plus de montant à encaisser.");
+      return;
+    }
+
+    try {
+      await createPayment.mutateAsync({
+        idempotencyKey: quickPaymentTarget.idempotencyKey,
+        transactionId: quickPaymentTarget.transaction.id,
+        accountId: account.id,
+        amount: summary.outstanding,
+        currency: "HTG",
+        paymentMethod: "cash",
+        date: today(),
+        notes: "Paiement complet enregistré depuis le statut des paiements clients.",
+      });
+      setQuickPaymentTarget(null);
+      toast.success(
+        `${formatBusinessMoney(summary.outstanding, "HTG")} enregistré dans ${account.name}.`,
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Impossible d’enregistrer le paiement.");
+    }
+  }
+
   const customerRows = customers.map((customer) => {
     const history = periodTransactions.filter(
       (transaction) => transaction.customerId === customer.id,
@@ -4347,10 +4413,27 @@ function BusinessPage() {
                                       {formatBusinessMoney(summary.outstanding, "HTG")}
                                     </td>
                                     <td className="px-3 py-2.5">
-                                      <StatusBadge
-                                        status={summary.status}
-                                        label={frenchBusinessStatus(summary.status)}
-                                      />
+                                      {summary.status === "unpaid" ? (
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-auto p-0"
+                                          disabled={createPayment.isPending}
+                                          onClick={() => requestCashPayment(transaction)}
+                                          aria-label={`Enregistrer le paiement complet de ${formatBusinessMoney(summary.outstanding, "HTG")} pour ${transaction.customerName}`}
+                                        >
+                                          <StatusBadge
+                                            status={summary.status}
+                                            label={frenchBusinessStatus(summary.status)}
+                                          />
+                                        </Button>
+                                      ) : (
+                                        <StatusBadge
+                                          status={summary.status}
+                                          label={frenchBusinessStatus(summary.status)}
+                                        />
+                                      )}
                                     </td>
                                     <td className="px-3 py-2.5">
                                       <StatusBadge
@@ -4366,6 +4449,66 @@ function BusinessPage() {
                         </div>
                       )}
                     </Card>
+                    <AlertDialog
+                      open={quickPaymentTarget !== null}
+                      onOpenChange={(open) => {
+                        if (!open && !createPayment.isPending) setQuickPaymentTarget(null);
+                      }}
+                    >
+                      <AlertDialogContent className="business-theme-dialog">
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Confirmer le paiement client ?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            {quickPaymentTarget
+                              ? `Cela enregistrera le montant restant de ${formatBusinessMoney(
+                                  calculateCustomerPaymentSummary(
+                                    quickPaymentTarget.transaction,
+                                    payments.filter(
+                                      (payment) =>
+                                        payment.customerTransactionId ===
+                                        quickPaymentTarget.transaction.id,
+                                    ),
+                                  ).outstanding,
+                                  "HTG",
+                                )} comme reçu en espèces et l’ajoutera au solde du compte choisi.`
+                              : ""}
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        {cashHtgAccounts.length > 1 ? (
+                          <Field label="Compte Cash crédité">
+                            <select
+                              value={quickPaymentAccountId}
+                              onChange={(event) => setQuickPaymentAccountId(event.target.value)}
+                              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                            >
+                              {cashHtgAccounts.map((account) => (
+                                <option key={account.id} value={account.id}>
+                                  {account.name} · HTG
+                                </option>
+                              ))}
+                            </select>
+                          </Field>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">
+                            Compte crédité : {cashHtgAccounts[0]?.name ?? "Cash"} · HTG
+                          </p>
+                        )}
+                        <AlertDialogFooter>
+                          <AlertDialogCancel disabled={createPayment.isPending}>
+                            Annuler
+                          </AlertDialogCancel>
+                          <AlertDialogAction
+                            disabled={createPayment.isPending}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              void confirmCashPayment();
+                            }}
+                          >
+                            {createPayment.isPending ? "Enregistrement…" : "Confirmer le paiement"}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
 
                     <Card
                       id="business-payment-history"
