@@ -82,6 +82,13 @@ const reversedPaymentBalanceMigration = readFileSync(
   ),
   "utf8",
 );
+const automaticCustomerPaymentReversalMigration = readFileSync(
+  new URL(
+    "../../supabase/migrations/20261020400000_reverse_customer_transaction_payments_automatically.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
 const businessDataSource = readFileSync(new URL("./business-data.ts", import.meta.url), "utf8");
 
 const accounts: BusinessAccount[] = [
@@ -546,6 +553,13 @@ test("reversing a customer transaction reverses active payments atomically first
   );
   assert.ok(
     businessDataSource.includes('rpc("reverse_business_customer_transaction_with_payments"'),
+  );
+});
+
+test("reversing a customer transaction automatically reverses its active payments", () => {
+  assert.match(
+    automaticCustomerPaymentReversalMigration,
+    /CREATE OR REPLACE FUNCTION public\.reverse_business_operation[\s\S]*PERFORM public\.reverse_business_customer_payments\(p_operation_id\);[\s\S]*Customer payments must be reversed before the transaction/,
   );
 });
 
