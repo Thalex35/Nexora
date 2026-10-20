@@ -135,6 +135,22 @@ export type Database = {
           created_at?: string;
         }
       >;
+      business_customer_payment_reversals: BusinessTable<
+        {
+          id: string;
+          user_id: string;
+          customer_payment_id: string;
+          reversed_at: string;
+          notes: string | null;
+        },
+        {
+          id?: string;
+          user_id: string;
+          customer_payment_id: string;
+          reversed_at?: string;
+          notes?: string | null;
+        }
+      >;
       business_loans: BusinessTable<
         {
           id: string;
@@ -1557,6 +1573,10 @@ export type Database = {
           p_notes: string | null;
         };
         Returns: string;
+      };
+      reverse_business_customer_payments: {
+        Args: { p_customer_transaction_id: string };
+        Returns: number;
       };
       create_business_loan: {
         Args: {

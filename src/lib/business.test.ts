@@ -61,6 +61,13 @@ const legacyReversalSupportMigration = readFileSync(
   ),
   "utf8",
 );
+const customerPaymentReversalsMigration = readFileSync(
+  new URL(
+    "../../supabase/migrations/20261020000000_business_customer_payment_reversals.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
 const businessDataSource = readFileSync(new URL("./business-data.ts", import.meta.url), "utf8");
 
 const accounts: BusinessAccount[] = [
@@ -484,6 +491,27 @@ test("business metrics distinguish the wallet, cash, expenses, and pending entri
   assert.equal(summary.completedTransactions, 1);
   assert.equal(summary.totalBusinessFunds, null);
   assert.equal(summary.valuationIncomplete, true);
+});
+
+test("customer payment reversals are owner-scoped and correct account balances", () => {
+  assert.match(
+    customerPaymentReversalsMigration,
+    /FOREIGN KEY \(customer_payment_id, user_id\)[\s\S]*REFERENCES public\.business_customer_payments \(id, user_id\)/,
+  );
+  assert.match(
+    customerPaymentReversalsMigration,
+    /CREATE POLICY "Users read their own customer payment reversals"[\s\S]*auth\.uid\(\) = user_id/,
+  );
+  assert.match(
+    customerPaymentReversalsMigration,
+    /CREATE FUNCTION public\.reverse_business_customer_payments[\s\S]*FOR UPDATE[\s\S]*Reversal would make an account balance negative/,
+  );
+  assert.match(
+    customerPaymentReversalsMigration,
+    /customer_payment_reversal[\s\S]*-v_payment\.amount/,
+  );
+  assert.ok(businessDataSource.includes('rpc("reverse_business_customer_payments"'));
+  assert.ok(businessDataSource.includes('from("business_customer_payment_reversals")'));
 });
 
 test("business funds use explicit rates and stay unchanged when assets move between accounts", () => {
