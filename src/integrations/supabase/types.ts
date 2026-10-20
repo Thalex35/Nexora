@@ -1578,6 +1578,10 @@ export type Database = {
         Args: { p_customer_transaction_id: string };
         Returns: number;
       };
+      reverse_business_customer_transaction_with_payments: {
+        Args: { p_transaction_id: string };
+        Returns: undefined;
+      };
       create_business_loan: {
         Args: {
           p_idempotency_key: string;

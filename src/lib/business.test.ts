@@ -68,6 +68,13 @@ const customerPaymentReversalsMigration = readFileSync(
   ),
   "utf8",
 );
+const reverseCustomerTransactionWithPaymentsMigration = readFileSync(
+  new URL(
+    "../../supabase/migrations/20261020100000_reverse_business_transaction_with_payments.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
 const businessDataSource = readFileSync(new URL("./business-data.ts", import.meta.url), "utf8");
 
 const accounts: BusinessAccount[] = [
@@ -512,6 +519,20 @@ test("customer payment reversals are owner-scoped and correct account balances",
   );
   assert.ok(businessDataSource.includes('rpc("reverse_business_customer_payments"'));
   assert.ok(businessDataSource.includes('from("business_customer_payment_reversals")'));
+});
+
+test("reversing a customer transaction reverses active payments atomically first", () => {
+  assert.match(
+    reverseCustomerTransactionWithPaymentsMigration,
+    /NOT EXISTS \([\s\S]*business_customer_payment_reversals[\s\S]*payment_reversal\.customer_payment_id = payment\.id/,
+  );
+  assert.match(
+    reverseCustomerTransactionWithPaymentsMigration,
+    /PERFORM public\.reverse_business_customer_payments\(p_transaction_id\);[\s\S]*PERFORM public\.reverse_business_operation\('customer_transaction', p_transaction_id\);/,
+  );
+  assert.ok(
+    businessDataSource.includes('rpc("reverse_business_customer_transaction_with_payments"'),
+  );
 });
 
 test("business funds use explicit rates and stay unchanged when assets move between accounts", () => {
