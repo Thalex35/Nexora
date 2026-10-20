@@ -33,6 +33,7 @@ export type BusinessRecords = {
   accounts: BusinessAccount[];
   transactions: BusinessTransaction[];
   payments: BusinessPayment[];
+  customerPaymentHistoryTransactionIds: string[];
   loans: BusinessLoan[];
   loanRepayments: BusinessLoanRepayment[];
   fundings: BusinessFunding[];
@@ -214,9 +215,11 @@ export function useBusinessRecords() {
       const reversedPaymentIds = new Set(
         unwrap(paymentReversalsResult).map((reversal) => reversal.customer_payment_id),
       );
-      const payments = unwrap(paymentsResult)
-        .filter((row) => !reversedPaymentIds.has(row.id))
-        .map(mapPayment);
+      const paymentRows = unwrap(paymentsResult);
+      const customerPaymentHistoryTransactionIds = [
+        ...new Set(paymentRows.map((row) => row.customer_transaction_id)),
+      ];
+      const payments = paymentRows.filter((row) => !reversedPaymentIds.has(row.id)).map(mapPayment);
       const loans = unwrap(loansResult).map((row) => mapLoan(row, customerById));
       const loanRepayments = unwrap(repaymentsResult).map(mapLoanRepayment);
       const latestRates = new Map<string, number>();
@@ -238,6 +241,7 @@ export function useBusinessRecords() {
         })),
         transactions,
         payments,
+        customerPaymentHistoryTransactionIds,
         loans,
         loanRepayments,
         fundings: fundingRows,
@@ -734,6 +738,21 @@ export function useReverseBusinessOperation() {
         await supabase.rpc("reverse_business_operation", {
           p_operation_type: type,
           p_operation_id: id,
+        }),
+      );
+    },
+    onSuccess: invalidate,
+  });
+}
+
+export function useReverseBusinessCustomerTransactionWithPayments() {
+  const invalidate = useBusinessInvalidation();
+  return useMutation({
+    mutationFn: async (transactionId: string) => {
+      await currentUserId();
+      throwIfError(
+        await supabase.rpc("reverse_business_customer_transaction_with_payments", {
+          p_transaction_id: transactionId,
         }),
       );
     },

@@ -103,6 +103,7 @@ import {
   useDeleteBusinessAccount,
   useReverseBusinessOperation,
   useReverseBusinessCustomerPayments,
+  useReverseBusinessCustomerTransactionWithPayments,
   useUnreverseBusinessCustomerTransaction,
   useSaveBusinessExchangeRate,
   useUpdateBusinessAccount,
@@ -296,6 +297,7 @@ function BusinessPage() {
   const closeOperation = useCloseBusinessOperation();
   const reverseOperation = useReverseBusinessOperation();
   const unreverseTransaction = useUnreverseBusinessCustomerTransaction();
+  const reverseTransactionWithPayments = useReverseBusinessCustomerTransactionWithPayments();
   const saveRate = useSaveBusinessExchangeRate();
   const [startDate, setStartDate] = useState(firstOfMonth);
   const [endDate, setEndDate] = useState(today);
@@ -403,6 +405,7 @@ function BusinessPage() {
   const customers = records?.customers ?? [];
   const transactions = records?.transactions ?? EMPTY_TRANSACTIONS;
   const payments = records?.payments ?? EMPTY_PAYMENTS;
+  const customerPaymentHistoryTransactionIds = records?.customerPaymentHistoryTransactionIds ?? [];
   const loans = records?.loans ?? EMPTY_LOANS;
   const loanRepayments = records?.loanRepayments ?? EMPTY_LOAN_REPAYMENTS;
   const fundings = records?.fundings ?? EMPTY_FUNDINGS;
@@ -1237,12 +1240,18 @@ function BusinessPage() {
       } else if (action === "reverse") {
         if (
           !window.confirm(
-            "Create a reversal entry for this completed operation? This does not delete history.",
+            type === "customer_transaction"
+              ? "Reverse this completed transaction and all associated customer payments? Account balances will be corrected, and history will be kept."
+              : "Create a reversal entry for this completed operation? This does not delete history.",
           )
         ) {
           return;
         }
-        await reverseOperation.mutateAsync({ type, id });
+        if (type === "customer_transaction") {
+          await reverseTransactionWithPayments.mutateAsync(id);
+        } else {
+          await reverseOperation.mutateAsync({ type, id });
+        }
       } else if (action === "unreverse") {
         if (
           !window.confirm(
@@ -1258,9 +1267,11 @@ function BusinessPage() {
       toast.success(
         action === "complete"
           ? "Operation confirmed and ledger updated."
-          : action === "unreverse"
-            ? "Transaction restored. You can now edit it."
-            : `Operation ${action}.`,
+          : action === "reverse" && type === "customer_transaction"
+            ? "Transaction and associated customer payments reversed. Account balances were corrected."
+            : action === "unreverse"
+              ? "Transaction restored. You can now edit it."
+              : `Operation ${action}.`,
       );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Couldn't update the operation.");
@@ -1654,6 +1665,7 @@ function BusinessPage() {
     completeOperation.isPending ||
     closeOperation.isPending ||
     reverseOperation.isPending ||
+    reverseTransactionWithPayments.isPending ||
     saveRate.isPending;
   const businessTabClass =
     "h-auto min-h-9 min-w-0 whitespace-normal px-2 py-2 text-center text-xs leading-tight sm:whitespace-nowrap sm:px-3 sm:py-1 sm:text-sm";
@@ -1995,9 +2007,8 @@ function BusinessPage() {
                                     <div className="flex min-w-max items-center gap-1.5">
                                       {(transaction.status === "pending" ||
                                         transaction.status === "completed") &&
-                                        !payments.some(
-                                          (payment) =>
-                                            payment.customerTransactionId === transaction.id,
+                                        !customerPaymentHistoryTransactionIds.includes(
+                                          transaction.id,
                                         ) && (
                                           <Button
                                             type="button"
@@ -2017,9 +2028,8 @@ function BusinessPage() {
                                         status={transaction.status}
                                         disabled={isMutating}
                                         canUnreverse={
-                                          !payments.some(
-                                            (payment) =>
-                                              payment.customerTransactionId === transaction.id,
+                                          !customerPaymentHistoryTransactionIds.includes(
+                                            transaction.id,
                                           )
                                         }
                                         onAction={(action) =>
@@ -3840,9 +3850,8 @@ function BusinessPage() {
                                     <div className="flex min-w-max items-center gap-1.5">
                                       {(activity.status === "pending" ||
                                         activity.status === "completed") &&
-                                        !payments.some(
-                                          (payment) =>
-                                            payment.customerTransactionId === activity.id,
+                                        !customerPaymentHistoryTransactionIds.includes(
+                                          activity.id,
                                         ) && (
                                           <Button
                                             type="button"
@@ -3868,9 +3877,8 @@ function BusinessPage() {
                                         disabled={isMutating}
                                         canUnreverse={
                                           activity.kind === "customer_transaction" &&
-                                          !payments.some(
-                                            (payment) =>
-                                              payment.customerTransactionId === activity.id,
+                                          !customerPaymentHistoryTransactionIds.includes(
+                                            activity.id,
                                           )
                                         }
                                         onAction={(action) =>
