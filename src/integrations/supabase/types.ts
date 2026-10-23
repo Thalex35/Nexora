@@ -704,6 +704,165 @@ export type Database = {
         };
         Relationships: [];
       };
+      daily_habit_settings: {
+        Row: {
+          created_at: string;
+          hydration_target_ml: number;
+          learning_target_minutes: number;
+          reading_target_minutes: number;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          hydration_target_ml?: number;
+          learning_target_minutes?: number;
+          reading_target_minutes?: number;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          hydration_target_ml?: number;
+          learning_target_minutes?: number;
+          reading_target_minutes?: number;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
+      daily_hydration_logs: {
+        Row: {
+          amount_ml: number;
+          created_at: string;
+          id: string;
+          logged_date: string;
+          user_id: string;
+        };
+        Insert: {
+          amount_ml: number;
+          created_at?: string;
+          id?: string;
+          logged_date?: string;
+          user_id: string;
+        };
+        Update: {
+          amount_ml?: number;
+          created_at?: string;
+          id?: string;
+          logged_date?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
+      daily_learning_sessions: {
+        Row: {
+          created_at: string;
+          duration_minutes: number;
+          id: string;
+          next_steps: string | null;
+          notes: string | null;
+          practiced: string | null;
+          session_date: string;
+          studied: string | null;
+          topic: string | null;
+          understood: string | null;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          duration_minutes: number;
+          id?: string;
+          next_steps?: string | null;
+          notes?: string | null;
+          practiced?: string | null;
+          session_date?: string;
+          studied?: string | null;
+          topic?: string | null;
+          understood?: string | null;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          duration_minutes?: number;
+          id?: string;
+          next_steps?: string | null;
+          notes?: string | null;
+          practiced?: string | null;
+          session_date?: string;
+          studied?: string | null;
+          topic?: string | null;
+          understood?: string | null;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
+      daily_reading_sessions: {
+        Row: {
+          book_title: string | null;
+          created_at: string;
+          duration_minutes: number;
+          id: string;
+          notes: string | null;
+          pages_read: number;
+          session_date: string;
+          user_id: string;
+        };
+        Insert: {
+          book_title?: string | null;
+          created_at?: string;
+          duration_minutes?: number;
+          id?: string;
+          notes?: string | null;
+          pages_read?: number;
+          session_date?: string;
+          user_id: string;
+        };
+        Update: {
+          book_title?: string | null;
+          created_at?: string;
+          duration_minutes?: number;
+          id?: string;
+          notes?: string | null;
+          pages_read?: number;
+          session_date?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
+      daily_reflections: {
+        Row: {
+          accomplished: string;
+          created_at: string;
+          id: string;
+          improve: string;
+          learned: string;
+          reflection_date: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          accomplished?: string;
+          created_at?: string;
+          id?: string;
+          improve?: string;
+          learned?: string;
+          reflection_date?: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          accomplished?: string;
+          created_at?: string;
+          id?: string;
+          improve?: string;
+          learned?: string;
+          reflection_date?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       goals: {
         Row: {
           created_at: string;
