@@ -16,6 +16,11 @@ export type DailyPlan = Database["public"]["Tables"]["daily_plans"]["Row"];
 export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 export type Routine = Database["public"]["Tables"]["routines"]["Row"];
 export type RoutineCompletion = Database["public"]["Tables"]["routine_completions"]["Row"];
+export type DailyHabitSettings = Database["public"]["Tables"]["daily_habit_settings"]["Row"];
+export type DailyReadingSession = Database["public"]["Tables"]["daily_reading_sessions"]["Row"];
+export type DailyHydrationLog = Database["public"]["Tables"]["daily_hydration_logs"]["Row"];
+export type DailyLearningSession = Database["public"]["Tables"]["daily_learning_sessions"]["Row"];
+export type DailyReflection = Database["public"]["Tables"]["daily_reflections"]["Row"];
 export type FutureExpense = Database["public"]["Tables"]["future_expenses"]["Row"];
 export type Debt = Database["public"]["Tables"]["debts"]["Row"];
 export type LearningItem = Database["public"]["Tables"]["learning_items"]["Row"];
@@ -1344,6 +1349,244 @@ export function useSaveDailyPlan() {
       Promise.all([
         qc.invalidateQueries({ queryKey: ["daily_plan"] }),
         qc.invalidateQueries({ queryKey: ["daily_plans"] }),
+      ]),
+  });
+}
+
+/* ---------------------------- daily habit tracking ------------------------- */
+
+export type DailyHabitTargetInput = Pick<
+  DailyHabitSettings,
+  "reading_target_minutes" | "hydration_target_ml" | "learning_target_minutes"
+>;
+
+export type DailyReadingSessionInput = Omit<
+  Database["public"]["Tables"]["daily_reading_sessions"]["Insert"],
+  "user_id"
+>;
+export type DailyHydrationLogInput = Omit<
+  Database["public"]["Tables"]["daily_hydration_logs"]["Insert"],
+  "user_id"
+>;
+export type DailyLearningSessionInput = Omit<
+  Database["public"]["Tables"]["daily_learning_sessions"]["Insert"],
+  "user_id"
+>;
+export type DailyReflectionInput = Omit<
+  Database["public"]["Tables"]["daily_reflections"]["Insert"],
+  "user_id" | "id" | "created_at" | "updated_at"
+>;
+export type DailyHabitImportInput = {
+  targets: DailyHabitTargetInput;
+  readingSessions: DailyReadingSessionInput[];
+  hydrationLogs: DailyHydrationLogInput[];
+  learningSessions: DailyLearningSessionInput[];
+  reflections: DailyReflectionInput[];
+};
+
+export function useDailyHabitSettings() {
+  const { authorized } = useAuth();
+  return useQuery({
+    queryKey: ["daily_habit_settings"],
+    enabled: authorized,
+    queryFn: async () => {
+      const userId = await currentUserId();
+      const settings = unwrap(
+        await supabase.from("daily_habit_settings").select("*").eq("user_id", userId).maybeSingle(),
+      ) as DailyHabitSettings | null;
+
+      return {
+        reading_target_minutes: settings?.reading_target_minutes ?? 20,
+        hydration_target_ml: settings?.hydration_target_ml ?? 2000,
+        learning_target_minutes: settings?.learning_target_minutes ?? 30,
+      };
+    },
+  });
+}
+
+export function useDailyHabitRecords() {
+  const { authorized } = useAuth();
+  return useQuery({
+    queryKey: ["daily_habit_records"],
+    enabled: authorized,
+    queryFn: async () => {
+      const userId = await currentUserId();
+      const [readingResult, hydrationResult, learningResult, reflectionResult] = await Promise.all([
+        supabase
+          .from("daily_reading_sessions")
+          .select("*")
+          .eq("user_id", userId)
+          .order("session_date", { ascending: false })
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("daily_hydration_logs")
+          .select("*")
+          .eq("user_id", userId)
+          .order("logged_date", { ascending: false })
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("daily_learning_sessions")
+          .select("*")
+          .eq("user_id", userId)
+          .order("session_date", { ascending: false })
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("daily_reflections")
+          .select("*")
+          .eq("user_id", userId)
+          .order("reflection_date", { ascending: false }),
+      ]);
+
+      return {
+        readingSessions: unwrap(readingResult) as DailyReadingSession[],
+        hydrationLogs: unwrap(hydrationResult) as DailyHydrationLog[],
+        learningSessions: unwrap(learningResult) as DailyLearningSession[],
+        reflections: unwrap(reflectionResult) as DailyReflection[],
+      };
+    },
+  });
+}
+
+export function useSaveDailyHabitTargets() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: DailyHabitTargetInput) => {
+      const userId = await currentUserId();
+      return unwrap(
+        await supabase
+          .from("daily_habit_settings")
+          .upsert({ user_id: userId, ...input }, { onConflict: "user_id" })
+          .select()
+          .single(),
+      ) as DailyHabitSettings;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["daily_habit_settings"] }),
+  });
+}
+
+export function useCreateDailyReadingSession() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: DailyReadingSessionInput) => {
+      const userId = await currentUserId();
+      return unwrap(
+        await supabase
+          .from("daily_reading_sessions")
+          .insert({ ...input, user_id: userId })
+          .select()
+          .single(),
+      ) as DailyReadingSession;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["daily_habit_records"] }),
+  });
+}
+
+export function useCreateDailyHydrationLog() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: DailyHydrationLogInput) => {
+      const userId = await currentUserId();
+      return unwrap(
+        await supabase
+          .from("daily_hydration_logs")
+          .insert({ ...input, user_id: userId })
+          .select()
+          .single(),
+      ) as DailyHydrationLog;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["daily_habit_records"] }),
+  });
+}
+
+export function useCreateDailyLearningSession() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: DailyLearningSessionInput) => {
+      const userId = await currentUserId();
+      return unwrap(
+        await supabase
+          .from("daily_learning_sessions")
+          .insert({ ...input, user_id: userId })
+          .select()
+          .single(),
+      ) as DailyLearningSession;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["daily_habit_records"] }),
+  });
+}
+
+export function useSaveDailyReflection() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: DailyReflectionInput) => {
+      const userId = await currentUserId();
+      return unwrap(
+        await supabase
+          .from("daily_reflections")
+          .upsert({ ...input, user_id: userId }, { onConflict: "user_id,reflection_date" })
+          .select()
+          .single(),
+      ) as DailyReflection;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["daily_habit_records"] }),
+  });
+}
+
+export function useImportDailyHabitData() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: DailyHabitImportInput) => {
+      const userId = await currentUserId();
+      const results = await Promise.all([
+        supabase
+          .from("daily_habit_settings")
+          .upsert(
+            { user_id: userId, ...input.targets },
+            { onConflict: "user_id", ignoreDuplicates: true },
+          ),
+        ...(input.readingSessions.length
+          ? [
+              supabase.from("daily_reading_sessions").upsert(
+                input.readingSessions.map((entry) => ({ ...entry, user_id: userId })),
+                { onConflict: "id", ignoreDuplicates: true },
+              ),
+            ]
+          : []),
+        ...(input.hydrationLogs.length
+          ? [
+              supabase.from("daily_hydration_logs").upsert(
+                input.hydrationLogs.map((entry) => ({ ...entry, user_id: userId })),
+                { onConflict: "id", ignoreDuplicates: true },
+              ),
+            ]
+          : []),
+        ...(input.learningSessions.length
+          ? [
+              supabase.from("daily_learning_sessions").upsert(
+                input.learningSessions.map((entry) => ({ ...entry, user_id: userId })),
+                { onConflict: "id", ignoreDuplicates: true },
+              ),
+            ]
+          : []),
+        ...(input.reflections.length
+          ? [
+              supabase.from("daily_reflections").upsert(
+                input.reflections.map((entry) => ({ ...entry, user_id: userId })),
+                { onConflict: "user_id,reflection_date", ignoreDuplicates: true },
+              ),
+            ]
+          : []),
+      ]);
+
+      for (const result of results) {
+        if (result.error) throw new Error(result.error.message);
+      }
+      return userId;
+    },
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: ["daily_habit_settings"] }),
+        qc.invalidateQueries({ queryKey: ["daily_habit_records"] }),
       ]),
   });
 }
