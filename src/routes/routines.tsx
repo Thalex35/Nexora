@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
   BookOpen,
+  ChevronDown,
+  ChevronRight,
   Droplets,
   ListChecks,
   Pencil,
@@ -69,6 +71,7 @@ export const Route = createFileRoute("/routines")({
 });
 
 type RoutineFilter = "active" | "inactive" | "all";
+type DailyHabit = "reading" | "hydration" | "learning";
 
 const LEGACY_DAILY_ROUTINE_STORAGE_KEY = "nexora-daily-routine-dashboard-v1";
 
@@ -199,6 +202,7 @@ function RoutinesPage() {
   const [editing, setEditing] = useState<Routine | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Routine | null>(null);
   const [selectedDate, setSelectedDate] = useState(today);
+  const [expandedHabit, setExpandedHabit] = useState<DailyHabit | null>(null);
   const selectedDay = useRoutineCompletions(selectedDate, selectedDate);
   const allRoutines = routines.data ?? [];
   const activeRoutines = allRoutines.filter((routine) => routine.is_active);
@@ -307,11 +311,6 @@ function RoutinesPage() {
   const readingProgress = Math.min((dailyReadingMinutes / readingTarget) * 100, 100);
   const hydrationProgress = Math.min((dailyHydrationAmount / hydrationTarget) * 100, 100);
   const learningProgress = Math.min((dailyLearningMinutes / learningTarget) * 100, 100);
-  const completedHabitCount = [
-    dailyReadingMinutes >= readingTarget,
-    dailyHydrationAmount >= hydrationTarget,
-    dailyLearningMinutes >= learningTarget,
-  ].filter(Boolean).length;
   const habitHistoryDates = Array.from({ length: 7 }, (_, index) => dateOffsetISO(index - 6));
   const dailyActivitySummary = habitHistoryDates.map((date) => {
     const readings = readingSessions.filter((entry) => entry.session_date === date);
@@ -329,10 +328,8 @@ function RoutinesPage() {
       readingPages,
       hydrationMl,
       learningMinutes,
-      active: readingMinutes > 0 || readingPages > 0 || hydrationMl > 0 || learningMinutes > 0,
     };
   });
-  const activeHabitDays = dailyActivitySummary.filter((day) => day.active).length;
   const weeklyTotals = dailyActivitySummary.reduce(
     (totals, day) => ({
       readingMinutes: totals.readingMinutes + day.readingMinutes,
@@ -342,6 +339,19 @@ function RoutinesPage() {
     }),
     { readingMinutes: 0, readingPages: 0, hydrationMl: 0, learningMinutes: 0 },
   );
+  const selectedHabitActiveDays = dailyActivitySummary.filter((day) =>
+    expandedHabit === "reading"
+      ? day.readingMinutes > 0 || day.readingPages > 0
+      : expandedHabit === "hydration"
+        ? day.hydrationMl > 0
+        : day.learningMinutes > 0,
+  ).length;
+  const selectedHabitWeeklyTotal =
+    expandedHabit === "reading"
+      ? `${weeklyTotals.readingMinutes} min · ${weeklyTotals.readingPages} pages`
+      : expandedHabit === "hydration"
+        ? `${weeklyTotals.hydrationMl} mL`
+        : `${weeklyTotals.learningMinutes} min`;
 
   function openCreate() {
     setEditing(null);
@@ -591,512 +601,584 @@ function RoutinesPage() {
                     {selectedDate === today ? "Today" : formatRoutineDate(selectedDate)}
                   </p>
                 </div>
-                <Badge variant={completedHabitCount >= 3 ? "default" : "secondary"}>
-                  {completedHabitCount} of 3 habits complete
-                </Badge>
               </div>
 
-              <div className="grid gap-4 xl:grid-cols-3">
-                <article className="space-y-4 rounded-xl border border-border bg-surface p-4">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 text-foreground">
-                      <BookOpen className="h-4 w-4 text-primary" />
-                      <h3 className="font-medium">Reading</h3>
+              <div className="space-y-2" aria-label="Daily habits">
+                {(
+                  [
+                    ["reading", "Reading"],
+                    ["hydration", "Hydration"],
+                    ["learning", "Daily Learning"],
+                  ] as const
+                ).map(([habit, label]) => {
+                  const expanded = expandedHabit === habit;
+                  const panelId = `daily-habit-${habit}-details`;
+                  return (
+                    <button
+                      key={habit}
+                      type="button"
+                      aria-expanded={expanded}
+                      aria-controls={expanded ? panelId : undefined}
+                      onClick={() => setExpandedHabit(expanded ? null : habit)}
+                      className="flex min-h-12 w-full items-center justify-between rounded-lg border border-border bg-surface px-4 py-3 text-left font-medium text-foreground transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <span>{label}</span>
+                      {expanded ? (
+                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="space-y-4">
+                {expandedHabit === "reading" && (
+                  <article
+                    id="daily-habit-reading-details"
+                    className="space-y-4 rounded-xl border border-border bg-surface p-4"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 text-foreground">
+                        <BookOpen className="h-4 w-4 text-primary" />
+                        <h3 className="font-medium">Reading</h3>
+                      </div>
+                      <Badge variant={dailyReadingMinutes >= readingTarget ? "default" : "outline"}>
+                        {dailyReadingMinutes >= readingTarget ? "Done" : "In progress"}
+                      </Badge>
                     </div>
-                    <Badge variant={dailyReadingMinutes >= readingTarget ? "default" : "outline"}>
-                      {dailyReadingMinutes >= readingTarget ? "Done" : "In progress"}
-                    </Badge>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="reading-target">Daily target (minutes)</Label>
-                    <Input
-                      id="reading-target"
-                      type="number"
-                      min={1}
-                      step={1}
-                      max={1440}
-                      value={targetDraft.reading}
-                      onChange={(event) =>
-                        setTargetDraft((current) => ({ ...current, reading: event.target.value }))
-                      }
-                      onBlur={() => saveTarget("reading")}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-sm text-muted-foreground">
-                      <span>Progress</span>
-                      <span>{formatProgressLabel(dailyReadingMinutes, readingTarget)} min</span>
-                    </div>
-                    <Progress value={readingProgress} />
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-2">
                     <div className="space-y-2">
-                      <Label htmlFor="reading-book">Book</Label>
+                      <Label htmlFor="reading-target">Daily target (minutes)</Label>
                       <Input
-                        id="reading-book"
-                        value={readingDraft.book}
+                        id="reading-target"
+                        type="number"
+                        min={1}
+                        step={1}
+                        max={1440}
+                        value={targetDraft.reading}
                         onChange={(event) =>
-                          setReadingDraft((current) => ({ ...current, book: event.target.value }))
+                          setTargetDraft((current) => ({ ...current, reading: event.target.value }))
                         }
-                        placeholder="Deep Work"
+                        onBlur={() => saveTarget("reading")}
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="reading-pages">Pages</Label>
-                      <Input
-                        id="reading-pages"
-                        type="number"
-                        min={0}
-                        step={1}
-                        value={readingDraft.pages}
-                        onChange={(event) =>
-                          setReadingDraft((current) => ({ ...current, pages: event.target.value }))
-                        }
-                      />
+                      <div className="flex items-center justify-between text-sm text-muted-foreground">
+                        <span>Progress</span>
+                        <span>{formatProgressLabel(dailyReadingMinutes, readingTarget)} min</span>
+                      </div>
+                      <Progress value={readingProgress} />
                     </div>
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="reading-book">Book</Label>
+                        <Input
+                          id="reading-book"
+                          value={readingDraft.book}
+                          onChange={(event) =>
+                            setReadingDraft((current) => ({ ...current, book: event.target.value }))
+                          }
+                          placeholder="Deep Work"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="reading-pages">Pages</Label>
+                        <Input
+                          id="reading-pages"
+                          type="number"
+                          min={0}
+                          step={1}
+                          value={readingDraft.pages}
+                          onChange={(event) =>
+                            setReadingDraft((current) => ({
+                              ...current,
+                              pages: event.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="reading-minutes">Minutes</Label>
+                        <Input
+                          id="reading-minutes"
+                          type="number"
+                          min={0}
+                          step={1}
+                          value={readingDraft.minutes}
+                          onChange={(event) =>
+                            setReadingDraft((current) => ({
+                              ...current,
+                              minutes: event.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="reading-notes">Notes</Label>
+                        <Input
+                          id="reading-notes"
+                          value={readingDraft.notes}
+                          onChange={(event) =>
+                            setReadingDraft((current) => ({
+                              ...current,
+                              notes: event.target.value,
+                            }))
+                          }
+                          placeholder="Learning notes"
+                        />
+                      </div>
+                    </div>
+                    <Button
+                      className="w-full"
+                      disabled={createReadingSession.isPending}
+                      onClick={addReadingSession}
+                    >
+                      {createReadingSession.isPending ? "Saving..." : "Save reading session"}
+                    </Button>
+                    <div className="space-y-2 text-sm">
+                      {readingsForDay.length === 0 ? (
+                        <p className="text-muted-foreground">
+                          No reading logged for this date yet.
+                        </p>
+                      ) : (
+                        readingsForDay.slice(0, 3).map((entry) => (
+                          <div key={entry.id} className="rounded-lg bg-background p-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-medium text-foreground">
+                                {entry.book_title || "Reading session"}
+                              </span>
+                              <span className="text-muted-foreground">
+                                {entry.duration_minutes} min
+                              </span>
+                            </div>
+                            {entry.pages_read > 0 && (
+                              <p className="mt-1 text-muted-foreground">{entry.pages_read} pages</p>
+                            )}
+                            {entry.notes && (
+                              <p className="mt-1 text-muted-foreground">{entry.notes}</p>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </article>
+                )}
+
+                {expandedHabit === "hydration" && (
+                  <article
+                    id="daily-habit-hydration-details"
+                    className="space-y-4 rounded-xl border border-border bg-surface p-4"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 text-foreground">
+                        <Droplets className="h-4 w-4 text-sky-500" />
+                        <h3 className="font-medium">Hydration</h3>
+                      </div>
+                      <Badge
+                        variant={dailyHydrationAmount >= hydrationTarget ? "default" : "outline"}
+                      >
+                        {dailyHydrationAmount >= hydrationTarget ? "Hydrated" : "On track"}
+                      </Badge>
+                    </div>
                     <div className="space-y-2">
-                      <Label htmlFor="reading-minutes">Minutes</Label>
+                      <Label htmlFor="hydration-target">Daily target (mL)</Label>
                       <Input
-                        id="reading-minutes"
+                        id="hydration-target"
                         type="number"
-                        min={0}
+                        min={1}
                         step={1}
-                        value={readingDraft.minutes}
+                        value={targetDraft.hydration}
                         onChange={(event) =>
-                          setReadingDraft((current) => ({
+                          setTargetDraft((current) => ({
                             ...current,
-                            minutes: event.target.value,
+                            hydration: event.target.value,
                           }))
                         }
+                        onBlur={() => saveTarget("hydration")}
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="reading-notes">Notes</Label>
-                      <Input
-                        id="reading-notes"
-                        value={readingDraft.notes}
-                        onChange={(event) =>
-                          setReadingDraft((current) => ({ ...current, notes: event.target.value }))
-                        }
-                        placeholder="Learning notes"
-                      />
+                      <div className="flex items-center justify-between text-sm text-muted-foreground">
+                        <span>Progress</span>
+                        <span>{formatProgressLabel(dailyHydrationAmount, hydrationTarget)} mL</span>
+                      </div>
+                      <Progress value={hydrationProgress} />
                     </div>
-                  </div>
-                  <Button
-                    className="w-full"
-                    disabled={createReadingSession.isPending}
-                    onClick={addReadingSession}
-                  >
-                    {createReadingSession.isPending ? "Saving..." : "Save reading session"}
-                  </Button>
-                  <div className="space-y-2 text-sm">
-                    {readingsForDay.length === 0 ? (
-                      <p className="text-muted-foreground">No reading logged for this date yet.</p>
-                    ) : (
-                      readingsForDay.slice(0, 3).map((entry) => (
-                        <div key={entry.id} className="rounded-lg bg-background p-2">
-                          <div className="flex items-center justify-between gap-2">
+                    <div className="space-y-3">
+                      <p className="text-sm font-medium text-foreground">Quick add</p>
+                      <div className="flex flex-wrap gap-2">
+                        {[250, 500, 750, 1000].map((amount) => (
+                          <Button
+                            key={amount}
+                            variant={hydrationQuickAmount === amount ? "default" : "outline"}
+                            size="sm"
+                            disabled={createHydrationLog.isPending}
+                            onClick={() => {
+                              setHydrationQuickAmount(amount);
+                              void addHydrationAmount(amount);
+                            }}
+                          >
+                            +{amount} mL
+                          </Button>
+                        ))}
+                      </div>
+                      <div className="flex gap-2">
+                        <Input
+                          type="number"
+                          min={1}
+                          step={1}
+                          value={hydrationQuickAmount}
+                          onChange={(event) =>
+                            setHydrationQuickAmount(Number(event.target.value || 0))
+                          }
+                        />
+                        <Button
+                          variant="secondary"
+                          disabled={createHydrationLog.isPending || hydrationQuickAmount <= 0}
+                          onClick={() => void addHydrationAmount(hydrationQuickAmount)}
+                        >
+                          {createHydrationLog.isPending ? "Saving..." : "Add"}
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="space-y-2 text-sm">
+                      {hydrationForDay.length === 0 ? (
+                        <p className="text-muted-foreground">No hydration entries yet.</p>
+                      ) : (
+                        hydrationForDay.slice(0, 4).map((entry) => (
+                          <div
+                            key={entry.id}
+                            className="flex items-center justify-between rounded-lg bg-background p-2 text-muted-foreground"
+                          >
+                            <span>Logged</span>
                             <span className="font-medium text-foreground">
-                              {entry.book_title || "Reading session"}
-                            </span>
-                            <span className="text-muted-foreground">
-                              {entry.duration_minutes} min
+                              {entry.amount_ml} mL
                             </span>
                           </div>
-                          {entry.pages_read > 0 && (
-                            <p className="mt-1 text-muted-foreground">{entry.pages_read} pages</p>
-                          )}
-                          {entry.notes && (
-                            <p className="mt-1 text-muted-foreground">{entry.notes}</p>
-                          )}
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </article>
+                        ))
+                      )}
+                    </div>
+                  </article>
+                )}
 
-                <article className="space-y-4 rounded-xl border border-border bg-surface p-4">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 text-foreground">
-                      <Droplets className="h-4 w-4 text-sky-500" />
-                      <h3 className="font-medium">Hydration</h3>
-                    </div>
-                    <Badge
-                      variant={dailyHydrationAmount >= hydrationTarget ? "default" : "outline"}
-                    >
-                      {dailyHydrationAmount >= hydrationTarget ? "Hydrated" : "On track"}
-                    </Badge>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="hydration-target">Daily target (mL)</Label>
-                    <Input
-                      id="hydration-target"
-                      type="number"
-                      min={1}
-                      step={1}
-                      value={targetDraft.hydration}
-                      onChange={(event) =>
-                        setTargetDraft((current) => ({ ...current, hydration: event.target.value }))
-                      }
-                      onBlur={() => saveTarget("hydration")}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-sm text-muted-foreground">
-                      <span>Progress</span>
-                      <span>{formatProgressLabel(dailyHydrationAmount, hydrationTarget)} mL</span>
-                    </div>
-                    <Progress value={hydrationProgress} />
-                  </div>
-                  <div className="space-y-3">
-                    <p className="text-sm font-medium text-foreground">Quick add</p>
-                    <div className="flex flex-wrap gap-2">
-                      {[250, 500, 750, 1000].map((amount) => (
-                        <Button
-                          key={amount}
-                          variant={hydrationQuickAmount === amount ? "default" : "outline"}
-                          size="sm"
-                          disabled={createHydrationLog.isPending}
-                          onClick={() => {
-                            setHydrationQuickAmount(amount);
-                            void addHydrationAmount(amount);
-                          }}
-                        >
-                          +{amount} mL
-                        </Button>
-                      ))}
-                    </div>
-                    <div className="flex gap-2">
-                      <Input
-                        type="number"
-                        min={1}
-                        step={1}
-                        value={hydrationQuickAmount}
-                        onChange={(event) =>
-                          setHydrationQuickAmount(Number(event.target.value || 0))
-                        }
-                      />
-                      <Button
-                        variant="secondary"
-                        disabled={createHydrationLog.isPending || hydrationQuickAmount <= 0}
-                        onClick={() => void addHydrationAmount(hydrationQuickAmount)}
+                {expandedHabit === "learning" && (
+                  <article
+                    id="daily-habit-learning-details"
+                    className="space-y-4 rounded-xl border border-border bg-surface p-4"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 text-foreground">
+                        <Sparkles className="h-4 w-4 text-amber-500" />
+                        <h3 className="font-medium">Daily learning</h3>
+                      </div>
+                      <Badge
+                        variant={dailyLearningMinutes >= learningTarget ? "default" : "outline"}
                       >
-                        {createHydrationLog.isPending ? "Saving..." : "Add"}
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="space-y-2 text-sm">
-                    {hydrationForDay.length === 0 ? (
-                      <p className="text-muted-foreground">No hydration entries yet.</p>
-                    ) : (
-                      hydrationForDay.slice(0, 4).map((entry) => (
-                        <div
-                          key={entry.id}
-                          className="flex items-center justify-between rounded-lg bg-background p-2 text-muted-foreground"
-                        >
-                          <span>Logged</span>
-                          <span className="font-medium text-foreground">{entry.amount_ml} mL</span>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </article>
-
-                <article className="space-y-4 rounded-xl border border-border bg-surface p-4">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 text-foreground">
-                      <Sparkles className="h-4 w-4 text-amber-500" />
-                      <h3 className="font-medium">Daily learning</h3>
-                    </div>
-                    <Badge variant={dailyLearningMinutes >= learningTarget ? "default" : "outline"}>
-                      {dailyLearningMinutes >= learningTarget ? "Complete" : "Practice"}
-                    </Badge>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="learning-target">Daily target (minutes)</Label>
-                    <Input
-                      id="learning-target"
-                      type="number"
-                      min={1}
-                      step={1}
-                      max={1440}
-                      value={targetDraft.learning}
-                      onChange={(event) =>
-                        setTargetDraft((current) => ({ ...current, learning: event.target.value }))
-                      }
-                      onBlur={() => saveTarget("learning")}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-sm text-muted-foreground">
-                      <span>Progress</span>
-                      <span>{formatProgressLabel(dailyLearningMinutes, learningTarget)} min</span>
-                    </div>
-                    <Progress value={learningProgress} />
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="learning-topic">Topic</Label>
-                      <Input
-                        id="learning-topic"
-                        value={learningDraft.topic}
-                        onChange={(event) =>
-                          setLearningDraft((current) => ({ ...current, topic: event.target.value }))
-                        }
-                        placeholder="TypeScript"
-                      />
+                        {dailyLearningMinutes >= learningTarget ? "Complete" : "Practice"}
+                      </Badge>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="learning-duration">Minutes</Label>
+                      <Label htmlFor="learning-target">Daily target (minutes)</Label>
                       <Input
-                        id="learning-duration"
+                        id="learning-target"
                         type="number"
                         min={1}
                         step={1}
-                        value={learningDraft.duration}
+                        max={1440}
+                        value={targetDraft.learning}
+                        onChange={(event) =>
+                          setTargetDraft((current) => ({
+                            ...current,
+                            learning: event.target.value,
+                          }))
+                        }
+                        onBlur={() => saveTarget("learning")}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-sm text-muted-foreground">
+                        <span>Progress</span>
+                        <span>{formatProgressLabel(dailyLearningMinutes, learningTarget)} min</span>
+                      </div>
+                      <Progress value={learningProgress} />
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="learning-topic">Topic</Label>
+                        <Input
+                          id="learning-topic"
+                          value={learningDraft.topic}
+                          onChange={(event) =>
+                            setLearningDraft((current) => ({
+                              ...current,
+                              topic: event.target.value,
+                            }))
+                          }
+                          placeholder="TypeScript"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="learning-duration">Minutes</Label>
+                        <Input
+                          id="learning-duration"
+                          type="number"
+                          min={1}
+                          step={1}
+                          value={learningDraft.duration}
+                          onChange={(event) =>
+                            setLearningDraft((current) => ({
+                              ...current,
+                              duration: event.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="learning-studied">What did you study?</Label>
+                      <Input
+                        id="learning-studied"
+                        value={learningDraft.studied}
                         onChange={(event) =>
                           setLearningDraft((current) => ({
                             ...current,
-                            duration: event.target.value,
+                            studied: event.target.value,
                           }))
                         }
+                        placeholder="Interfaces and generics"
                       />
                     </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="learning-studied">What did you study?</Label>
-                    <Input
-                      id="learning-studied"
-                      value={learningDraft.studied}
-                      onChange={(event) =>
-                        setLearningDraft((current) => ({ ...current, studied: event.target.value }))
-                      }
-                      placeholder="Interfaces and generics"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="learning-understood">What did you understand?</Label>
-                    <Input
-                      id="learning-understood"
-                      value={learningDraft.understood}
-                      onChange={(event) =>
-                        setLearningDraft((current) => ({
-                          ...current,
-                          understood: event.target.value,
-                        }))
-                      }
-                      placeholder="How inference works"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="learning-practiced">What did you practice?</Label>
-                    <Input
-                      id="learning-practiced"
-                      value={learningDraft.practiced}
-                      onChange={(event) =>
-                        setLearningDraft((current) => ({
-                          ...current,
-                          practiced: event.target.value,
-                        }))
-                      }
-                      placeholder="Small exercises"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="learning-notes">Notes</Label>
-                    <Textarea
-                      id="learning-notes"
-                      value={learningDraft.notes}
-                      onChange={(event) =>
-                        setLearningDraft((current) => ({ ...current, notes: event.target.value }))
-                      }
-                      rows={2}
-                      placeholder="Additional reflections"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="learning-next">Next to learn</Label>
-                    <Input
-                      id="learning-next"
-                      value={learningDraft.next}
-                      onChange={(event) =>
-                        setLearningDraft((current) => ({ ...current, next: event.target.value }))
-                      }
-                      placeholder="Type narrowing and mapped types"
-                    />
-                  </div>
-                  <Button
-                    className="w-full"
-                    disabled={createLearningSession.isPending}
-                    onClick={addLearningSession}
-                  >
-                    {createLearningSession.isPending ? "Saving..." : "Save learning session"}
-                  </Button>
-                  <div className="space-y-2 text-sm">
-                    {learningForDay.length === 0 ? (
-                      <p className="text-muted-foreground">No learning sessions yet.</p>
-                    ) : (
-                      learningForDay.slice(0, 3).map((entry) => (
-                        <div key={entry.id} className="rounded-lg bg-background p-2">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-medium text-foreground">
-                              {entry.topic || "Learning"}
-                            </span>
-                            <span className="text-muted-foreground">
-                              {entry.duration_minutes} min
+                    <div className="space-y-2">
+                      <Label htmlFor="learning-understood">What did you understand?</Label>
+                      <Input
+                        id="learning-understood"
+                        value={learningDraft.understood}
+                        onChange={(event) =>
+                          setLearningDraft((current) => ({
+                            ...current,
+                            understood: event.target.value,
+                          }))
+                        }
+                        placeholder="How inference works"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="learning-practiced">What did you practice?</Label>
+                      <Input
+                        id="learning-practiced"
+                        value={learningDraft.practiced}
+                        onChange={(event) =>
+                          setLearningDraft((current) => ({
+                            ...current,
+                            practiced: event.target.value,
+                          }))
+                        }
+                        placeholder="Small exercises"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="learning-notes">Notes</Label>
+                      <Textarea
+                        id="learning-notes"
+                        value={learningDraft.notes}
+                        onChange={(event) =>
+                          setLearningDraft((current) => ({ ...current, notes: event.target.value }))
+                        }
+                        rows={2}
+                        placeholder="Additional reflections"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="learning-next">Next to learn</Label>
+                      <Input
+                        id="learning-next"
+                        value={learningDraft.next}
+                        onChange={(event) =>
+                          setLearningDraft((current) => ({ ...current, next: event.target.value }))
+                        }
+                        placeholder="Type narrowing and mapped types"
+                      />
+                    </div>
+                    <Button
+                      className="w-full"
+                      disabled={createLearningSession.isPending}
+                      onClick={addLearningSession}
+                    >
+                      {createLearningSession.isPending ? "Saving..." : "Save learning session"}
+                    </Button>
+                    <div className="space-y-2 text-sm">
+                      {learningForDay.length === 0 ? (
+                        <p className="text-muted-foreground">No learning sessions yet.</p>
+                      ) : (
+                        learningForDay.slice(0, 3).map((entry) => (
+                          <div key={entry.id} className="rounded-lg bg-background p-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-medium text-foreground">
+                                {entry.topic || "Learning"}
+                              </span>
+                              <span className="text-muted-foreground">
+                                {entry.duration_minutes} min
+                              </span>
+                            </div>
+                            {entry.studied && (
+                              <p className="mt-1 text-muted-foreground">Studied: {entry.studied}</p>
+                            )}
+                            {entry.understood && (
+                              <p className="mt-1 text-muted-foreground">
+                                Understood: {entry.understood}
+                              </p>
+                            )}
+                            {entry.next_steps && (
+                              <p className="mt-1 text-muted-foreground">Next: {entry.next_steps}</p>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </article>
+                )}
+              </div>
+
+              {expandedHabit !== null && (
+                <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+                  <article className="space-y-3 rounded-xl border border-border bg-surface p-4">
+                    <div>
+                      <h3 className="font-medium text-foreground">Daily summary</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Compare actual progress against each daily target without forcing a failed
+                        day.
+                      </p>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-lg bg-background p-3">
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                          {expandedHabit === "reading"
+                            ? "Reading time"
+                            : expandedHabit === "hydration"
+                              ? "Hydration"
+                              : "Learning time"}
+                        </p>
+                        <p className="mt-2 text-xl font-semibold text-foreground">
+                          {expandedHabit === "reading"
+                            ? `${dailyReadingMinutes} min`
+                            : expandedHabit === "hydration"
+                              ? `${dailyHydrationAmount} mL`
+                              : `${dailyLearningMinutes} min`}
+                        </p>
+                      </div>
+                      {expandedHabit === "reading" && (
+                        <div className="rounded-lg bg-background p-3">
+                          <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                            Pages read
+                          </p>
+                          <p className="mt-2 text-xl font-semibold text-foreground">
+                            {dailyReadingPages}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm text-muted-foreground">
+                        <span>Weekly consistency</span>
+                        <span>{selectedHabitActiveDays} days with activity</span>
+                      </div>
+                      <p className="rounded-lg bg-background p-2 text-sm text-foreground">
+                        7-day total: {selectedHabitWeeklyTotal}
+                      </p>
+                      {dailyActivitySummary.map((day) => {
+                        const active =
+                          expandedHabit === "reading"
+                            ? day.readingMinutes > 0 || day.readingPages > 0
+                            : expandedHabit === "hydration"
+                              ? day.hydrationMl > 0
+                              : day.learningMinutes > 0;
+                        return (
+                          <div
+                            key={day.date}
+                            className="flex items-center justify-between rounded-lg bg-background p-2 text-sm"
+                          >
+                            <span>{formatRoutineDate(day.date)}</span>
+                            <span className={active ? "text-foreground" : "text-muted-foreground"}>
+                              {!active
+                                ? "No data"
+                                : expandedHabit === "reading"
+                                  ? `${day.readingMinutes}m · ${day.readingPages} pages`
+                                  : expandedHabit === "hydration"
+                                    ? `${day.hydrationMl} mL`
+                                    : `${day.learningMinutes} min`}
                             </span>
                           </div>
-                          {entry.studied && (
-                            <p className="mt-1 text-muted-foreground">Studied: {entry.studied}</p>
-                          )}
-                          {entry.understood && (
-                            <p className="mt-1 text-muted-foreground">
-                              Understood: {entry.understood}
-                            </p>
-                          )}
-                          {entry.next_steps && (
-                            <p className="mt-1 text-muted-foreground">Next: {entry.next_steps}</p>
-                          )}
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </article>
-              </div>
+                        );
+                      })}
+                    </div>
+                  </article>
 
-              <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-                <article className="space-y-3 rounded-xl border border-border bg-surface p-4">
-                  <div>
-                    <h3 className="font-medium text-foreground">Daily summary</h3>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Compare actual progress against each daily target without forcing a failed
-                      day.
-                    </p>
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    <div className="rounded-lg bg-background p-3">
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                        Reading time
-                      </p>
-                      <p className="mt-2 text-xl font-semibold text-foreground">
-                        {dailyReadingMinutes}m
-                      </p>
-                    </div>
-                    <div className="rounded-lg bg-background p-3">
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                        Pages read
-                      </p>
-                      <p className="mt-2 text-xl font-semibold text-foreground">
-                        {dailyReadingPages}
-                      </p>
-                    </div>
-                    <div className="rounded-lg bg-background p-3">
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                        Hydration
-                      </p>
-                      <p className="mt-2 text-xl font-semibold text-foreground">
-                        {dailyHydrationAmount}mL
-                      </p>
-                    </div>
-                    <div className="rounded-lg bg-background p-3">
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                        Learning
-                      </p>
-                      <p className="mt-2 text-xl font-semibold text-foreground">
-                        {dailyLearningMinutes}m
-                      </p>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm text-muted-foreground">
-                      <span>Weekly consistency</span>
-                      <span>{activeHabitDays} days with activity</span>
-                    </div>
-                    <p className="rounded-lg bg-background p-2 text-sm text-foreground">
-                      7-day totals: {weeklyTotals.readingMinutes} min reading ·{" "}
-                      {weeklyTotals.readingPages} pages · {weeklyTotals.hydrationMl} mL ·{" "}
-                      {weeklyTotals.learningMinutes} min learning
-                    </p>
-                    {dailyActivitySummary.map((day) => {
-                      return (
-                        <div
-                          key={day.date}
-                          className="flex items-center justify-between rounded-lg bg-background p-2 text-sm"
-                        >
-                          <span>{formatRoutineDate(day.date)}</span>
-                          <span
-                            className={day.active ? "text-foreground" : "text-muted-foreground"}
-                          >
-                            {day.active
-                              ? `${day.readingMinutes}m, ${day.readingPages}p / ${day.hydrationMl}mL / ${day.learningMinutes}m`
-                              : "No data"}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </article>
-
-                <article className="space-y-3 rounded-xl border border-border bg-surface p-4">
-                  <div>
-                    <h3 className="font-medium text-foreground">Daily reflection</h3>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Keep it short and useful for tomorrow&apos;s focus.
-                    </p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="reflection-accomplished">What did I accomplish today?</Label>
-                    <Textarea
-                      id="reflection-accomplished"
-                      rows={3}
-                      value={reflectionDraft.accomplished}
-                      onChange={(event) =>
-                        setReflectionDraft((current) => ({
-                          ...current,
-                          accomplished: event.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="reflection-learned">What did I learn today?</Label>
-                    <Textarea
-                      id="reflection-learned"
-                      rows={3}
-                      value={reflectionDraft.learned}
-                      onChange={(event) =>
-                        setReflectionDraft((current) => ({
-                          ...current,
-                          learned: event.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="reflection-improve">What should I improve tomorrow?</Label>
-                    <Textarea
-                      id="reflection-improve"
-                      rows={3}
-                      value={reflectionDraft.improve}
-                      onChange={(event) =>
-                        setReflectionDraft((current) => ({
-                          ...current,
-                          improve: event.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-                  <Button
-                    className="w-full"
-                    disabled={saveReflectionMutation.isPending}
-                    onClick={saveReflection}
-                  >
-                    {saveReflectionMutation.isPending ? "Saving..." : "Save reflection"}
-                  </Button>
-                </article>
-              </div>
+                  {expandedHabit === "learning" && (
+                    <article className="space-y-3 rounded-xl border border-border bg-surface p-4">
+                      <div>
+                        <h3 className="font-medium text-foreground">Daily reflection</h3>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          Keep it short and useful for tomorrow&apos;s focus.
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="reflection-accomplished">
+                          What did I accomplish today?
+                        </Label>
+                        <Textarea
+                          id="reflection-accomplished"
+                          rows={3}
+                          value={reflectionDraft.accomplished}
+                          onChange={(event) =>
+                            setReflectionDraft((current) => ({
+                              ...current,
+                              accomplished: event.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="reflection-learned">What did I learn today?</Label>
+                        <Textarea
+                          id="reflection-learned"
+                          rows={3}
+                          value={reflectionDraft.learned}
+                          onChange={(event) =>
+                            setReflectionDraft((current) => ({
+                              ...current,
+                              learned: event.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="reflection-improve">What should I improve tomorrow?</Label>
+                        <Textarea
+                          id="reflection-improve"
+                          rows={3}
+                          value={reflectionDraft.improve}
+                          onChange={(event) =>
+                            setReflectionDraft((current) => ({
+                              ...current,
+                              improve: event.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                      <Button
+                        className="w-full"
+                        disabled={saveReflectionMutation.isPending}
+                        onClick={saveReflection}
+                      >
+                        {saveReflectionMutation.isPending ? "Saving..." : "Save reflection"}
+                      </Button>
+                    </article>
+                  )}
+                </div>
+              )}
             </>
           )}
         </section>
