@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
   BookOpen,
+  Check,
   ChevronDown,
   ChevronRight,
   Droplets,
@@ -73,6 +74,7 @@ export const Route = createFileRoute("/routines")({
 type RoutineFilter = "active" | "inactive" | "all";
 type DailyHabit = "reading" | "hydration" | "learning";
 
+const HYDRATION_SERVING_SIZE_ML = 250;
 const LEGACY_DAILY_ROUTINE_STORAGE_KEY = "nexora-daily-routine-dashboard-v1";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -308,6 +310,21 @@ function RoutinesPage() {
   const readingTarget = Number(targetDraft.reading) || 20;
   const hydrationTarget = Number(targetDraft.hydration) || 2000;
   const learningTarget = Number(targetDraft.learning) || 30;
+  const hydrationSteps = Array.from(
+    { length: Math.ceil(hydrationTarget / HYDRATION_SERVING_SIZE_ML) },
+    (_, index) => {
+      const amount = Math.min(
+        HYDRATION_SERVING_SIZE_ML,
+        hydrationTarget - index * HYDRATION_SERVING_SIZE_ML,
+      );
+      const cumulativeAmount = Math.min((index + 1) * HYDRATION_SERVING_SIZE_ML, hydrationTarget);
+      return {
+        amount,
+        completed: dailyHydrationAmount >= cumulativeAmount,
+      };
+    },
+  );
+  const nextHydrationStep = hydrationSteps.findIndex((step) => !step.completed);
   const readingProgress = Math.min((dailyReadingMinutes / readingTarget) * 100, 100);
   const hydrationProgress = Math.min((dailyHydrationAmount / hydrationTarget) * 100, 100);
   const learningProgress = Math.min((dailyLearningMinutes / learningTarget) * 100, 100);
@@ -451,7 +468,6 @@ function RoutinesPage() {
 
     try {
       await createHydrationLog.mutateAsync({ logged_date: selectedDate, amount_ml: numeric });
-      setHydrationQuickAmount(250);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Couldn't record this hydration entry");
     }
@@ -775,12 +791,11 @@ function RoutinesPage() {
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2 text-foreground">
                         <Droplets className="h-4 w-4 text-sky-500" />
-                        <h3 className="font-medium">Hydration</h3>
+                        <h3 className="font-medium">Daily hydration tracker</h3>
                       </div>
-                      <Badge
-                        variant={dailyHydrationAmount >= hydrationTarget ? "default" : "outline"}
-                      >
-                        {dailyHydrationAmount >= hydrationTarget ? "Hydrated" : "On track"}
+                      <Badge variant={nextHydrationStep === -1 ? "default" : "outline"}>
+                        {hydrationSteps.filter((step) => step.completed).length}/
+                        {hydrationSteps.length}
                       </Badge>
                     </div>
                     <div className="space-y-2">
@@ -802,31 +817,68 @@ function RoutinesPage() {
                     </div>
                     <div className="space-y-2">
                       <div className="flex items-center justify-between text-sm text-muted-foreground">
-                        <span>Progress</span>
+                        <span>Daily progress</span>
                         <span>{formatProgressLabel(dailyHydrationAmount, hydrationTarget)} mL</span>
                       </div>
                       <Progress value={hydrationProgress} />
                     </div>
-                    <div className="space-y-3">
-                      <p className="text-sm font-medium text-foreground">Quick add</p>
-                      <div className="flex flex-wrap gap-2">
-                        {[250, 500, 750, 1000].map((amount) => (
-                          <Button
-                            key={amount}
-                            variant={hydrationQuickAmount === amount ? "default" : "outline"}
-                            size="sm"
-                            disabled={createHydrationLog.isPending}
-                            onClick={() => {
-                              setHydrationQuickAmount(amount);
-                              void addHydrationAmount(amount);
-                            }}
+                    <ul className="divide-y divide-border" aria-label="Hydration servings">
+                      {hydrationSteps.map((step, index) => {
+                        const canRecord = index === nextHydrationStep;
+                        return (
+                          <li
+                            key={`${index}-${step.amount}`}
+                            className="flex min-h-16 items-center gap-3 py-3"
                           >
-                            +{amount} mL
-                          </Button>
-                        ))}
-                      </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              aria-label={
+                                step.completed
+                                  ? `Hydration serving ${index + 1} completed`
+                                  : `Record hydration serving ${index + 1}, ${step.amount} milliliters`
+                              }
+                              aria-pressed={step.completed}
+                              disabled={!canRecord || createHydrationLog.isPending}
+                              onClick={() => void addHydrationAmount(step.amount)}
+                              className={
+                                step.completed
+                                  ? "h-6 w-6 shrink-0 rounded-full border-emerald-600 bg-emerald-600 p-0 text-white hover:bg-emerald-600"
+                                  : "h-6 w-6 shrink-0 rounded-full border-muted-foreground/40 bg-transparent p-0"
+                              }
+                            >
+                              {step.completed && <Check className="h-3.5 w-3.5" />}
+                            </Button>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium text-foreground">
+                                Serving {index + 1}
+                              </p>
+                              <p className="text-sm text-muted-foreground">
+                                {step.completed
+                                  ? "Completed"
+                                  : canRecord
+                                    ? "Click the circle when you drink"
+                                    : "Complete the previous serving first"}
+                              </p>
+                            </div>
+                            <span className="shrink-0 text-sm text-muted-foreground">
+                              {step.amount} mL
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    {nextHydrationStep === -1 && (
+                      <p className="text-sm font-medium text-emerald-600">
+                        Daily hydration target reached.
+                      </p>
+                    )}
+                    <div className="space-y-2 border-t border-border pt-3">
+                      <Label htmlFor="hydration-custom-amount">Log a different amount (mL)</Label>
                       <div className="flex gap-2">
                         <Input
+                          id="hydration-custom-amount"
                           type="number"
                           min={1}
                           step={1}
