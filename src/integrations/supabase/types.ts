@@ -755,6 +755,51 @@ export type Database = {
         };
         Relationships: [];
       };
+      daily_hydration_schedule_slots: {
+        Row: {
+          created_at: string;
+          id: string;
+          time: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          time: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          time?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
+      daily_hydration_schedule_completions: {
+        Row: {
+          completed_date: string;
+          created_at: string;
+          id: string;
+          slot_id: string;
+          user_id: string;
+        };
+        Insert: {
+          completed_date?: string;
+          created_at?: string;
+          id?: string;
+          slot_id: string;
+          user_id: string;
+        };
+        Update: {
+          completed_date?: string;
+          created_at?: string;
+          id?: string;
+          slot_id?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       daily_learning_sessions: {
         Row: {
           created_at: string;

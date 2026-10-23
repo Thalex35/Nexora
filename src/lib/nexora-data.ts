@@ -19,6 +19,10 @@ export type RoutineCompletion = Database["public"]["Tables"]["routine_completion
 export type DailyHabitSettings = Database["public"]["Tables"]["daily_habit_settings"]["Row"];
 export type DailyReadingSession = Database["public"]["Tables"]["daily_reading_sessions"]["Row"];
 export type DailyHydrationLog = Database["public"]["Tables"]["daily_hydration_logs"]["Row"];
+export type DailyHydrationScheduleSlot =
+  Database["public"]["Tables"]["daily_hydration_schedule_slots"]["Row"];
+export type DailyHydrationScheduleCompletion =
+  Database["public"]["Tables"]["daily_hydration_schedule_completions"]["Row"];
 export type DailyLearningSession = Database["public"]["Tables"]["daily_learning_sessions"]["Row"];
 export type DailyReflection = Database["public"]["Tables"]["daily_reflections"]["Row"];
 export type FutureExpense = Database["public"]["Tables"]["future_expenses"]["Row"];
@@ -1411,7 +1415,14 @@ export function useDailyHabitRecords() {
     enabled: authorized,
     queryFn: async () => {
       const userId = await currentUserId();
-      const [readingResult, hydrationResult, learningResult, reflectionResult] = await Promise.all([
+      const [
+        readingResult,
+        hydrationResult,
+        hydrationSlotsResult,
+        hydrationCompletionsResult,
+        learningResult,
+        reflectionResult,
+      ] = await Promise.all([
         supabase
           .from("daily_reading_sessions")
           .select("*")
@@ -1424,6 +1435,16 @@ export function useDailyHabitRecords() {
           .eq("user_id", userId)
           .order("logged_date", { ascending: false })
           .order("created_at", { ascending: false }),
+        supabase
+          .from("daily_hydration_schedule_slots")
+          .select("*")
+          .eq("user_id", userId)
+          .order("time", { ascending: true }),
+        supabase
+          .from("daily_hydration_schedule_completions")
+          .select("*")
+          .eq("user_id", userId)
+          .order("completed_date", { ascending: false }),
         supabase
           .from("daily_learning_sessions")
           .select("*")
@@ -1440,6 +1461,10 @@ export function useDailyHabitRecords() {
       return {
         readingSessions: unwrap(readingResult) as DailyReadingSession[],
         hydrationLogs: unwrap(hydrationResult) as DailyHydrationLog[],
+        hydrationScheduleSlots: unwrap(hydrationSlotsResult) as DailyHydrationScheduleSlot[],
+        hydrationScheduleCompletions: unwrap(
+          hydrationCompletionsResult,
+        ) as DailyHydrationScheduleCompletion[],
         learningSessions: unwrap(learningResult) as DailyLearningSession[],
         reflections: unwrap(reflectionResult) as DailyReflection[],
       };
@@ -1493,6 +1518,78 @@ export function useCreateDailyHydrationLog() {
           .select()
           .single(),
       ) as DailyHydrationLog;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["daily_habit_records"] }),
+  });
+}
+
+export function useCreateDailyHydrationScheduleSlot() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (time: string) => {
+      const userId = await currentUserId();
+      return unwrap(
+        await supabase
+          .from("daily_hydration_schedule_slots")
+          .insert({ time, user_id: userId })
+          .select()
+          .single(),
+      ) as DailyHydrationScheduleSlot;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["daily_habit_records"] }),
+  });
+}
+
+export function useDeleteDailyHydrationScheduleSlot() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const userId = await currentUserId();
+      const { error } = await supabase
+        .from("daily_hydration_schedule_slots")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", userId);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["daily_habit_records"] }),
+  });
+}
+
+export function useSetDailyHydrationScheduleCompletion() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      slotId,
+      date,
+      completed,
+    }: {
+      slotId: string;
+      date: string;
+      completed: boolean;
+    }) => {
+      const userId = await currentUserId();
+      if (completed) {
+        return unwrap(
+          await supabase
+            .from("daily_hydration_schedule_completions")
+            .upsert(
+              { slot_id: slotId, completed_date: date, user_id: userId },
+              { onConflict: "slot_id,completed_date" },
+            )
+            .select()
+            .single(),
+        ) as DailyHydrationScheduleCompletion;
+      }
+
+      const { error } = await supabase
+        .from("daily_hydration_schedule_completions")
+        .delete()
+        .eq("slot_id", slotId)
+        .eq("completed_date", date)
+        .eq("user_id", userId);
+      if (error) throw new Error(error.message);
+      return undefined;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["daily_habit_records"] }),
   });
