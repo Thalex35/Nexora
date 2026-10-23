@@ -40,8 +40,10 @@ import {
   dateOffsetISO,
   todayISO,
   useCreateDailyHydrationLog,
+  useCreateDailyHydrationScheduleSlot,
   useCreateDailyLearningSession,
   useCreateDailyReadingSession,
+  useDeleteDailyHydrationScheduleSlot,
   useCreateRoutine,
   useDailyHabitRecords,
   useDailyHabitSettings,
@@ -51,6 +53,7 @@ import {
   useRoutines,
   useSaveDailyHabitTargets,
   useSaveDailyReflection,
+  useSetDailyHydrationScheduleCompletion,
   useUpdateRoutine,
   type DailyHabitImportInput,
   type DailyHabitTargetInput,
@@ -74,8 +77,12 @@ export const Route = createFileRoute("/routines")({
 type RoutineFilter = "active" | "inactive" | "all";
 type DailyHabit = "reading" | "hydration" | "learning";
 
-const HYDRATION_SERVING_SIZE_ML = 250;
 const LEGACY_DAILY_ROUTINE_STORAGE_KEY = "nexora-daily-routine-dashboard-v1";
+
+function formatHydrationTime(time: string): string {
+  const [hours, minutes] = time.slice(0, 5).split(":");
+  return `${Number(hours)}h${minutes === "00" ? "" : minutes}`;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -223,6 +230,9 @@ function RoutinesPage() {
   const importDailyHabitData = useImportDailyHabitData();
   const createReadingSession = useCreateDailyReadingSession();
   const createHydrationLog = useCreateDailyHydrationLog();
+  const createHydrationScheduleSlot = useCreateDailyHydrationScheduleSlot();
+  const deleteHydrationScheduleSlot = useDeleteDailyHydrationScheduleSlot();
+  const setHydrationScheduleCompletion = useSetDailyHydrationScheduleCompletion();
   const createLearningSession = useCreateDailyLearningSession();
   const saveReflectionMutation = useSaveDailyReflection();
   const [targetDraft, setTargetDraft] = useState({
@@ -237,6 +247,7 @@ function RoutinesPage() {
     notes: "",
   });
   const [hydrationQuickAmount, setHydrationQuickAmount] = useState(250);
+  const [hydrationScheduleTime, setHydrationScheduleTime] = useState("08:00");
   const [learningDraft, setLearningDraft] = useState({
     topic: "",
     duration: "30",
@@ -296,6 +307,8 @@ function RoutinesPage() {
   const learningSessions = habitRecords.data?.learningSessions ?? [];
   const readingsForDay = readingSessions.filter((entry) => entry.session_date === selectedDate);
   const hydrationForDay = hydrationLogs.filter((entry) => entry.logged_date === selectedDate);
+  const hydrationScheduleSlots = habitRecords.data?.hydrationScheduleSlots ?? [];
+  const hydrationScheduleCompletions = habitRecords.data?.hydrationScheduleCompletions ?? [];
   const learningForDay = learningSessions.filter((entry) => entry.session_date === selectedDate);
   const dailyReadingMinutes = readingsForDay.reduce(
     (total, entry) => total + entry.duration_minutes,
@@ -310,21 +323,6 @@ function RoutinesPage() {
   const readingTarget = Number(targetDraft.reading) || 20;
   const hydrationTarget = Number(targetDraft.hydration) || 2000;
   const learningTarget = Number(targetDraft.learning) || 30;
-  const hydrationSteps = Array.from(
-    { length: Math.ceil(hydrationTarget / HYDRATION_SERVING_SIZE_ML) },
-    (_, index) => {
-      const amount = Math.min(
-        HYDRATION_SERVING_SIZE_ML,
-        hydrationTarget - index * HYDRATION_SERVING_SIZE_ML,
-      );
-      const cumulativeAmount = Math.min((index + 1) * HYDRATION_SERVING_SIZE_ML, hydrationTarget);
-      return {
-        amount,
-        completed: dailyHydrationAmount >= cumulativeAmount,
-      };
-    },
-  );
-  const nextHydrationStep = hydrationSteps.findIndex((step) => !step.completed);
   const readingProgress = Math.min((dailyReadingMinutes / readingTarget) * 100, 100);
   const hydrationProgress = Math.min((dailyHydrationAmount / hydrationTarget) * 100, 100);
   const learningProgress = Math.min((dailyLearningMinutes / learningTarget) * 100, 100);
@@ -470,6 +468,44 @@ function RoutinesPage() {
       await createHydrationLog.mutateAsync({ logged_date: selectedDate, amount_ml: numeric });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Couldn't record this hydration entry");
+    }
+  }
+
+  async function addHydrationScheduleSlot() {
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(hydrationScheduleTime)) {
+      toast.error("Choose a valid time for your hydration reminder.");
+      return;
+    }
+    if (hydrationScheduleSlots.some((slot) => slot.time.slice(0, 5) === hydrationScheduleTime)) {
+      toast.error("That hydration time already exists.");
+      return;
+    }
+    try {
+      await createHydrationScheduleSlot.mutateAsync(hydrationScheduleTime);
+      toast.success("Hydration time added");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Couldn't add this hydration time");
+    }
+  }
+
+  async function toggleHydrationScheduleSlot(slotId: string, completed: boolean) {
+    try {
+      await setHydrationScheduleCompletion.mutateAsync({
+        slotId,
+        date: selectedDate,
+        completed,
+      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Couldn't update this hydration time");
+    }
+  }
+
+  async function removeHydrationScheduleSlot(slotId: string) {
+    try {
+      await deleteHydrationScheduleSlot.mutateAsync(slotId);
+      toast.success("Hydration time removed");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Couldn't remove this hydration time");
     }
   }
 
@@ -793,10 +829,7 @@ function RoutinesPage() {
                         <Droplets className="h-4 w-4 text-sky-500" />
                         <h3 className="font-medium">Daily hydration tracker</h3>
                       </div>
-                      <Badge variant={nextHydrationStep === -1 ? "default" : "outline"}>
-                        {hydrationSteps.filter((step) => step.completed).length}/
-                        {hydrationSteps.length}
-                      </Badge>
+                      <Badge variant="outline">{dailyHydrationAmount} mL today</Badge>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="hydration-target">Daily target (mL)</Label>
@@ -822,58 +855,77 @@ function RoutinesPage() {
                       </div>
                       <Progress value={hydrationProgress} />
                     </div>
-                    <ul className="divide-y divide-border" aria-label="Hydration servings">
-                      {hydrationSteps.map((step, index) => {
-                        const canRecord = index === nextHydrationStep;
-                        return (
-                          <li
-                            key={`${index}-${step.amount}`}
-                            className="flex min-h-16 items-center gap-3 py-3"
-                          >
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="icon"
-                              aria-label={
-                                step.completed
-                                  ? `Hydration serving ${index + 1} completed`
-                                  : `Record hydration serving ${index + 1}, ${step.amount} milliliters`
-                              }
-                              aria-pressed={step.completed}
-                              disabled={!canRecord || createHydrationLog.isPending}
-                              onClick={() => void addHydrationAmount(step.amount)}
-                              className={
-                                step.completed
-                                  ? "h-6 w-6 shrink-0 rounded-full border-emerald-600 bg-emerald-600 p-0 text-white hover:bg-emerald-600"
-                                  : "h-6 w-6 shrink-0 rounded-full border-muted-foreground/40 bg-transparent p-0"
-                              }
-                            >
-                              {step.completed && <Check className="h-3.5 w-3.5" />}
-                            </Button>
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm font-medium text-foreground">
-                                Serving {index + 1}
-                              </p>
-                              <p className="text-sm text-muted-foreground">
-                                {step.completed
-                                  ? "Completed"
-                                  : canRecord
-                                    ? "Click the circle when you drink"
-                                    : "Complete the previous serving first"}
-                              </p>
-                            </div>
-                            <span className="shrink-0 text-sm text-muted-foreground">
-                              {step.amount} mL
-                            </span>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                    {nextHydrationStep === -1 && (
-                      <p className="text-sm font-medium text-emerald-600">
-                        Daily hydration target reached.
-                      </p>
-                    )}
+                    <div className="space-y-3">
+                      <div className="flex flex-wrap items-end gap-2">
+                        <div className="min-w-36 flex-1 space-y-2">
+                          <Label htmlFor="hydration-schedule-time">Add a time</Label>
+                          <Input
+                            id="hydration-schedule-time"
+                            type="time"
+                            value={hydrationScheduleTime}
+                            onChange={(event) => setHydrationScheduleTime(event.target.value)}
+                          />
+                        </div>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          disabled={createHydrationScheduleSlot.isPending}
+                          onClick={() => void addHydrationScheduleSlot()}
+                        >
+                          <Plus className="mr-1 h-4 w-4" />
+                          Add time
+                        </Button>
+                      </div>
+                      {hydrationScheduleSlots.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">
+                          Add the times you usually drink water.
+                        </p>
+                      ) : (
+                        <ul className="divide-y divide-border" aria-label="Hydration times">
+                          {hydrationScheduleSlots.map((slot) => {
+                            const completed = hydrationScheduleCompletions.some(
+                              (entry) =>
+                                entry.slot_id === slot.id && entry.completed_date === selectedDate,
+                            );
+                            return (
+                              <li key={slot.id} className="flex min-h-16 items-center gap-3 py-3">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="icon"
+                                  aria-label={`${completed ? "Unmark" : "Mark"} water at ${slot.time.slice(0, 5)} as ${completed ? "not completed" : "completed"}`}
+                                  aria-pressed={completed}
+                                  disabled={setHydrationScheduleCompletion.isPending}
+                                  onClick={() =>
+                                    void toggleHydrationScheduleSlot(slot.id, !completed)
+                                  }
+                                  className={
+                                    completed
+                                      ? "h-6 w-6 shrink-0 rounded-full border-emerald-600 bg-emerald-600 p-0 text-white hover:bg-emerald-600"
+                                      : "h-6 w-6 shrink-0 rounded-full border-muted-foreground/40 bg-transparent p-0"
+                                  }
+                                >
+                                  {completed && <Check className="h-3.5 w-3.5" />}
+                                </Button>
+                                <p className="min-w-0 flex-1 font-medium text-foreground">
+                                  {formatHydrationTime(slot.time)}
+                                </p>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  aria-label={`Remove ${slot.time.slice(0, 5)} hydration time`}
+                                  disabled={deleteHydrationScheduleSlot.isPending}
+                                  onClick={() => void removeHydrationScheduleSlot(slot.id)}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                    </div>
                     <div className="space-y-2 border-t border-border pt-3">
                       <Label htmlFor="hydration-custom-amount">Log a different amount (mL)</Label>
                       <div className="flex gap-2">
