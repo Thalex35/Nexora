@@ -665,6 +665,22 @@ function RoutinesPage() {
                 ).map(([habit, label]) => {
                   const expanded = expandedHabit === habit;
                   const panelId = `daily-habit-${habit}-details`;
+                  if (habit === "reading") {
+                    return (
+                      <Link
+                        key={habit}
+                        to="/daily-reading"
+                        search={{ date: selectedDate }}
+                        className="flex min-h-12 w-full items-center justify-between rounded-lg border border-border bg-surface px-4 py-3 text-left font-medium text-foreground transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <span>{label}</span>
+                        <ChevronRight
+                          className="h-4 w-4 text-muted-foreground"
+                          aria-hidden="true"
+                        />
+                      </Link>
+                    );
+                  }
                   if (habit === "learning") {
                     return (
                       <Link
