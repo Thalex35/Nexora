@@ -15,6 +15,7 @@ import { Route as AnalyticsRouteImport } from './routes/analytics'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as BusinessRouteImport } from './routes/business'
 import { Route as CardsRouteImport } from './routes/cards'
+import { Route as DailyHydrationRouteImport } from './routes/daily-hydration'
 import { Route as DailyLearningRouteImport } from './routes/daily-learning'
 import { Route as DailyReadingRouteImport } from './routes/daily-reading'
 import { Route as FinanceRouteImport } from './routes/finance'
@@ -64,6 +65,11 @@ const BusinessRoute = BusinessRouteImport.update({
 const CardsRoute = CardsRouteImport.update({
   id: '/cards',
   path: '/cards',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DailyHydrationRoute = DailyHydrationRouteImport.update({
+  id: '/daily-hydration',
+  path: '/daily-hydration',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DailyLearningRoute = DailyLearningRouteImport.update({
@@ -174,6 +180,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/business': typeof BusinessRoute
   '/cards': typeof CardsRouteWithChildren
+  '/daily-hydration': typeof DailyHydrationRoute
   '/daily-learning': typeof DailyLearningRoute
   '/daily-reading': typeof DailyReadingRoute
   '/finance': typeof FinanceRouteWithChildren
@@ -202,6 +209,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/business': typeof BusinessRoute
   '/cards': typeof CardsRouteWithChildren
+  '/daily-hydration': typeof DailyHydrationRoute
   '/daily-learning': typeof DailyLearningRoute
   '/daily-reading': typeof DailyReadingRoute
   '/finance': typeof FinanceRouteWithChildren
@@ -231,6 +239,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/business': typeof BusinessRoute
   '/cards': typeof CardsRouteWithChildren
+  '/daily-hydration': typeof DailyHydrationRoute
   '/daily-learning': typeof DailyLearningRoute
   '/daily-reading': typeof DailyReadingRoute
   '/finance': typeof FinanceRouteWithChildren
@@ -261,6 +270,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/business'
     | '/cards'
+    | '/daily-hydration'
     | '/daily-learning'
     | '/daily-reading'
     | '/finance'
@@ -289,6 +299,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/business'
     | '/cards'
+    | '/daily-hydration'
     | '/daily-learning'
     | '/daily-reading'
     | '/finance'
@@ -317,6 +328,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/business'
     | '/cards'
+    | '/daily-hydration'
     | '/daily-learning'
     | '/daily-reading'
     | '/finance'
@@ -346,6 +358,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   BusinessRoute: typeof BusinessRoute
   CardsRoute: typeof CardsRouteWithChildren
+  DailyHydrationRoute: typeof DailyHydrationRoute
   DailyLearningRoute: typeof DailyLearningRoute
   DailyReadingRoute: typeof DailyReadingRoute
   FinanceRoute: typeof FinanceRouteWithChildren
@@ -405,6 +418,13 @@ declare module '@tanstack/react-router' {
       path: '/cards'
       fullPath: '/cards'
       preLoaderRoute: typeof CardsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/daily-hydration': {
+      id: '/daily-hydration'
+      path: '/daily-hydration'
+      fullPath: '/daily-hydration'
+      preLoaderRoute: typeof DailyHydrationRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/daily-learning': {
@@ -612,6 +632,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   BusinessRoute: BusinessRoute,
   CardsRoute: CardsRouteWithChildren,
+  DailyHydrationRoute: DailyHydrationRoute,
   DailyLearningRoute: DailyLearningRoute,
   DailyReadingRoute: DailyReadingRoute,
   FinanceRoute: FinanceRouteWithChildren,
