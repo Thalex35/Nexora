@@ -15,6 +15,7 @@ import { Route as AnalyticsRouteImport } from './routes/analytics'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as BusinessRouteImport } from './routes/business'
 import { Route as CardsRouteImport } from './routes/cards'
+import { Route as DailyLearningRouteImport } from './routes/daily-learning'
 import { Route as FinanceRouteImport } from './routes/finance'
 import { Route as GoalsRouteImport } from './routes/goals'
 import { Route as LearningRouteImport } from './routes/learning'
@@ -62,6 +63,11 @@ const BusinessRoute = BusinessRouteImport.update({
 const CardsRoute = CardsRouteImport.update({
   id: '/cards',
   path: '/cards',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DailyLearningRoute = DailyLearningRouteImport.update({
+  id: '/daily-learning',
+  path: '/daily-learning',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FinanceRoute = FinanceRouteImport.update({
@@ -162,6 +168,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/business': typeof BusinessRoute
   '/cards': typeof CardsRouteWithChildren
+  '/daily-learning': typeof DailyLearningRoute
   '/finance': typeof FinanceRouteWithChildren
   '/goals': typeof GoalsRouteWithChildren
   '/learning': typeof LearningRouteWithChildren
@@ -188,6 +195,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/business': typeof BusinessRoute
   '/cards': typeof CardsRouteWithChildren
+  '/daily-learning': typeof DailyLearningRoute
   '/finance': typeof FinanceRouteWithChildren
   '/goals': typeof GoalsRouteWithChildren
   '/learning': typeof LearningRouteWithChildren
@@ -215,6 +223,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/business': typeof BusinessRoute
   '/cards': typeof CardsRouteWithChildren
+  '/daily-learning': typeof DailyLearningRoute
   '/finance': typeof FinanceRouteWithChildren
   '/goals': typeof GoalsRouteWithChildren
   '/learning': typeof LearningRouteWithChildren
@@ -243,6 +252,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/business'
     | '/cards'
+    | '/daily-learning'
     | '/finance'
     | '/goals'
     | '/learning'
@@ -269,6 +279,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/business'
     | '/cards'
+    | '/daily-learning'
     | '/finance'
     | '/goals'
     | '/learning'
@@ -295,6 +306,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/business'
     | '/cards'
+    | '/daily-learning'
     | '/finance'
     | '/goals'
     | '/learning'
@@ -322,6 +334,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   BusinessRoute: typeof BusinessRoute
   CardsRoute: typeof CardsRouteWithChildren
+  DailyLearningRoute: typeof DailyLearningRoute
   FinanceRoute: typeof FinanceRouteWithChildren
   GoalsRoute: typeof GoalsRouteWithChildren
   LearningRoute: typeof LearningRouteWithChildren
@@ -379,6 +392,13 @@ declare module '@tanstack/react-router' {
       path: '/cards'
       fullPath: '/cards'
       preLoaderRoute: typeof CardsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/daily-learning': {
+      id: '/daily-learning'
+      path: '/daily-learning'
+      fullPath: '/daily-learning'
+      preLoaderRoute: typeof DailyLearningRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/finance': {
@@ -572,6 +592,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   BusinessRoute: BusinessRoute,
   CardsRoute: CardsRouteWithChildren,
+  DailyLearningRoute: DailyLearningRoute,
   FinanceRoute: FinanceRouteWithChildren,
   GoalsRoute: GoalsRouteWithChildren,
   LearningRoute: LearningRouteWithChildren,
